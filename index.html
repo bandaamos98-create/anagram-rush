@@ -463,12 +463,39 @@
 
     async function initApp(){
       try {
-        const { data: { session } } = await sb.auth.getSession();
-        if(session?.user){
-          await loadSession(session.user);
+        // Handle OAuth redirect URL fragment (e.g. access_token returned in hash)
+        if(window.location.hash && (window.location.hash.includes('access_token') || window.location.hash.includes('refresh_token') || window.location.hash.includes('provider_token'))){
+          try{
+            // Parse fragment into params
+            const frag = window.location.hash.replace(/^#/, '');
+            const params = new URLSearchParams(frag);
+            const access_token = params.get('access_token');
+            const refresh_token = params.get('refresh_token');
+
+            if(access_token){
+              // Use setSession to establish the auth session in Supabase client
+              const { data, error } = await sb.auth.setSession({ access_token, refresh_token });
+              if(error){ console.warn('setSession warning:', error); }
+              if(data?.session?.user){
+                await loadSession(data.session.user);
+              }
+            }
+          } catch(e){
+            console.error('Error processing OAuth redirect:', e);
+            showLogin();
+          } finally {
+            // Remove URL fragment to avoid showing raw tokens and to stop Google "continue" loop
+            try{ history.replaceState(null, '', window.location.pathname + window.location.search); }catch(e){}
+          }
         } else {
-          showLogin();
+          const { data: { session } } = await sb.auth.getSession();
+          if(session?.user){
+            await loadSession(session.user);
+          } else {
+            showLogin();
+          }
         }
+
         sb.auth.onAuthStateChange(async (_event, session) => {
           if(session?.user){
             await loadSession(session.user);
@@ -508,10 +535,82 @@
         showApp();
         renderLeaderboard();
         updateNotifications();
+        // Setup realtime subscriptions after session loads
+        try{
+          setupRealtimeSubscriptions();
+        }catch(e){ console.error('Realtime setup failed:', e); }
       } catch (err) {
         console.error('Critical session load error:', err);
         showApp(); // Fallback: enter app anyway
       }
+    }
+
+    // Setup realtime listeners for core tables so UI updates live
+    function setupRealtimeSubscriptions(){
+      if(!sb || !currentUserId) return;
+      // clean up existing channel
+      try{ if(gameChannel){ sb.removeChannel(gameChannel); gameChannel = null; } }catch(e){}
+
+      gameChannel = sb.channel('realtime:anagram:' + currentUserId);
+
+      // Friend requests (incoming)
+      gameChannel.on('postgres_changes', { event: '*', schema: 'public', table: 'friend_requests', filter: `to_user_id=eq.${currentUserId}` }, payload => {
+        console.log('Friend request realtime:', payload);
+        updateNotifications();
+        // keep invites list fresh if open
+        if(document.getElementById('socialModal').classList.contains('active') && document.getElementById('socialTitle').innerText.toLowerCase().includes('invites')){
+          openInvites();
+        }
+      });
+
+      // Friends list changes for this user
+      gameChannel.on('postgres_changes', { event: '*', schema: 'public', table: 'friends', filter: `user_id=eq.${currentUserId}` }, payload => {
+        console.log('Friends realtime:', payload);
+        if(document.getElementById('socialModal').classList.contains('active') && document.getElementById('socialTitle').innerText.toLowerCase().includes('friends')){
+          renderFriendsList();
+        }
+      });
+
+      // Game invites (incoming)
+      gameChannel.on('postgres_changes', { event: '*', schema: 'public', table: 'game_invites', filter: `to_user_id=eq.${currentUserId}` }, payload => {
+        console.log('Invite realtime:', payload);
+        updateNotifications();
+        if(document.getElementById('socialModal').classList.contains('active') && document.getElementById('socialTitle').innerText.toLowerCase().includes('invites')){
+          openInvites();
+        }
+      });
+
+      // Messages - listen broadly, filter in handler (client sends display names)
+      gameChannel.on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, payload => {
+        const m = payload.record || payload.new || payload;
+        if(!m) return;
+        // if message is to this user (by name) or to_user_id matches
+        if(m.to === user.name || m.to_user_id === currentUserId || m.from_user_id === currentUserId){
+          console.log('Message realtime:', m);
+          updateNotifications();
+          // if messages modal is open, refresh
+          if(document.getElementById('socialModal').classList.contains('active') && document.getElementById('socialTitle').innerText.toLowerCase().includes('messages')){
+            openMessages();
+          }
+        }
+      });
+
+      // Profiles updates (update current user's UI when their profile changes)
+      gameChannel.on('postgres_changes', { event: '*', schema: 'public', table: 'profiles', filter: `id=eq.${currentUserId}` }, payload => {
+        console.log('Profile realtime:', payload);
+        loadProfileFromSupabase();
+      });
+
+      // Online presence updates for all users (used by online players view)
+      gameChannel.on('postgres_changes', { event: '*', schema: 'public', table: 'online_status' }, payload => {
+        if(document.getElementById('socialModal').classList.contains('active') && document.getElementById('socialTitle').innerText.toLowerCase().includes('online')){
+          openOnlinePlayers();
+        }
+      });
+
+      // Subscribe to the channel. Supabase v2's subscribe returns the channel itself.
+      gameChannel.subscribe();
+      console.log('Realtime channel subscribed');
     }
 
     async function ensureProfile(authUser){
@@ -751,37 +850,38 @@
       if(!query) return;
       resDiv.innerHTML = '<div style="opacity:.7">Searching...</div>';
 
-      // Search by email OR display_name
-      const { data, error } = await sb.from('profiles')
-        .select('id, display_name, avatar_url, email')
-        .or(`email.eq."${query}",display_name.eq."${query}"`)
-        .maybeSingle();
+      // Use case-insensitive partial match on email or display_name
+      try{
+        const orFilter = `email.ilike.%${query}%,display_name.ilike.%${query}%`;
+        const { data, error } = await sb.from('profiles')
+          .select('id, display_name, avatar_url, email')
+          .or(orFilter)
+          .limit(10);
 
-      if(data){
-        if(data.id === currentUserId) {
-           resDiv.innerHTML = '<div style="opacity:.7">That\'s you!</div>';
-           return;
-        }
-        resDiv.innerHTML = `
+        if(error){ console.error('Search error:', error); resDiv.innerHTML = '<div style="color:var(--danger);">Search failed.</div>'; return; }
+        if(!data || data.length === 0){ resDiv.innerHTML = '<div style="color:var(--danger);font-size:13px;">Player not found.</div>'; return; }
+
+        // render results
+        const items = data.filter(d => d.id !== currentUserId).map(d => `
           <div class="social-item">
             <div class="social-top">
               <div class="social-user">
-                <img class="small-avatar" src="${data.avatar_url || avatars[0]}">
+                <img class="small-avatar" src="${d.avatar_url || avatars[0]}">
                 <div>
-                  <div style="font-weight:700">${data.display_name}</div>
-                  <div style="font-size:11px;opacity:0.6">${data.email || ''}</div>
+                  <div style="font-weight:700">${d.display_name}</div>
+                  <div style="font-size:11px;opacity:0.6">${d.email || ''}</div>
                 </div>
               </div>
               <div style="display:flex;gap:8px;">
-                <button class="mini-btn accept" onclick="sendFriendRequest('${data.id}','${data.display_name.replace(/'/g, "\\'")}')">🤝 Friend</button>
-                <button class="mini-btn accept" onclick="sendGameInvite('${data.id}','${data.display_name.replace(/'/g, "\\'")}')">🎮 Invite</button>
+                <button class="mini-btn accept" onclick="sendFriendRequest('${d.id}','${d.display_name.replace(/'/g, "\\'")}')">🤝 Friend</button>
+                <button class="mini-btn accept" onclick="sendGameInvite('${d.id}','${d.display_name.replace(/'/g, "\\'")}')">🎮 Invite</button>
               </div>
             </div>
           </div>
-        `;
-      } else {
-        resDiv.innerHTML = '<div style="color:var(--danger);font-size:13px;">Player not found. Try exact email or name.</div>';
-      }
+        `).join('');
+
+        resDiv.innerHTML = items || '<div style="opacity:.7">No matches.</div>';
+      }catch(e){ console.error('Search exception:', e); resDiv.innerHTML = '<div style="color:var(--danger);">Search error.</div>'; }
     }
 
     function friendCard(p){
@@ -821,7 +921,31 @@
     async function sendGameInvite(targetId, targetName){ if(!currentUserId) return; const { error } = await sb.from('game_invites').insert({ from_user_id: currentUserId, to_user_id: targetId, mode: 'quick', status: 'pending', created_at: new Date().toISOString() }); if(error){ console.error('Supabase game invite error:', error); return; } showPopupNotification(`Game invite sent to ${targetName}`); }
     function showPopupNotification(message){ const toast = document.createElement('div'); toast.style.cssText='position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:rgba(15,23,42,.95);color:white;padding:14px 18px;border-radius:18px;box-shadow:0 10px 30px rgba(0,0,0,.25);z-index:2000;opacity:0;transition:.3s;max-width:90%;text-align:center;font-weight:700;'; toast.innerText = message; document.body.appendChild(toast); requestAnimationFrame(()=>toast.style.opacity='1'); setTimeout(()=>{ toast.style.opacity='0'; setTimeout(()=>{ if(toast.parentNode) toast.parentNode.removeChild(toast); }, 400); }, 2600); }
     async function loadMessages(){ if(currentUserId){ const { data, error } = await sb.from('messages').select('*').order('created_at', { ascending: true }); if(error){ console.error('Supabase load messages error:', error); return []; } return (data || []).filter(m => (m.from === user.name || m.to === user.name) && new Date(m.created_at).getTime() >= Date.now() - 72 * 3600 * 1000); } return []; }
-    async function sendMessage(to, text){ if(!to || !text) return; if(currentUserId){ const { error } = await sb.from('messages').insert({ from: user.name, to, text, created_at: new Date().toISOString() }); if(error){ console.error('Supabase send message error:', error); return; } } openMessages(to); }
+    async function sendMessage(to, text){
+      if(!to || !text) return;
+      if(!currentUserId) return openMessages();
+
+      // Try to resolve the recipient id by display_name (best-effort)
+      let toUserId = null;
+      try{
+        const { data: recipient } = await sb.from('profiles').select('id').ilike('display_name', to).maybeSingle();
+        if(recipient && recipient.id) toUserId = recipient.id;
+      }catch(e){ console.warn('Recipient lookup failed:', e); }
+
+      try{
+        const { error } = await sb.from('messages').insert({
+          from: user.name,
+          to,
+          text,
+          from_user_id: currentUserId,
+          to_user_id: toUserId,
+          created_at: new Date().toISOString()
+        });
+        if(error){ console.error('Supabase send message error:', error); return; }
+      }catch(e){ console.error('Send message exception:', e); }
+
+      openMessages(to);
+    }
 
     async function openMessages(to){
       if(!currentUserId){
