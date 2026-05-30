@@ -1,0 +1,1052 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+  <title>AMOS' ANAGRAM RUSH</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Poppins:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <style>
+    :root{ --bg:#0F172A; --card:#1E293B; --blue:#3B82F6; --purple:#8B5CF6; --white:#F8FAFC; --glass:rgba(255,255,255,0.08); --border:rgba(255,255,255,0.12); --success:#22c55e; --danger:#ef4444; --warning:#f59e0b; }
+    *{ margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color: transparent; }
+    body{ background: radial-gradient(circle at top left, rgba(59,130,246,.25), transparent 25%), radial-gradient(circle at bottom right, rgba(139,92,246,.2), transparent 25%), var(--bg); color:var(--white); font-family:'Inter',sans-serif; min-height:100vh; overflow-x:hidden; }
+    .hidden{display:none !important;}
+    .app{ width:100%; max-width:720px; margin:auto; min-height:100vh; position:relative; padding-bottom:110px; }
+    .glass{ background:var(--glass); backdrop-filter: blur(18px); border:1px solid var(--border); box-shadow: 0 10px 30px rgba(0,0,0,.25), inset 0 1px 0 rgba(255,255,255,.05); }
+    .login-screen{ min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:24px; position:relative; overflow:hidden; }
+    .floating{ position:absolute; border-radius:50%; filter:blur(40px); animation:float 8s infinite ease-in-out; }
+    .float1{ width:200px; height:200px; background:rgba(59,130,246,.25); top:-50px; left:-80px; }
+    .float2{ width:220px; height:220px; background:rgba(139,92,246,.25); bottom:-80px; right:-80px; animation-delay:2s; }
+    @keyframes float{ 0%,100%{transform:translateY(0px);} 50%{transform:translateY(20px);} }
+    .logo{ text-align:center; margin-bottom:40px; z-index:2; }
+    .logo h1{ font-family:'Poppins',sans-serif; font-size:42px; line-height:1; font-weight:800; background:linear-gradient(135deg,var(--blue),var(--purple)); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; margin-bottom:10px; }
+    .logo p{ opacity:.8; }
+    .login-card{ width:100%; border-radius:30px; padding:30px 22px; z-index:2; }
+    .btn{ width:100%; border:none; outline:none; border-radius:20px; padding:16px; font-weight:700; font-size:16px; cursor:pointer; transition:.25s; font-family:'Inter',sans-serif; }
+    .btn:active{ transform:scale(.97); }
+    .google-btn{ background:linear-gradient(135deg,var(--blue),var(--purple)); color:white; margin-bottom:14px; box-shadow:0 10px 30px rgba(59,130,246,.3); }
+    .guest-btn{ background:rgba(255,255,255,.08); color:white; }
+    .header{ display:flex; align-items:center; justify-content:space-between; padding:20px 16px; position:sticky; top:0; z-index:10; backdrop-filter: blur(14px); }
+    .header-left{ display:flex; align-items:center; gap:12px; }
+    .profile-pic{ width:52px; height:52px; border-radius:50%; border:3px solid rgba(255,255,255,.12); object-fit:cover; cursor:pointer; }
+    .player-name{ font-weight:700; font-size:17px; }
+    .player-rank{ font-size:12px; color:#93c5fd; }
+    .icon-btn{ width:48px; height:48px; border-radius:18px; display:flex; align-items:center; justify-content:center; background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.1); font-size:20px; cursor:pointer; }
+    .page{ padding:0 16px 30px; }
+    .card{ border-radius:28px; padding:20px; margin-bottom:18px; }
+    .stats-grid{ display:grid; grid-template-columns:repeat(2,1fr); gap:12px; margin-top:18px; }
+    .stat-box{ background:rgba(255,255,255,.05); border-radius:18px; padding:16px; }
+    .stat-title{ font-size:12px; opacity:.7; margin-bottom:6px; }
+    .stat-value{ font-size:22px; font-weight:800; }
+    .big-buttons{ display:grid; gap:14px; }
+    .play-btn{ padding:20px; border-radius:24px; border:none; color:white; font-weight:800; font-size:18px; cursor:pointer; transition:.25s; position:relative; overflow:hidden; }
+    .play-btn::after{ content:''; position:absolute; inset:0; background:linear-gradient(120deg,transparent,rgba(255,255,255,.15),transparent); transform:translateX(-100%); }
+    .play-btn:hover::after{ animation:shine 1s; }
+    @keyframes shine{ to{transform:translateX(100%);} }
+    .quick{ background:linear-gradient(135deg,var(--blue),#2563eb); }
+    .ranked{ background:linear-gradient(135deg,var(--purple),#7c3aed); }
+    .single{ background:linear-gradient(135deg,#334155,#1e293b); }
+    .leader-item{ display:flex; align-items:center; justify-content:space-between; padding:12px 0; border-bottom:1px solid rgba(255,255,255,.06); }
+    .leader-left{ display:flex; align-items:center; gap:12px; }
+    .small-avatar{ width:44px; height:44px; border-radius:50%; }
+    .bottom-bar{ position:fixed; bottom:14px; left:50%; transform:translateX(-50%); width:calc(100% - 24px); max-width:496px; height:78px; border-radius:28px; display:flex; align-items:center; justify-content:space-around; z-index:100; }
+    .nav-item{ display:flex; flex-direction:column; align-items:center; gap:4px; font-size:12px; cursor:pointer; }
+    .nav-icon{ font-size:22px; }
+    .modal{ position:fixed; inset:0; background:rgba(0,0,0,.55); display:flex; align-items:flex-end; justify-content:center; z-index:999; opacity:0; pointer-events:none; transition:.3s; }
+    .modal.active{ opacity:1; pointer-events:auto; }
+    .modal-content{ width:100%; max-width:520px; border-radius:30px 30px 0 0; padding:24px; max-height:90vh; overflow-y:auto; transform:translateY(100%); transition:.35s; }
+    .modal.active .modal-content{ transform:translateY(0); }
+    .modal-title{ font-size:24px; font-weight:800; margin-bottom:20px; }
+    .avatar-grid{ display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-top:20px; }
+    .avatar-option{ width:100%; aspect-ratio:1/1; border-radius:20px; cursor:pointer; border:3px solid transparent; overflow:hidden; }
+    .avatar-option.active{ border-color:var(--blue); }
+    .avatar-option img{ width:100%; height:100%; object-fit:cover; }
+    /* Leaderboard button styles */
+    .leader-primary{ background:linear-gradient(135deg,var(--purple),var(--blue)); padding:12px 18px; border-radius:22px; font-weight:800; box-shadow:0 8px 24px rgba(59,130,246,.18); }
+    .leader-secondary{ background:transparent; border:1px solid rgba(255,255,255,.10); color:var(--white); padding:10px 14px; border-radius:18px; font-weight:700; }
+    /* message button */
+    .msg-btn{ background:linear-gradient(90deg,#06b6d4,#7c3aed); padding:10px 14px; border-radius:14px; border:none; color:white; font-weight:800; }
+    /* fullscreen chat modal */
+    .modal.fullscreen{ align-items:stretch; justify-content:center; }
+    .modal.fullscreen .modal-content{ width:100%; max-width:720px; height:100vh; border-radius:0; padding:0; display:flex; flex-direction:column; }
+    #socialContent.fullscreen-chat{ flex:1; display:flex; flex-direction:column; overflow:hidden; padding:18px; }
+    .online-players-list{ flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:12px; padding:18px; }
+    .online-player-card{ width:100%; border-radius:24px; background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.08); padding:16px; display:flex; align-items:center; justify-content:space-between; gap:12px; }
+    .online-player-card .social-user{ display:flex; align-items:center; gap:12px; }
+    .online-actions{ display:flex; gap:10px; flex-wrap:wrap; }
+    .online-btn{ background:linear-gradient(135deg,#06b6d4,#7c3aed); color:white; border:none; border-radius:16px; padding:10px 14px; font-weight:700; cursor:pointer; min-width:110px; }
+    .chat-list{ flex:1; overflow-y:auto; margin-bottom:12px; padding-right:6px; }
+    .chat-input-row{ display:flex; gap:8px; }
+    .chat-bubble{ background:rgba(255,255,255,.06); padding:10px 12px; border-radius:12px; margin-bottom:8px; max-width:80%; }
+    .chat-bubble.me{ background:linear-gradient(90deg,var(--blue),var(--purple)); color:white; margin-left:auto; }
+    .game-screen{ padding:18px; }
+    .timer{ font-size:56px; font-weight:800; text-align:center; margin:10px 0 12px; color:white; text-shadow: 0 0 12px rgba(59,130,246,.8), 0 0 30px rgba(59,130,246,.7); transition:.25s; }
+    .timer.urgent{ color:#fb7185; text-shadow: 0 0 18px rgba(251,113,133,.9), 0 0 30px rgba(248,113,113,.5); }
+    .match-status{ text-align:center; opacity:.9; margin-bottom:12px; font-size:14px; letter-spacing:.4px; }
+    .combo-badge{ display:inline-flex; align-items:center; justify-content:center; padding:10px 16px; border-radius:999px; background:rgba(255,255,255,.08); color:#93c5fd; font-size:13px; font-weight:700; margin:0 auto 10px; width:max-content; }
+    .versus{ display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:10px; }
+    .player-side{ flex:1; text-align:center; }
+    .player-side img{ width:76px; height:76px; border-radius:50%; margin-bottom:8px; }
+    .score{ font-size:30px; font-weight:800; }
+    .vs{ font-size:32px; font-weight:800; opacity:.7; }
+    .versus.single-mode .player-side:nth-child(3), .versus.single-mode .vs{ display:none; }
+    .versus.single-mode .player-side{ flex:1; }
+    .opp-action{ font-size:13px; opacity:.75; margin-top:10px; }
+    .tiles{ display:flex; flex-wrap:wrap; justify-content:center; gap:12px; margin:30px 0; }
+    .message-input{ width:100%; border:none; outline:none; background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.12); color:white; padding:14px; border-radius:18px; margin-top:12px; font-size:15px; }
+    .tile{ width:58px; height:58px; border-radius:18px; display:flex; align-items:center; justify-content:center; font-size:28px; font-weight:800; background:linear-gradient(135deg,var(--blue),var(--purple)); animation:pop .35s; }
+    @keyframes pop{ from{ opacity:0; transform:scale(.6); } to{ opacity:1; transform:scale(1); } }
+    .answer-input{ width:100%; border:none; outline:none; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.1); color:white; padding:18px; border-radius:22px; font-size:24px; text-transform:uppercase; text-align:center; font-weight:700; letter-spacing:3px; }
+    .submit-btn{ margin-top:16px; background:linear-gradient(135deg,var(--blue),var(--purple)); color:white; }
+    .feedback{ text-align:center; margin-top:14px; font-weight:800; min-height:24px; }
+    .success{ color:var(--success); }
+    .error{ color:var(--danger); }
+    .social-item{ padding:16px; border-radius:20px; margin-bottom:12px; background:rgba(255,255,255,.05); }
+    .social-top{ display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
+    .social-user{ display:flex; align-items:center; gap:12px; }
+    .mini-btns{ display:flex; gap:10px; }
+    .mini-btn{ padding:10px 14px; border:none; border-radius:14px; font-weight:700; color:white; cursor:pointer; }
+    .accept{ background:var(--success); }
+    .decline{ background:var(--danger); }
+    .message{ background:rgba(255,255,255,.05); padding:14px; border-radius:18px; margin-bottom:10px; }
+    .fade-in{ animation:fadeIn .35s; }
+    @keyframes fadeIn{ from{ opacity:0; transform:translateY(10px); } to{ opacity:1; transform:translateY(0); } }
+    .badge{ display:inline-flex; align-items:center; gap:6px; padding:8px 14px; border-radius:999px; background:rgba(59,130,246,.15); border:1px solid rgba(59,130,246,.25); color:#93c5fd; font-size:12px; font-weight:700; }
+    .center{ text-align:center; }
+    .spacer{ height:10px; }
+    .notification-dot{ width:10px; height:10px; background:var(--danger); border-radius:50%; position:absolute; top:10px; right:10px; }
+    .relative{ position:relative; }
+
+  </style>
+</head>
+<body>
+  <div class="app">
+    <!-- LOGIN -->
+    <div class="login-screen" id="loginScreen">
+      <div class="floating float1"></div>
+      <div class="floating float2"></div>
+      <div class="logo">
+        <h1>AMOS' ANAGRAM RUSH</h1>
+        <p>Premium Multiplayer Word Battles</p>
+      </div>
+      <div class="login-card glass">
+        <button class="btn google-btn" id="googleLogin" style="display:flex;align-items:center;justify-content:center;gap:12px;">
+          <img src="https://www.google.com/favicon.ico" style="width:20px;height:20px;filter:brightness(0) invert(1);">
+          Continue with Google
+        </button>
+      </div>
+    </div>
+    <!-- MAIN APP -->
+    <div id="mainApp" class="hidden fade-in">
+      <!-- HEADER -->
+      <div class="header">
+        <div class="header-left">
+          <img id="headerAvatar" class="profile-pic" src="" />
+          <div>
+            <div class="player-name" id="headerName"></div>
+            <div class="player-rank" id="headerRank">Diamond League</div>
+          </div>
+        </div>
+        <div class="icon-btn relative" onclick="openNotifications()"> 🔔 <div class="notification-dot"></div> </div>
+      </div>
+      <!-- DASHBOARD -->
+      <div class="page" id="dashboardPage">
+        <div class="card glass">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <div>
+              <h2 style="font-size:26px;">Player Stats</h2>
+              <div class="badge" id="leagueBadge">💎 Diamond League</div>
+            </div>
+            <div style="font-size:52px;">🏆</div>
+          </div>
+          <div class="stats-grid">
+            <div class="stat-box">
+              <div class="stat-title">Ranked Wins</div>
+              <div class="stat-value" id="wins">0</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-title">Losses</div>
+              <div class="stat-value" id="losses">0</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-title">Draws</div>
+              <div class="stat-value" id="draws">0</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-title">Win Rate</div>
+              <div class="stat-value" id="winrate">0%</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-title">MMR</div>
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+                <div class="stat-value" id="mmr">1000</div>
+                <button id="rankProgressBtn" class="mini-btn" style="flex-shrink:0;padding:10px 14px;font-size:12px;background:linear-gradient(135deg,var(--blue),var(--purple));color:white;" onclick="showRankLevels()">View Ranks</button>
+              </div>
+            </div>
+            <div class="stat-box" style="display:flex;flex-direction:column;justify-content:center;">
+              <div class="stat-title">Rank Progress</div>
+              <div style="background:rgba(255,255,255,.08);border-radius:12px;overflow:hidden;height:10px;margin-top:8px;">
+                <div id="rankProgressBar" style="height:100%;width:0%;background:linear-gradient(135deg,var(--blue),var(--purple));transition:width .35s;"></div>
+              </div>
+              <div id="rankProgressText" style="font-size:12px;opacity:.85;margin-top:8px;">0% to Silver League</div>
+            </div>
+          </div>
+          <div style="margin-top:18px; display:flex; gap:10px;">
+            <button class="leader-secondary" style="flex:1;padding:16px 18px;font-size:16px;display:flex;align-items:center;justify-content:center;gap:10px;" onclick="openOnlinePlayers()">🟢 Players Online</button>
+            <button class="leader-secondary" style="flex:1;padding:16px 18px;font-size:16px;display:flex;align-items:center;justify-content:center;gap:10px;" onclick="openFriends()">🔍 Find Friends</button>
+          </div>
+        </div>
+        <div class="big-buttons">
+          <button class="play-btn quick" onclick="findMatch('quick')"> ⚡ Quick Match </button>
+          <button class="play-btn ranked" onclick="findMatch('ranked')"> 🏆 Ranked / Leaderboard Match </button>
+          <button class="play-btn single" onclick="startGame('single')"> 🎯 Single Player </button>
+        </div>
+        <div class="spacer"></div>
+        <div class="card glass">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+            <div>
+              <h2>Global Leaders</h2>
+              <div style="font-size:13px;opacity:.75;">Top players from highest to lowest</div>
+            </div>
+            <div style="display:flex;gap:10px;align-items:center;">
+              <button class="leader-secondary" onclick="openLeaderboard()">Show Top 100</button>
+            </div>
+          </div>
+          <div id="leaderboardPreview"></div>
+        </div>
+      </div>
+      <!-- GAME SCREEN -->
+      <div id="gameScreen" class="hidden fade-in game-screen">
+        <div class="timer" id="timer">180</div>
+        <div class="match-status" id="matchStatus">Keep the pressure high and unlock streak bonuses.</div>
+        <div class="combo-badge" id="comboBadge">Combo x0</div>
+        <div class="versus">
+          <div class="player-side">
+            <img id="meAvatar" src="">
+            <div id="meName">YOU</div>
+            <div class="badge">💎 Diamond</div>
+            <div class="score" id="myScore">0</div>
+          </div>
+          <div class="vs">VS</div>
+          <div class="player-side">
+            <img id="oppAvatar" src="https://i.pravatar.cc/150?img=8">
+            <div id="oppName">RIVAL</div>
+            <div class="badge" id="oppBadge">🔥 Elite</div>
+            <div class="score" id="oppScore">0</div>
+            <div class="opp-action" id="oppAction">Rival warming up...</div>
+          </div>
+        </div>
+        <div class="card glass">
+          <div class="center" style="opacity:.7;margin-bottom:10px;">Unscramble The Word</div>
+          <div class="tiles" id="tiles"></div>
+          <input id="answerInput" class="answer-input" placeholder="TYPE WORD" maxlength="12" />
+          <button class="btn submit-btn" onclick="submitAnswer()"> Submit Answer </button>
+          <div class="feedback" id="feedback"></div>
+        </div>
+        <button id="exitMatchBtn" class="btn guest-btn" onclick="endMatch()" style="margin-top:18px;"> Exit Match </button>
+      </div>
+    </div>
+    <!-- BOTTOM NAV -->
+    <div class="bottom-bar glass hidden" id="bottomBar">
+      <div class="nav-item" onclick="openFriends()">
+        <div class="nav-icon">👥</div>
+        <div>Friends</div>
+      </div>
+      <div class="nav-item" onclick="openMessages()">
+        <div class="nav-icon">💬</div>
+        <div>Messages</div>
+      </div>
+      <div class="nav-item" onclick="openInvites()">
+        <div class="nav-icon">🎮</div>
+        <div>Invites</div>
+      </div>
+      <div class="nav-item" onclick="openProfile()">
+        <div class="nav-icon">👤</div>
+        <div>Profile</div>
+      </div>
+    </div>
+  </div>
+  <!-- PROFILE MODAL -->
+  <div class="modal" id="profileModal">
+    <div class="modal-content glass">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div class="modal-title">Profile</div>
+        <div class="icon-btn" onclick="closeModal('profileModal')">✕</div>
+      </div>
+      <div style="display:flex;gap:16px;align-items:flex-start;">
+        <div style="position:relative;width:120px;height:120px;flex-shrink:0;">
+          <img id="profileAvatar" class="profile-pic" style="width:120px;height:120px;border-radius:20px;" src="">
+        </div>
+        <div style="flex:1;">
+          <h2 id="profileName" style="font-size:18px;margin-bottom:4px;"></h2>
+          <div id="profileEmail" style="font-size:13px;opacity:.7;margin-bottom:6px;"></div>
+          <div style="font-size:14px;" id="profileLeagueBadge">League</div>
+          <div id="profileRankText" style="font-size:13px;opacity:.75;margin-top:8px;"></div>
+        </div>
+      </div>
+      <h3 style="margin-top:24px;">Profile Settings</h3>
+      <div class="center" style="margin-top:12px;">
+        <div style="margin-bottom:8px;">Change Profile Picture</div>
+        <input type="file" id="avatarUpload" accept="image/*" style="width:100%;" />
+      </div>
+      <div style="margin-top:12px;width:100%;">
+        <div style="margin-bottom:8px;">Display Name</div>
+        <input id="displayNameInput" class="answer-input" type="text" placeholder="Enter display name" maxlength="24" style="font-size:16px;letter-spacing:normal;" />
+      </div>
+      <div style="display:flex;gap:10px;margin-top:14px;">
+        <button class="btn guest-btn" style="flex:1;padding:12px 14px;" onclick="openModal('aboutModal')"> About Us </button>
+        <button class="btn guest-btn" style="flex:1;padding:12px 14px;" onclick="logout()"> Logout </button>
+      </div>
+      <div style="height:18px;"></div>
+      <button class="btn google-btn" style="margin-top:8px;" id="saveProfileBtn">Save Changes</button>
+    </div>
+  </div>
+  <!-- SOCIAL MODAL -->
+  <div class="modal" id="socialModal">
+    <div class="modal-content glass">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div class="modal-title" id="socialTitle">Friends</div>
+        <div class="icon-btn" onclick="closeModal('socialModal')">✕</div>
+      </div>
+      <div id="socialContent"></div>
+    </div>
+  </div>
+  <!-- LEADERBOARD MODAL -->
+  <div class="modal" id="rankModal">
+    <div class="modal-content glass">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div class="modal-title">Rank Progression</div>
+        <div class="icon-btn" onclick="closeModal('rankModal')">✕</div>
+      </div>
+      <div id="rankModalContent" style="padding:8px 4px;line-height:1.6;"></div>
+    </div>
+  </div>
+  <div class="modal" id="leaderboardModal">
+    <div class="modal-content glass">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div class="modal-title">Global Leaderboard</div>
+        <div class="icon-btn" onclick="closeModal('leaderboardModal')">✕</div>
+      </div>
+      <div id="leaderboardActions" style="display:flex;justify-content:flex-start;gap:12px;margin-bottom:16px;">
+        <button class="leader-primary" style="padding:12px 16px;font-size:14px;" onclick="joinLeaderboardMatch()">Play Leaderboard Match</button>
+        <button class="leader-secondary" style="padding:12px 16px;font-size:14px;" onclick="renderLeaderboard(true)">Show Top 100</button>
+
+      </div>
+      <div id="leaderboardFull"></div>
+    </div>
+  </div>
+  <div class="modal" id="notificationModal">
+    <div class="modal-content glass">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div class="modal-title">Notifications</div>
+        <div class="icon-btn" onclick="closeModal('notificationModal')">✕</div>
+      </div>
+      <div id="notificationContent"></div>
+    </div>
+  </div>
+  <div class="modal" id="resultModal">
+    <div class="modal-content glass">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div class="modal-title">Match Result</div>
+        <div class="icon-btn" onclick="closeModal('resultModal')">✕</div>
+      </div>
+      <div id="resultSummary"></div>
+      <button class="btn google-btn" style="margin-top:18px;" onclick="confirmResult()">Continue</button>
+    </div>
+  </div>
+  <div class="modal" id="matchmakingModal">
+    <div class="modal-content glass">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <div class="modal-title">Searching for Opponent</div>
+      </div>
+      <div id="matchmakingContent" style="text-align:center;padding:20px;">
+        <div style="font-weight:800;margin-bottom:8px;">Finding a suitable opponent...</div>
+        <div style="opacity:.8;margin-bottom:12px;">This usually takes a few seconds.</div>
+        <div id="matchSpinner" style="margin-bottom:20px;font-size:24px;">⏳</div>
+        <button class="btn guest-btn" onclick="cancelMatchmaking()"> Cancel </button>
+      </div>
+    </div>
+  </div>
+  <div class="modal" id="aboutModal">
+    <div class="modal-content glass">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div class="modal-title">About & How to Play</div>
+        <div class="icon-btn" onclick="closeModal('aboutModal')">✕</div>
+      </div>
+      <div style="padding:8px 4px;line-height:1.6;">
+        <div style="font-weight:800;margin-bottom:8px;">Full Name: Amos Banda</div>
+        <div>Email: bandaamos98@gmail.com</div>
+        <div>Location: Zambia</div>
+        <div style="margin-top:8px;font-weight:800;">Our Games</div>
+        <div>1. Anagram Rush</div>
+        <div>2. Wordfury</div>
+        <div style="margin-top:16px;font-weight:800;">How to Play</div>
+        <div>• Choose Quick Match to practice, Ranked Match to earn MMR, or Single Player to warm up.</div>
+        <div>• Unscramble the letters before time runs out.</div>
+        <div>• Correct answers build score and streak bonus.</div>
+        <div style="margin-top:16px;font-weight:800;">How to Rank Up</div>
+        <div>1. Play ranked matches and focus on wins.</div>
+        <div>2. Winning increases your MMR; losing may decrease it.</div>
+        <div>3. Reach the next MMR milestone to advance your league.</div>
+        <div>4. The rank shown in your profile is your current league.</div>
+      </div>
+    </div>
+  </div>
+  <script>
+    /* ========================================== SUPABASE INIT ========================================== */
+    var sb = null;
+    var currentUserId = null;
+
+    const wordPools = {
+      easy:["APPLE","TABLE","CHAIR","PHONE","TRAIN","BOOK","LIGHT","CLOUD","WATER","MONEY","FAMILY","HAPPY","SWEET","SILVER","GOLDEN"],
+      medium:["BROWSER","MOBILE","PROFILE","PUZZLE","LEADER","FRIEND","SCHOOL","HUNTER","DYNAMIC","SOCIAL","MESSAGE","NETWORK","SYSTEM","RANKED","ADVENTURE"],
+      hard:["ANAGRAM","VICTORY","CHALLENGE","SCRAMBLE","RANKING","PREMIUM","STRONGER","LANGUAGE","SUPPORT","CAPABLE","CREATIVE","COMPLETE","DECISION","BALANCE","LIBRARY"],
+      elite:["JAVASCRIPT","FIREBASE","MULTIPLAYER","LEADERBOARD","COMMUNITY","COMPETITION","STRATEGY","PERFORMANCE","INNOVATION","DISCOVERY","ENGAGEMENT","TRANSFORM","ADVANTAGE","EXPERIENCE","EMPOWERMENT"]
+    };
+    const rankProgression = [
+      { label: 'Bronze League', min: 0, next: 'Silver League', nextMMR: 600, description: 'The first step. Learn the game and build wins.' },
+      { label: 'Silver League', min: 600, next: 'Gold League', nextMMR: 900, description: 'You are improving. Focus on consistency.' },
+      { label: 'Gold League', min: 900, next: 'Platinum League', nextMMR: 1150, description: 'Good wordplay gets rewarded here.' },
+      { label: 'Platinum League', min: 1150, next: 'Diamond League', nextMMR: 1350, description: 'Challenging opponents and tighter games.' },
+      { label: 'Diamond League', min: 1350, next: 'Master League', nextMMR: 1550, description: 'Elite performance with strong rank momentum.' },
+      { label: 'Master League', min: 1550, next: 'Grandmaster League', nextMMR: 1750, description: 'Master the meta and keep your win rate high.' },
+      { label: 'Grandmaster League', min: 1750, next: 'Legend League', nextMMR: 2000, description: 'Only the best players stay here.' },
+      { label: 'Legend League', min: 2000, next: 'Mythic League', nextMMR: 2300, description: 'Top-tier elite competition ahead.' },
+      { label: 'Mythic League', min: 2300, next: null, nextMMR: null, description: 'The highest rank. Dominance unlocked.' }
+    ];
+    const avatars = [
+      "https://i.pravatar.cc/150?img=1",
+      "https://i.pravatar.cc/150?img=2",
+      "https://i.pravatar.cc/150?img=3",
+      "https://i.pravatar.cc/150?img=4",
+      "https://i.pravatar.cc/150?img=5",
+      "https://i.pravatar.cc/150?img=6",
+      "https://i.pravatar.cc/150?img=7",
+      "https://i.pravatar.cc/150?img=8",
+      "https://i.pravatar.cc/150?img=9",
+      "https://i.pravatar.cc/150?img=10"
+    ];
+
+    let user = { name:"Guest", avatar:avatars[0], wins:0, losses:0, draws:0, mmr:1000, email:"" };
+    let notifications = [];
+    let gameChannel = null;
+    let matchmakingTimeout = null;
+    let currentMatchId = null;
+    let currentWord = "";
+    let currentMode = "single";
+    let myScore = 0;
+    let oppScore = 0;
+    let timeLeft = 0;
+    let timer;
+    let streak = 0;
+    let currentWordStart = 0;
+
+    function initSupabase(){
+      if (sb) return;
+      const supabaseUrl = "https://gultmvvalrrvrwrganzz.supabase.co";
+      const supabaseKey = "sb_publishable_EAvEUp-5zSn5pZS8oVDX-Q__lZTdQJU";
+      const supabaseGlobal = window.supabase;
+      if(!supabaseGlobal || typeof supabaseGlobal.createClient !== 'function'){
+        console.warn('Supabase library loading...');
+        setTimeout(initSupabase, 500);
+        return;
+      }
+      try {
+        sb = supabaseGlobal.createClient(supabaseUrl, supabaseKey);
+        console.log('Supabase client created');
+        initApp();
+      } catch (err) {
+        console.error('Failed to create Supabase client:', err);
+      }
+    }
+
+    async function initApp(){
+      try {
+        const { data: { session } } = await sb.auth.getSession();
+        if(session?.user){
+          await loadSession(session.user);
+        } else {
+          showLogin();
+        }
+        sb.auth.onAuthStateChange(async (_event, session) => {
+          if(session?.user){
+            await loadSession(session.user);
+          } else {
+            showLogin();
+          }
+        });
+      } catch (err) {
+        console.error('App initialization failed:', err);
+        showLogin();
+      }
+    }
+
+    function showLogin(){
+      document.getElementById("loginScreen").classList.remove("hidden");
+      document.getElementById("mainApp").classList.add("hidden");
+      document.getElementById("bottomBar").classList.add("hidden");
+    }
+
+    function showApp(){
+      document.getElementById("loginScreen").classList.add("hidden");
+      document.getElementById("mainApp").classList.remove("hidden");
+      document.getElementById("bottomBar").classList.remove("hidden");
+    }
+
+    async function loadSession(userObj){
+      try {
+        currentUserId = userObj.id;
+        // Use auth email as primary source if db is missing it
+        user.email = userObj.email || "";
+
+        // Try to ensure profile exists, but don't let it block app entry
+        await ensureProfile(userObj).catch(e => console.error("Profile sync failed:", e));
+        await setOnlineStatus(true).catch(e => console.error("Presence failed:", e));
+        await loadProfileFromSupabase();
+
+        showApp();
+        renderLeaderboard();
+        updateNotifications();
+      } catch (err) {
+        console.error('Critical session load error:', err);
+        showApp(); // Fallback: enter app anyway
+      }
+    }
+
+    async function ensureProfile(authUser){
+      const { data, error } = await sb.from('profiles').select('*').eq('id', authUser.id).maybeSingle();
+
+      const autoName = "Anagrammer_" + Math.floor(1000 + Math.random() * 9000);
+
+      if(!data){
+        const newProfile = {
+          id: authUser.id,
+          email: authUser.email,
+          display_name: autoName,
+          avatar_url: authUser.user_metadata.avatar_url || authUser.user_metadata.picture || avatars[0],
+          wins: 0, losses: 0, draws: 0, mmr: 1000, league: 'Silver League'
+        };
+        await sb.from('profiles').insert(newProfile);
+      } else {
+        const updates = {};
+        if (!data.email) updates.email = authUser.email;
+        if (!data.display_name) updates.display_name = autoName;
+        if (Object.keys(updates).length > 0) {
+          await sb.from('profiles').update(updates).eq('id', authUser.id);
+        }
+      }
+    }
+
+    async function loadProfileFromSupabase(){
+      if(!currentUserId) return;
+      const { data, error } = await sb.from('profiles').select('*').eq('id', currentUserId).maybeSingle();
+      if(error){
+        console.error('Supabase load profile error:', error);
+        return;
+      }
+      if(data){
+        user = {
+          name: data.display_name || 'Player',
+          avatar: data.avatar_url || avatars[0],
+          wins: data.wins || 0,
+          losses: data.losses || 0,
+          draws: data.draws || 0,
+          mmr: data.mmr || 1000,
+          email: data.email || ""
+        };
+        updateUI();
+      }
+    }
+
+    async function setOnlineStatus(isOnline){
+      if(!currentUserId) return;
+      await sb.from('online_status').upsert({ user_id: currentUserId, is_online: isOnline });
+    }
+
+    async function signInWithGoogle(){
+      if (!sb) {
+        alert('Game services are still loading. Please wait a moment and try again.');
+        return;
+      }
+      console.log('Initiating Google Login...');
+      const cleanURL = window.location.origin + window.location.pathname;
+      const { error } = await sb.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          scopes: 'openid email profile',
+          redirectTo: cleanURL,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent',
+          }
+        }
+      });
+      if(error){
+        console.error('Supabase sign-in error:', error.message);
+      }
+    }
+
+    // Attach event listener directly
+    document.getElementById("googleLogin").addEventListener("click", signInWithGoogle);
+
+    async function logout(){
+      document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
+      await signOutSupabase();
+    }
+
+    async function signOutSupabase(){
+      await setOnlineStatus(false);
+      const { error } = await sb.auth.signOut();
+      if(error){
+        console.error('Supabase sign-out error:', error.message);
+      }
+      document.getElementById("mainApp").classList.add("hidden");
+      document.getElementById("bottomBar").classList.add("hidden");
+      document.getElementById("loginScreen").classList.remove("hidden");
+    }
+
+    function updateUI(){
+      document.getElementById("headerAvatar").src = user.avatar;
+      document.getElementById("profileAvatar").src = user.avatar;
+      document.getElementById("meAvatar").src = user.avatar;
+      document.getElementById("headerName").innerText = user.name;
+      document.getElementById("profileName").innerText = user.name;
+      document.getElementById("profileEmail").innerText = user.email ? `Email: ${user.email}` : "Email not available";
+      const leagueLabel = getLeagueLabel(user.mmr);
+      document.getElementById("leagueBadge").innerText = leagueLabel;
+      document.getElementById("profileLeagueBadge").innerText = leagueLabel;
+      document.getElementById("headerRank").innerText = leagueLabel;
+      const rankInfo = getRankInfo(user.mmr);
+      document.getElementById("profileRankText").innerText = rankInfo.next ? `Current rank: ${rankInfo.current.label}. Next rank: ${rankInfo.next.label} at ${rankInfo.next.nextMMR} MMR.` : `Current rank: ${rankInfo.current.label}. You are at the top rank.`;
+      const progressPercent = getRankProgressPercent(user.mmr);
+      const progressBar = document.getElementById("rankProgressBar");
+      const progressText = document.getElementById("rankProgressText");
+      const progressBtn = document.getElementById("rankProgressBtn");
+      if(progressBar){
+        progressBar.style.width = `${progressPercent}%`;
+      }
+      if(progressText){
+        progressText.innerText = rankInfo.next ? `${progressPercent}% to ${rankInfo.next.label}` : 'Max rank reached';
+      }
+      if(progressBtn){
+        progressBtn.innerText = rankInfo.next ? 'View Ranks' : 'Max rank';
+      }
+      const displayNameInputField = document.getElementById("displayNameInput");
+      if(displayNameInputField) displayNameInputField.value = user.name;
+      document.getElementById("wins").innerText = user.wins;
+      document.getElementById("losses").innerText = user.losses;
+      document.getElementById("draws").innerText = user.draws;
+      const totalGames = user.wins + user.losses + user.draws;
+      const wr = totalGames ? Math.round((user.wins / totalGames) * 100) : 0;
+      document.getElementById("winrate").innerText = wr + "%";
+      document.getElementById("mmr").innerText = user.mmr;
+    }
+
+    async function renderLeaderboard(showAll){
+      const { data: leaders, error } = await sb.from('profiles').select('display_name, avatar_url, mmr, league').order('mmr', { ascending: false }).limit(showAll ? 100 : 5);
+      if(error){ console.error('Leaderboard error:', error); return; }
+
+      let html = "";
+      leaders.forEach((l, i) => {
+        html += `
+          <div class="leader-item">
+            <div class="leader-left">
+              <img class="small-avatar" src="${l.avatar_url || avatars[0]}">
+              <div>
+                <div style="font-weight:700">${i+1}. ${l.display_name}</div>
+                <div style="font-size:12px;opacity:.7">${l.league}</div>
+              </div>
+            </div>
+            <div style="font-weight:800">${l.mmr}</div>
+          </div>
+        `;
+      });
+
+      if(showAll) document.getElementById("leaderboardFull").innerHTML = html;
+      else document.getElementById("leaderboardPreview").innerHTML = html;
+    }
+
+    function updateNotifications(){
+      try {
+        const dyn = [];
+        const prev = parseInt(localStorage.getItem('prevMMR')||user.mmr,10);
+        if(user.mmr > prev){
+          dyn.push({ title: 'Rank Up', message: `You ranked up to ${getLeagueLabel(user.mmr)} (+${user.mmr - prev} MMR)` });
+        } else if(user.mmr < prev){
+          dyn.push({ title: 'Surpassed', message: `You've been surpassed. MMR ${user.mmr} (${prev - user.mmr} down)` });
+        }
+        localStorage.setItem('prevMMR', user.mmr);
+        const base = (notifications || []).concat(dyn);
+        const content = base.map(n=>`<div class="social-item"><div style="display:flex;justify-content:space-between;align-items:center;"><div><div style="font-weight:700">${n.title}</div><div style="font-size:12px;opacity:.7">${n.message}</div></div>${n.read ? '' : '<span class="badge" style="background:var(--danger);color:#fff;">NEW</span>'}</div></div>`).join("");
+        document.getElementById("notificationContent").innerHTML = content;
+      } catch(e) { console.error("Notification update failed", e); }
+    }
+
+    function openNotifications(){ updateNotifications(); openModal("notificationModal"); notifications.forEach(n=>n.read = true); const dot = document.querySelector('.notification-dot'); if(dot){ dot.style.display = 'none'; } }
+    function enterLeaderboard(){ openLeaderboard(); }
+    function openLeaderboard(){ renderLeaderboard(true); openModal("leaderboardModal"); }
+    function joinLeaderboardMatch(){ closeModal("leaderboardModal"); startGame("ranked"); }
+    function getLeagueLabel(mmr){ const rank = rankProgression.slice().reverse().find(r=>mmr >= r.min); return rank ? rank.label : rankProgression[0].label; }
+    function getRankInfo(mmr){ const rank = rankProgression.slice().reverse().find(r=>mmr >= r.min) || rankProgression[0]; const next = rankProgression.find(r=>r.min > rank.min); return { current: rank, next: next || null }; }
+    function getRankProgressPercent(mmr){ const rankInfo = getRankInfo(mmr); if(!rankInfo.next) return 100; const range = rankInfo.next.min - rankInfo.current.min; const progress = range > 0 ? ((mmr - rankInfo.current.min) / range) * 100 : 0; return Math.min(100, Math.max(0, Math.round(progress))); }
+    function selectWordPool(mode){ if(mode === "single" || mode === "ranked"){ if(user.mmr >= 2000) return wordPools.elite; if(user.mmr >= 1350) return wordPools.hard; if(user.mmr >= 900) return wordPools.medium; return wordPools.easy; } return user.mmr >= 1300 ? wordPools.hard : wordPools.medium; }
+    function openProfile(){ updateUI(); openModal("profileModal"); }
+    function showRankLevels(){
+      const rankInfo = getRankInfo(user.mmr);
+      const rows = rankProgression.map(r => {
+        const isCurrent = r.label === rankInfo.current.label;
+        const isNext = rankInfo.next && r.label === rankInfo.next.label;
+        const marker = isCurrent ? '✅' : isNext ? '➡️' : '•';
+        const threshold = r.nextMMR ? `→ ${r.nextMMR} MMR` : 'Top rank';
+        return `<div style="margin-bottom:12px;padding:12px 14px;border-radius:18px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;font-weight:700;">${marker} ${r.label}<span style="font-size:12px;opacity:.75;">${threshold}</span></div>
+          <div style="font-size:12px;opacity:.8;margin-top:6px;">${r.description}</div>
+        </div>`;
+      }).join('');
+      document.getElementById('rankModalContent').innerHTML = `<div style="margin-bottom:14px;font-size:14px;font-weight:800;">Current: ${rankInfo.current.label} (${user.mmr} MMR)</div>${rows}`;
+      openModal('rankModal');
+    }
+    function openModal(id){ document.getElementById(id).classList.add("active"); }
+    function closeModal(id){ const el = document.getElementById(id); if(!el) return; el.classList.remove("active"); el.classList.remove("fullscreen"); if(id === 'socialModal'){ document.getElementById('bottomBar').classList.remove('hidden'); } }
+
+    function openFriends(){
+      document.getElementById("socialTitle").innerText = "Friends";
+      document.getElementById("socialContent").className = '';
+      document.getElementById("socialContent").innerHTML = `
+        <div style="margin-bottom:18px;">
+          <div style="margin-bottom:8px;font-size:14px;opacity:.8;">Find Friends</div>
+          <div class="chat-input-row">
+            <input id="friendSearchEmail" class="message-input" placeholder="Search by email..." style="margin:0;flex:1;"/>
+            <button class="btn google-btn" onclick="searchFriendByEmail()" style="width:auto;padding:0 20px;margin:0;">Search</button>
+          </div>
+          <div id="searchResult" style="margin-top:12px;"></div>
+        </div>
+        <div id="friendsList">Loading friends...</div>
+      `;
+      renderFriendsList();
+      openModal("socialModal");
+    }
+
+    async function renderFriendsList(){
+      if(!currentUserId) {
+        document.getElementById("friendsList").innerHTML = '<div class="message">Sign in to see friends.</div>';
+        return;
+      }
+      const { data, error } = await sb.from('friends').select('friend_id').eq('user_id', currentUserId);
+      if(error){ console.error('Friends error:', error); return; }
+      const ids = (data || []).map(f => f.friend_id);
+      if(ids.length === 0){
+        document.getElementById("friendsList").innerHTML = '<div class="message">No friends added yet.</div>';
+        return;
+      }
+      const { data: profiles } = await sb.from('profiles').select('id,display_name,avatar_url').in('id', ids);
+      const html = (profiles || []).map(p => friendCard(p)).join('');
+      document.getElementById("friendsList").innerHTML = html || '<div class="message">No friends found.</div>';
+    }
+
+    async function searchFriendByEmail(){
+      const query = document.getElementById('friendSearchEmail').value.trim();
+      const resDiv = document.getElementById('searchResult');
+      if(!query) return;
+      resDiv.innerHTML = '<div style="opacity:.7">Searching...</div>';
+
+      // Search by email OR display_name
+      const { data, error } = await sb.from('profiles')
+        .select('id, display_name, avatar_url, email')
+        .or(`email.eq."${query}",display_name.eq."${query}"`)
+        .maybeSingle();
+
+      if(data){
+        if(data.id === currentUserId) {
+           resDiv.innerHTML = '<div style="opacity:.7">That\'s you!</div>';
+           return;
+        }
+        resDiv.innerHTML = `
+          <div class="social-item">
+            <div class="social-top">
+              <div class="social-user">
+                <img class="small-avatar" src="${data.avatar_url || avatars[0]}">
+                <div>
+                  <div style="font-weight:700">${data.display_name}</div>
+                  <div style="font-size:11px;opacity:0.6">${data.email || ''}</div>
+                </div>
+              </div>
+              <div style="display:flex;gap:8px;">
+                <button class="mini-btn accept" onclick="sendFriendRequest('${data.id}','${data.display_name.replace(/'/g, "\\'")}')">🤝 Friend</button>
+                <button class="mini-btn accept" onclick="sendGameInvite('${data.id}','${data.display_name.replace(/'/g, "\\'")}')">🎮 Invite</button>
+              </div>
+            </div>
+          </div>
+        `;
+      } else {
+        resDiv.innerHTML = '<div style="color:var(--danger);font-size:13px;">Player not found. Try exact email or name.</div>';
+      }
+    }
+
+    function friendCard(p){
+      return `
+        <div class="social-item">
+          <div class="social-top">
+            <div class="social-user">
+              <img class="small-avatar" src="${p.avatar_url || avatars[0]}">
+              <div>
+                <div style="font-weight:700">${p.display_name || 'Player'}</div>
+              </div>
+            </div>
+            <div style="display:flex;gap:8px;">
+              <button class="mini-btn accept" onclick="sendGameInvite('${p.id}','${p.display_name.replace(/'/g, "\\'")}')">Invite</button>
+              <button class="msg-btn" onclick="openMessages('${p.display_name.replace(/'/g, "\\'")}')">Message</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    async function openOnlinePlayers(){
+      document.getElementById("socialTitle").innerText = "Players Online";
+      if(!currentUserId){ document.getElementById("socialContent").className = 'online-players-list'; document.getElementById("socialContent").innerHTML = '<div class="message">Sign in with Google to see players online.</div>'; openModal("socialModal"); document.getElementById('socialModal').classList.add('fullscreen'); document.getElementById('bottomBar').classList.add('hidden'); return; }
+      const { data: onlineRows, error: onlineError } = await sb.from('online_status').select('user_id').eq('is_online', true).neq('user_id', currentUserId);
+      if(onlineError){ console.error('Supabase online players error:', onlineError); }
+      const ids = (onlineRows || []).map(row => row.user_id);
+      if(ids.length === 0){ document.getElementById("socialContent").className = 'online-players-list'; document.getElementById("socialContent").innerHTML = '<div class="message">No players online found.</div>'; openModal("socialModal"); document.getElementById('socialModal').classList.add('fullscreen'); document.getElementById('bottomBar').classList.add('hidden'); return; }
+      const { data: profiles, error: profileError } = await sb.from('profiles').select('id,display_name,avatar_url').in('id', ids);
+      if(profileError){ console.error('Supabase profile lookup error:', profileError); }
+      const html = (profiles || []).map(p => { const name = p.display_name || 'Player'; const safeName = escapeHtml(name); const safeAvatar = p.avatar_url || `https://i.pravatar.cc/150?u=${encodeURIComponent(name)}`; return `<div class="online-player-card"><div class="social-user"><img class="small-avatar" src="${safeAvatar}"><div><div style="font-weight:700">${safeName}</div><div style="font-size:12px;opacity:.7">🟢 Online</div></div></div><div class="online-actions"><button class="online-btn" onclick="sendFriendRequest('${p.id}','${safeName.replace(/'/g, "\\'")}')">🤝 Friend</button><button class="online-btn" onclick="sendGameInvite('${p.id}','${safeName.replace(/'/g, "\\'")}')">🎮 Invite</button></div></div>`; }).join('') || '<div class="message">No players online found.</div>';
+      const socialContent = document.getElementById("socialContent"); socialContent.className = 'online-players-list'; socialContent.innerHTML = html;
+      const socialModal = document.getElementById('socialModal'); socialModal.classList.add('fullscreen'); document.getElementById('bottomBar').classList.add('hidden'); openModal("socialModal");
+    }
+
+    async function sendFriendRequest(targetId, targetName){ if(!currentUserId) return; const { error } = await sb.from('friend_requests').insert({ from_user_id: currentUserId, to_user_id: targetId, status: 'pending', created_at: new Date().toISOString() }); if(error){ console.error('Supabase friend request error:', error); return; } showPopupNotification(`Friend request sent to ${targetName}`); }
+    async function sendGameInvite(targetId, targetName){ if(!currentUserId) return; const { error } = await sb.from('game_invites').insert({ from_user_id: currentUserId, to_user_id: targetId, mode: 'quick', status: 'pending', created_at: new Date().toISOString() }); if(error){ console.error('Supabase game invite error:', error); return; } showPopupNotification(`Game invite sent to ${targetName}`); }
+    function showPopupNotification(message){ const toast = document.createElement('div'); toast.style.cssText='position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:rgba(15,23,42,.95);color:white;padding:14px 18px;border-radius:18px;box-shadow:0 10px 30px rgba(0,0,0,.25);z-index:2000;opacity:0;transition:.3s;max-width:90%;text-align:center;font-weight:700;'; toast.innerText = message; document.body.appendChild(toast); requestAnimationFrame(()=>toast.style.opacity='1'); setTimeout(()=>{ toast.style.opacity='0'; setTimeout(()=>{ if(toast.parentNode) toast.parentNode.removeChild(toast); }, 400); }, 2600); }
+    async function loadMessages(){ if(currentUserId){ const { data, error } = await sb.from('messages').select('*').order('created_at', { ascending: true }); if(error){ console.error('Supabase load messages error:', error); return []; } return (data || []).filter(m => (m.from === user.name || m.to === user.name) && new Date(m.created_at).getTime() >= Date.now() - 72 * 3600 * 1000); } return []; }
+    async function sendMessage(to, text){ if(!to || !text) return; if(currentUserId){ const { error } = await sb.from('messages').insert({ from: user.name, to, text, created_at: new Date().toISOString() }); if(error){ console.error('Supabase send message error:', error); return; } } openMessages(to); }
+
+    async function openMessages(to){
+      if(!currentUserId){
+        document.getElementById("socialTitle").innerText = "Messages";
+        document.getElementById("socialContent").className = '';
+        document.getElementById("socialContent").innerHTML = '<div class="message">Sign in with Google to view or send messages.</div>';
+        openModal('socialModal');
+        return;
+      }
+      const msgs = await loadMessages();
+      document.getElementById("socialTitle").innerText = to ? `Chat with ${to}` : "Messages";
+      let convo = '';
+      if(to){
+        const conv = msgs.filter(m => (m.from === to && m.to === user.name) || (m.from === user.name && m.to === to)).sort((a,b)=>((a.ts || new Date(a.created_at).getTime()) - (b.ts || new Date(b.created_at).getTime())));
+        convo = conv.map(m=>`<div class="chat-bubble ${m.from === user.name ? 'me' : ''}">${escapeHtml(m.text)} <div style="font-size:11px;opacity:.6">${new Date(m.ts || m.created_at).toLocaleString()}</div></div>`).join('');
+        const socialContent = document.getElementById("socialContent");
+        socialContent.className = 'fullscreen-chat';
+        socialContent.innerHTML = `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;padding:0 16px;"><div style="font-weight:800;font-size:18px;">${to}</div></div><div class="chat-list" id="chatList" style="flex:1;overflow-y:auto;padding:0 16px;margin-bottom:12px;">${convo || '<div class="message">No messages yet. Say hello!</div>'}</div><div class="chat-input-row" style="gap:8px;padding:0 16px 24px;display:flex;align-items:center;"><input id="msgInput" class="message-input" placeholder="Type a message" style="flex:1;padding:16px;font-size:16px;text-transform:none;color:var(--white);background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.20);border-radius:20px;outline:none;min-height:50px;margin:0;"/> <button class="btn google-btn" id="sendMsgBtn" style="padding:8px 12px;font-size:13px;height:50px;width:50px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin:0;">↑</button></div>`;
+        const social = document.getElementById('socialModal'); social.classList.add('fullscreen'); document.getElementById('bottomBar').classList.add('hidden'); openModal('socialModal');
+        const chatList = document.getElementById('chatList'); if(chatList){ setTimeout(()=>{ chatList.scrollTop = chatList.scrollHeight; }, 100); }
+        document.getElementById('sendMsgBtn').addEventListener('click', ()=>{ const text = document.getElementById('msgInput').value.trim(); if(text){ sendMessage(to, text); } });
+      } else {
+        const socialContent = document.getElementById("socialContent");
+        socialContent.className = '';
+        const threads = {};
+        msgs.slice().reverse().forEach(m=>{ const other = m.from === user.name ? m.to : m.from; if(!threads[other]) threads[other] = []; threads[other].push(m); });
+        const list = Object.keys(threads).map(other=>{ const last = threads[other][threads[other].length-1]; return `<div class="social-item" style="display:flex;align-items:center;justify-content:space-between;"><div style="display:flex;gap:12px;align-items:center;"><img class="small-avatar" src="https://i.pravatar.cc/150?u=${other}"><div><div style="font-weight:700">${other}</div><div style="font-size:12px;opacity:.7">${escapeHtml(last.text)}</div></div></div><div style="display:flex;gap:8px;"><button class="msg-btn" onclick="openMessages('${other.replace("'","\\'")}')">Open</button></div></div>`; }).join('') || '<div class="message">No messages in the last 72 hours.</div>';
+        document.getElementById("socialContent").innerHTML = list;
+        const social = document.getElementById('socialModal'); social.classList.remove('fullscreen'); document.getElementById('bottomBar').classList.remove('hidden'); openModal('socialModal');
+      }
+    }
+
+    async function acceptInvite(inviteId){ const { data, error } = await sb.from('game_invites').select('*').eq('id', inviteId).single(); if(error){ console.error('Accept invite error:', error); return; } await sb.from('game_invites').update({ status: 'accepted' }).eq('id', inviteId); closeModal('socialModal'); findMatch(data?.mode || 'quick'); }
+    async function declineGameInvite(inviteId){ await sb.from('game_invites').update({ status: 'declined' }).eq('id', inviteId); openInvites(); }
+    async function acceptFriendRequest(requestId){ const { data, error } = await sb.from('friend_requests').select('*').eq('id', requestId).single(); if(error){ console.error('Accept request error:', error); return; } await sb.from('friend_requests').update({ status: 'accepted' }).eq('id', requestId); if(data){ await sb.from('friends').upsert([ { user_id: currentUserId, friend_id: data.from_user_id }, { user_id: data.from_user_id, friend_id: currentUserId } ], { onConflict: ['user_id','friend_id'] }); } openInvites(); showPopupNotification('Friend request accepted!'); }
+    async function declineFriendRequest(requestId){ await sb.from('friend_requests').update({ status: 'declined' }).eq('id', requestId); openInvites(); }
+
+    async function openInvites(){
+      document.getElementById("socialTitle").innerText = "Invites";
+      if(!currentUserId){
+        document.getElementById("socialContent").innerHTML = '<div class="message">Sign in with Google to view invites.</div>';
+        openModal("socialModal");
+        return;
+      }
+      let html = '<div style="margin-bottom:12px;font-size:14px;opacity:.8;">Friend Requests</div>';
+      const { data: frData } = await sb.from('friend_requests').select('*').eq('to_user_id', currentUserId).eq('status','pending');
+      const fromIds = (frData || []).map(r => r.from_user_id);
+      const { data: frProfiles } = fromIds.length ? await sb.from('profiles').select('id,display_name,avatar_url').in('id', fromIds) : { data: [] };
+      const prMap = (frProfiles || []).reduce((acc, p) => { acc[p.id] = p; return acc; }, {});
+      if(frData && frData.length){ html += frData.map(req => { const p = prMap[req.from_user_id] || {}; const name = escapeHtml(p.display_name || req.from_user_id); return `<div class="social-item"><div class="social-top"><div class="social-user"><img class="small-avatar" src="${p.avatar_url || 'https://i.pravatar.cc/150'}"><div><div style="font-weight:700">${name}</div><div style="font-size:12px;opacity:.7">Friend Request</div></div></div><div class="mini-btns"><button class="mini-btn accept" onclick="acceptFriendRequest('${req.id}')">Accept</button><button class="mini-btn decline" onclick="declineFriendRequest('${req.id}')">Decline</button></div></div></div>`; }).join(''); } else { html += '<div style="opacity:.7;margin-bottom:16px;">No pending requests</div>'; }
+      html += '<div style="margin-top:16px;margin-bottom:12px;font-size:14px;opacity:.8;">Game Invites</div>';
+      const { data: giData } = await sb.from('game_invites').select('*').eq('to_user_id', currentUserId).eq('status','pending');
+      const giFromIds = (giData || []).map(inv => inv.from_user_id);
+      const { data: giProfiles } = giFromIds.length ? await sb.from('profiles').select('id,display_name,avatar_url').in('id', giFromIds) : { data: [] };
+      const giPrMap = (giProfiles || []).reduce((acc, p) => { acc[p.id] = p; return acc; }, {});
+      if(giData && giData.length){ html += giData.map(inv => { const p = giPrMap[inv.from_user_id] || {}; const name = escapeHtml(p.display_name || inv.from_user_id); return `<div class="social-item"><div class="social-top"><div class="social-user"><img class="small-avatar" src="${p.avatar_url || 'https://i.pravatar.cc/150'}"><div><div style="font-weight:700">${name}</div><div style="font-size:12px;opacity:.7">${escapeHtml(inv.mode || 'quick')} Match Invite</div></div></div><div class="mini-btns"><button class="mini-btn accept" onclick="acceptInvite('${inv.id}')">Accept</button><button class="mini-btn decline" onclick="declineGameInvite('${inv.id}')">Decline</button></div></div></div>`; }).join(''); } else { html += '<div style="opacity:.7;">No pending invites</div>'; }
+      document.getElementById("socialContent").innerHTML = html;
+      openModal("socialModal");
+    }
+
+    function handleAvatarUpload(e){
+      const file = e.target.files && e.target.files[0];
+      if(!file) return;
+      const reader = new FileReader();
+      reader.onload = ()=>{
+        user.avatar = reader.result;
+        document.getElementById('profileAvatar').src = user.avatar;
+        document.getElementById('meAvatar').src = user.avatar;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function findMatch(mode){
+      if(mode === 'single'){ startGame('single'); return; }
+      openModal('matchmakingModal');
+      matchmakingTimeout = setTimeout(async () => {
+        const league = getLeagueLabel(user.mmr);
+        const { data: candidates } = await sb.from('profiles').select('id, display_name, avatar_url, mmr, league').eq('league', league).neq('id', currentUserId).limit(5);
+        let opponent = (candidates && candidates.length) ? candidates[Math.floor(Math.random()*candidates.length)] : { display_name: 'Search Rival', avatar_url: avatars[Math.floor(Math.random()*10)], mmr: user.mmr, league: league };
+        closeModal('matchmakingModal');
+        startGame(mode, opponent);
+      }, 4000);
+    }
+
+    function cancelMatchmaking(){ if(matchmakingTimeout){ clearTimeout(matchmakingTimeout); matchmakingTimeout = null; } closeModal('matchmakingModal'); }
+
+    function startGame(mode, opponent){
+      currentMode = mode;
+      document.getElementById("dashboardPage").classList.add("hidden");
+      document.getElementById("gameScreen").classList.remove("hidden");
+      document.getElementById("oppAction").innerText = "Waiting for rival...";
+      myScore = 0; oppScore = 0; streak = 0;
+      updateScores();
+      if(mode !== 'single') initRealtimeMatch(opponent);
+      document.querySelector(".versus").classList.toggle("single-mode", mode === "single");
+      if(opponent){
+        document.getElementById('oppName').innerText = opponent.display_name || opponent.name || "RIVAL";
+        document.getElementById('oppAvatar').src = opponent.avatar_url || opponent.avatar || avatars[0];
+        document.getElementById('oppBadge').innerText = opponent.league || "Bronze";
+      }
+      timeLeft = mode === "single" ? 120 : 180;
+      document.getElementById("timer").innerText = timeLeft;
+      nextWord();
+      clearInterval(timer);
+      timer = setInterval(()=>{
+        timeLeft--;
+        document.getElementById("timer").innerText = timeLeft;
+        if(timeLeft <= 0) finishGame();
+      },1000);
+    }
+
+    function initRealtimeMatch(opp){
+      if(!opp || !opp.id) return;
+      const matchRoom = [currentUserId, opp.id].sort().join('_');
+      gameChannel = sb.channel(`match_${matchRoom}`);
+      gameChannel.on('broadcast', { event: 'score_update' }, ({ payload }) => {
+        if(payload.userId !== currentUserId) {
+          oppScore = payload.score;
+          updateScores();
+          setOpponentAction(`Rival solved a word!`);
+        }
+      }).subscribe();
+    }
+
+    function nextWord(){
+      const currentPool = selectWordPool(currentMode);
+      currentWord = currentPool[Math.floor(Math.random()*currentPool.length)];
+      const scrambled = scramble(currentWord);
+      const tiles = document.getElementById("tiles");
+      tiles.innerHTML = "";
+      scrambled.split("").forEach(letter=>{
+        const div = document.createElement("div");
+        div.className = "tile";
+        div.innerText = letter;
+        tiles.appendChild(div);
+      });
+      document.getElementById("answerInput").value = "";
+      document.getElementById("feedback").innerText = "";
+      currentWordStart = Date.now();
+    }
+
+    function scramble(word){
+      let arr = word.split("");
+      for(let i = arr.length - 1; i > 0; i--){
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i],arr[j]] = [arr[j],arr[i]];
+      }
+      return arr.join("");
+    }
+
+    function submitAnswer(){
+      const input = document.getElementById("answerInput");
+      const answer = input.value.toUpperCase().trim();
+      const feedback = document.getElementById("feedback");
+      if(!answer) return;
+      if(answer === currentWord){
+        const solveSeconds = Math.max(0, Math.round((Date.now() - currentWordStart) / 1000));
+        const speedBonus = Math.max(2, Math.ceil(18 - solveSeconds * 0.8));
+        const gained = 12 + speedBonus + (streak > 1 ? 5 : 0);
+        myScore += gained;
+        streak += 1;
+        if(gameChannel) gameChannel.send({ type: 'broadcast', event: 'score_update', payload: { userId: currentUserId, score: myScore } });
+        feedback.innerHTML = `<span class="success">✅ +${gained}</span>`;
+        updateScores();
+        updateStatus(`Streak: ${streak}!`);
+        setTimeout(nextWord, 400);
+      } else {
+        feedback.innerHTML = `<span class="error">❌ Wrong</span>`;
+        streak = 0;
+        updateStatus(`Streak reset!`);
+      }
+    }
+
+    function setOpponentAction(text){ const actionElement = document.getElementById("oppAction"); if(actionElement){ actionElement.innerText = text; } }
+    function updateStatus(message){ const status = document.getElementById("matchStatus"); status.innerText = message; document.getElementById("comboBadge").innerText = `Combo x${streak}`; }
+    function updateScores(){ document.getElementById("myScore").innerText = myScore; document.getElementById("oppScore").innerText = oppScore; }
+
+    async function finishGame(){
+      clearInterval(timer);
+      if(gameChannel) sb.removeChannel(gameChannel);
+      let win = myScore > oppScore;
+      let draw = myScore === oppScore;
+      if(currentMode === "ranked"){
+        if(win) { user.wins++; user.mmr += 25; }
+        else if(!draw) { user.losses++; user.mmr = Math.max(0, user.mmr - 20); }
+        else user.draws++;
+        await sb.from('profiles').update({ wins: user.wins, losses: user.losses, draws: user.draws, mmr: user.mmr, league: getLeagueLabel(user.mmr) }).eq('id', currentUserId);
+      }
+      const title = win ? "🏆 VICTORY!" : draw ? "🤝 DRAW" : "💀 DEFEAT";
+      const details = `Final: ${myScore} - ${oppScore}<br>New MMR: ${user.mmr}`;
+      updateUI();
+      showResultModal(title, details);
+    }
+
+    function showResultModal(title, details){ document.getElementById("resultSummary").innerHTML = `<div class="center" style="margin-top:16px;"><div style="font-size:32px;font-weight:800;margin-bottom:12px;">${title}</div><div style="font-size:16px;opacity:.85;">${details}</div></div>`; openModal("resultModal"); }
+    function confirmResult(){ closeModal("resultModal"); endMatch(); }
+    function endMatch(){ clearInterval(timer); document.getElementById("gameScreen").classList.add("hidden"); document.getElementById("dashboardPage").classList.remove("hidden"); document.getElementById("timer").classList.remove("urgent"); setOpponentAction("Rival waiting..."); }
+
+    document.getElementById("saveProfileBtn").addEventListener("click", async () => {
+      const newName = document.getElementById("displayNameInput").value.trim();
+      if(!newName) return;
+
+      const { error } = await sb.from('profiles').update({
+        display_name: newName,
+        avatar_url: user.avatar
+      }).eq('id', currentUserId);
+
+      if(error) {
+        console.error("Save profile error:", error);
+        alert("Failed to save changes.");
+      } else {
+        user.name = newName;
+        updateUI();
+        closeModal('profileModal');
+        showPopupNotification("Profile updated!");
+      }
+    });
+
+    document.getElementById("avatarUpload").addEventListener("change", handleAvatarUpload);
+    function escapeHtml(s){ return String(s).replace(/[&<>"']/g, (c)=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' })[c]); }
+
+    // Start everything
+    initSupabase();
+
+    document.getElementById("answerInput").addEventListener("keypress",(e)=>{ if(e.key === "Enter"){ submitAnswer(); } });
+  </script>
+</body>
+</html>
