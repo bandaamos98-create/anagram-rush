@@ -695,14 +695,20 @@
     }
 
     async function signOutSupabase(){
-      await setOnlineStatus(false);
-      const { error } = await sb.auth.signOut();
-      if(error){
-        console.error('Supabase sign-out error:', error.message);
+      try{
+        await setOnlineStatus(false);
+      }catch(e){
+        console.warn('Failed to update presence during sign-out (ignored):', e);
       }
-      document.getElementById("mainApp").classList.add("hidden");
-      document.getElementById("bottomBar").classList.add("hidden");
-      document.getElementById("loginScreen").classList.remove("hidden");
+      try{
+        const { error } = await sb.auth.signOut();
+        if(error){ console.warn('Supabase sign-out warning:', error.message); }
+      }catch(e){ console.warn('Supabase sign-out failed (ignored):', e); }
+
+      // Reset UI regardless of errors
+      try{ document.getElementById("mainApp").classList.add("hidden"); }catch(e){}
+      try{ document.getElementById("bottomBar").classList.add("hidden"); }catch(e){}
+      try{ document.getElementById("loginScreen").classList.remove("hidden"); }catch(e){}
     }
 
     function updateUI(){
@@ -1006,9 +1012,11 @@
       openModal("socialModal");
     }
 
+    let selectedAvatarFile = null;
     function handleAvatarUpload(e){
       const file = e.target.files && e.target.files[0];
       if(!file) return;
+      selectedAvatarFile = file;
       const reader = new FileReader();
       reader.onload = ()=>{
         user.avatar = reader.result;
@@ -1148,20 +1156,37 @@
       const newName = document.getElementById("displayNameInput").value.trim();
       if(!newName) return;
 
-      const { error } = await sb.from('profiles').update({
-        display_name: newName,
-        avatar_url: user.avatar
-      }).eq('id', currentUserId);
+      try{
+        let avatarUrlToSave = user.avatar;
+        // If a new file was selected, upload to Supabase storage first
+        if(selectedAvatarFile && currentUserId){
+          const path = `avatars/${currentUserId}/${Date.now()}_${selectedAvatarFile.name}`;
+          const { data: uploadData, error: uploadError } = await sb.storage.from('avatars').upload(path, selectedAvatarFile, { upsert: true });
+          if(uploadError){
+            console.error('Avatar upload error:', uploadError);
+            // fallback: keep data URL but warn
+            showPopupNotification('Avatar upload failed, saving name only.');
+          } else {
+            const { data: publicData } = sb.storage.from('avatars').getPublicUrl(path);
+            avatarUrlToSave = publicData?.publicUrl || avatarUrlToSave;
+            // clear selected file after successful upload
+            selectedAvatarFile = null;
+          }
+        }
 
-      if(error) {
-        console.error("Save profile error:", error);
-        alert("Failed to save changes.");
-      } else {
+        const { error } = await sb.from('profiles').upsert({ id: currentUserId, display_name: newName, avatar_url: avatarUrlToSave, email: user.email }, { onConflict: 'id' });
+        if(error){
+          console.error("Save profile error:", error);
+          alert("Failed to save changes.");
+          return;
+        }
+
         user.name = newName;
+        user.avatar = avatarUrlToSave;
         updateUI();
         closeModal('profileModal');
         showPopupNotification("Profile updated!");
-      }
+      }catch(e){ console.error('Save profile exception:', e); alert('Failed to save changes.'); }
     });
 
     document.getElementById("avatarUpload").addEventListener("change", handleAvatarUpload);
