@@ -108,9 +108,58 @@
     .feedback-speed { animation: slideIn 0.3s ease-out; color: var(--blue); }
     .feedback-comeback { animation: shake 0.5s ease-out; color: var(--purple); }
     .feedback-levelup { animation: levelUp 0.6s ease-out; color: var(--success); font-size: 1.2em; }
+    
+    /* Toast Notifications */
+    .toast-container {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      z-index: 10000;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .toast {
+      background: rgba(30, 30, 40, 0.95);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 16px;
+      min-width: 300px;
+      max-width: 350px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+      animation: slideInRight 0.3s ease-out;
+      cursor: pointer;
+    }
+    .toast.message { border-left: 4px solid var(--blue); }
+    .toast.invite { border-left: 4px solid var(--purple); }
+    .toast.friend { border-left: 4px solid var(--success); }
+    .toast.notification { border-left: 4px solid var(--warning); }
+    .toast-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 8px;
+      font-weight: 700;
+      font-size: 14px;
+    }
+    .toast-body {
+      font-size: 13px;
+      opacity: 0.8;
+      line-height: 1.4;
+    }
+    @keyframes slideInRight {
+      from { transform: translateX(100%); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+    @keyframes slideOutRight {
+      from { transform: translateX(0); opacity: 1; }
+      to { transform: translateX(100%); opacity: 0; }
+    }
   </style>
 </head>
 <body>
+  <div class="toast-container" id="toastContainer"></div>
   <div class="app">
     <!-- LOGIN -->
     <div class="login-screen" id="loginScreen">
@@ -480,8 +529,12 @@
         startMatchSession(payload);
       }).on('broadcast', { event: 'match_progress' }, ({ payload }) => {
         if (!GameCache.match.active || GameCache.match.matchId !== payload.matchId) return;
-        GameCache.match.currentIndex = payload.nextIndex;
-        GameCache.match.solved = payload.solved || GameCache.match.solved || [];
+        const opponentId = GameCache.match.from_user_id === currentUserId ? GameCache.match.to_user_id : GameCache.match.from_user_id;
+        if (payload.playerId === opponentId) {
+          GameCache.match.playerScores[opponentId] = payload.score;
+          GameCache.match.playerStreaks[opponentId] = payload.streak || 0;
+          GameCache.match.playerCorrectCount[opponentId] = payload.correctCount || 0;
+        }
         renderMatchUI();
       });
       socialChannel.subscribe(async (status) => { if (status === 'SUBSCRIBED') await trackPresence('online'); });
@@ -492,6 +545,9 @@
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `to_user_id=eq.${currentUserId}` }, async (p) => {
           if (!GameCache.profiles[p.new.from_user_id]) await fetchProfile(p.new.from_user_id);
           GameCache.messages.unshift(p.new); updateBadges(); refreshOpenSocialView();
+          // Show toast notification
+          const sender = GameCache.profiles[p.new.from_user_id]?.display_name || 'Someone';
+          showToast('message', `New message from ${sender}`, p.new.text, () => viewChat(p.new.from_user_id));
           // If chat with this user is open, append message immediately
           const activeChatId = document.getElementById('socialModal').dataset.activeChatId;
           if (activeChatId === p.new.from_user_id) {
@@ -526,6 +582,9 @@
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'game_invites', filter: `to_user_id=eq.${currentUserId}` }, async (p) => {
           if (!GameCache.profiles[p.new.from_user_id]) await fetchProfile(p.new.from_user_id);
           GameCache.invites.unshift(p.new); updateBadges(); refreshOpenSocialView();
+          // Show toast notification
+          const sender = GameCache.profiles[p.new.from_user_id]?.display_name || 'Someone';
+          showToast('invite', `Game Invite from ${sender}`, 'Click to accept or decline', () => openInvites());
         })
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'game_invites', filter: `from_user_id=eq.${currentUserId}` }, async (p) => {
           if (!GameCache.profiles[p.new.to_user_id]) await fetchProfile(p.new.to_user_id);
@@ -546,6 +605,9 @@
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'friend_requests', filter: `to_user_id=eq.${currentUserId}` }, async (p) => {
           if (!GameCache.profiles[p.new.from_user_id]) await fetchProfile(p.new.from_user_id);
           GameCache.friendRequests.unshift(p.new); updateBadges(); refreshOpenSocialView();
+          // Show toast notification
+          const sender = GameCache.profiles[p.new.from_user_id]?.display_name || 'Someone';
+          showToast('friend', `Friend Request from ${sender}`, 'Click to accept or decline', () => openInvites());
         })
         // Friend Requests: UPDATE for accept/decline
         .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'friend_requests' }, (p) => {
@@ -589,6 +651,10 @@
         // Notifications: INSERT for new notifications
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${currentUserId}` }, (p) => {
           GameCache.notifications.unshift(p.new); updateBadges(); refreshOpenSocialView();
+          // Show toast notification
+          const title = p.new.title || 'Notification';
+          const body = p.new.body || p.new.message || '';
+          showToast('notification', title, body, () => openNotifications());
         })
         // Notifications: UPDATE for read status
         .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'notifications', filter: `user_id=eq.${currentUserId}` }, (p) => {
@@ -602,6 +668,49 @@
           updateBadges(); refreshOpenSocialView();
         })
         .subscribe();
+    }
+
+    /* ========= Toast Notifications ========= */
+    function showToast(type, title, message, onClick = null) {
+      const container = document.getElementById('toastContainer');
+      const toast = document.createElement('div');
+      toast.className = `toast ${type}`;
+      
+      const icons = {
+        message: '💬',
+        invite: '🎮',
+        friend: '👋',
+        notification: '🔔'
+      };
+      
+      toast.innerHTML = `
+        <div class="toast-header">
+          <span>${icons[type] || '📢'}</span>
+          <span>${title}</span>
+        </div>
+        <div class="toast-body">${message}</div>
+      `;
+      
+      if (onClick) {
+        toast.onclick = () => {
+          onClick();
+          removeToast(toast);
+        };
+      } else {
+        toast.onclick = () => removeToast(toast);
+      }
+      
+      container.appendChild(toast);
+      
+      // Auto-remove after 5 seconds
+      setTimeout(() => removeToast(toast), 5000);
+    }
+    
+    function removeToast(toast) {
+      toast.style.animation = 'slideOutRight 0.3s ease-out';
+      setTimeout(() => {
+        if (toast.parentNode) toast.parentNode.removeChild(toast);
+      }, 300);
     }
 
     /* ========= lastSeen tracking (client-side fallback for read state) ========= */
@@ -813,10 +922,19 @@
     }
     async function logout(){ await trackPresence('offline'); cleanupRealtime(); await sb.auth.signOut(); window.location.reload(); }
     function endMatch(){
+      if (preventQuit()) return;
       if (GameCache.match.timer) clearInterval(GameCache.match.timer);
       GameCache.match.active = false;
       document.getElementById("gameScreen").classList.add("hidden");
       document.getElementById("dashboardPage").classList.remove("hidden");
+    }
+    
+    function preventQuit() {
+      if (GameCache.match.active && GameCache.match.mode !== 'single') {
+        alert('You cannot quit during an active multiplayer match. The game will end when the timer runs out.');
+        return true;
+      }
+      return false;
     }
 
     function openOnlinePlayers(){
@@ -1120,18 +1238,15 @@
     }
 
     function createMatchPayload(invite) {
-      const roundCount = 5;
-      const rounds = [];
-      for (let i = 0; i < roundCount; i++) {
-        const puzzle = generateLetters(6);
-        rounds.push(puzzle);
-      }
+      const duration = 180; // 3 minutes in seconds
       return {
         matchId: `match-${invite.id}-${Date.now()}`,
         inviteId: invite.id,
         from_user_id: invite.from_user_id,
         to_user_id: invite.to_user_id,
         mode: invite.mode || 'quick',
+        gameType: 'timed', // New: time-based mode
+        duration: duration,
         playerNames: {
           [invite.from_user_id]: GameCache.profiles[invite.from_user_id]?.display_name || 'Player',
           [invite.to_user_id]: GameCache.profiles[invite.to_user_id]?.display_name || 'Player'
@@ -1140,12 +1255,7 @@
           [invite.from_user_id]: GameCache.profiles[invite.from_user_id]?.avatar_url || avatars[0],
           [invite.to_user_id]: GameCache.profiles[invite.to_user_id]?.avatar_url || avatars[0]
         },
-        roundCount,
-        rounds,
-        playerProgress: {
-          [invite.from_user_id]: 0,
-          [invite.to_user_id]: 0
-        },
+        currentPuzzle: generateLetters(6),
         playerScores: {
           [invite.from_user_id]: 0,
           [invite.to_user_id]: 0
@@ -1167,7 +1277,7 @@
           [invite.to_user_id]: 0
         },
         startedAt: Date.now(),
-        endsAt: Date.now() + 180000,
+        endsAt: Date.now() + (duration * 1000),
         status: 'active'
       };
     }
@@ -1185,31 +1295,37 @@
       if (GameCache.match.timer) clearInterval(GameCache.match.timer);
       GameCache.match.timer = setInterval(() => {
         const remaining = Math.max(0, Math.round((GameCache.match.endsAt - Date.now()) / 1000));
-        document.getElementById('timer').innerText = remaining;
         if (remaining <= 0) {
           clearInterval(GameCache.match.timer);
           finishMatch(false);
         }
-      }, 250);
+        renderMatchUI();
+      }, 1000);
     }
 
     function renderMatchUI() {
       const opponentId = GameCache.match.from_user_id === currentUserId ? GameCache.match.to_user_id : GameCache.match.from_user_id;
       const meScore = GameCache.match.playerScores[currentUserId] || 0;
       const oppScore = GameCache.match.playerScores[opponentId] || 0;
-      const meProgress = GameCache.match.playerProgress[currentUserId] || 0;
-      const oppProgress = GameCache.match.playerProgress[opponentId] || 0;
       const meStreak = GameCache.match.playerStreaks[currentUserId] || 0;
       const oppStreak = GameCache.match.playerStreaks[opponentId] || 0;
-      const round = meProgress < GameCache.match.roundCount ? meProgress : oppProgress < GameCache.match.roundCount ? oppProgress : GameCache.match.roundCount - 1;
-      const currentPuzzle = GameCache.match.rounds[Math.min(round, GameCache.match.roundCount - 1)] || { scrambled: '' };
+      const meCorrect = GameCache.match.playerCorrectCount[currentUserId] || 0;
+      const oppCorrect = GameCache.match.playerCorrectCount[opponentId] || 0;
+      
+      const currentPuzzle = GameCache.match.currentPuzzle || { scrambled: '' };
       const letters = currentPuzzle.scrambled;
+      
+      // Calculate remaining time
+      const remainingTime = Math.max(0, Math.ceil((GameCache.match.endsAt - Date.now()) / 1000));
+      const minutes = Math.floor(remainingTime / 60);
+      const seconds = remainingTime % 60;
+      const timeDisplay = `${minutes}:${seconds.toString().padStart(2, '0')}`;
       
       document.getElementById('meName').innerText = GameCache.match.playerNames[currentUserId];
       document.getElementById('oppName').innerText = GameCache.match.playerNames[opponentId];
       document.getElementById('myScore').innerText = meScore;
       document.getElementById('oppScore').innerText = oppScore;
-      document.getElementById('roundCount').innerText = `${meProgress + 1}/${GameCache.match.roundCount}`;
+      document.getElementById('roundCount').innerText = timeDisplay;
       document.getElementById('scrambleWord').innerText = letters.toUpperCase();
       
       if (!GameCache.match.roundStartTime) {
@@ -1227,23 +1343,27 @@
       oppAvatar.style.backgroundSize = 'cover';
       
       // Update opponent progress display
-      const oppPercent = Math.round((oppProgress / GameCache.match.roundCount) * 100);
-      const myPercent = Math.round((meProgress / GameCache.match.roundCount) * 100);
+      const winning = meScore > oppScore;
+      const losing = meScore < oppScore;
+      const tie = meScore === oppScore;
       
       document.getElementById('feedback').innerHTML = `
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
           <div style="text-align:center;">
-            <div style="font-size:11px;opacity:0.7;">Your Progress</div>
-            <div style="font-weight:700;color:var(--blue);">${myPercent}%</div>
+            <div style="font-size:11px;opacity:0.7;">Your Stats</div>
+            <div style="font-weight:700;color:var(--blue);">${meCorrect} words</div>
             <div style="font-size:10px;opacity:0.6;">Streak: ${meStreak}</div>
           </div>
           <div style="text-align:center;">
             <div style="font-size:11px;opacity:0.7;">Opponent</div>
-            <div style="font-weight:700;color:var(--purple);">${oppPercent}%</div>
+            <div style="font-weight:700;color:var(--purple);">${oppCorrect} words</div>
             <div style="font-size:10px;opacity:0.6;">Streak: ${oppStreak}</div>
           </div>
         </div>
-        <div style="font-size:13px;opacity:0.85;">Form a valid word from these letters</div>
+        <div style="font-size:13px;opacity:0.85;">
+          ${winning ? '🏆 You\'re winning!' : losing ? '📉 You\'re behind!' : '🤝 It\'s a tie!'} 
+          Form a valid word from these letters
+        </div>
       `;
       
       document.getElementById('answerInput').value = '';
@@ -1311,7 +1431,7 @@
       if (avgSolveTime < oppAvgSolve) mvp = '🏆 Fastest Solver';
       if (meStreak > oppStreak && meStreak >= 3) mvp = '🔥 Longest Streak';
       if (accuracy > oppAccuracy) mvp = '🎯 Highest Accuracy';
-      if (meCorrect > oppCorrect) mvp = '⭐ Most Puzzles Solved';
+      if (meCorrect > oppCorrect) mvp = '⭐ Most Words Solved';
       
       // Show comprehensive result summary
       const summaryHTML = `
@@ -1333,10 +1453,10 @@
           <div style="background:rgba(255,255,255,0.05);padding:20px;border-radius:16px;margin-bottom:20px;">
             <h3 style="margin-bottom:15px;">Match Stats</h3>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:14px;">
+              <div>Words Solved: <strong>${meCorrect}</strong></div>
               <div>Accuracy: <strong>${accuracy}%</strong></div>
               <div>Avg Time: <strong>${avgSolveTime}s</strong></div>
               <div>Streak: <strong>${meStreak}</strong></div>
-              <div>Correct: <strong>${meCorrect}</strong></div>
             </div>
           </div>
           
@@ -1455,16 +1575,13 @@
     }
     
     function startSinglePlayer() {
-      const roundCount = 5;
-      const rounds = [];
-      for (let i = 0; i < roundCount; i++) {
-        const puzzle = generateLetters(6);
-        rounds.push(puzzle);
-      }
+      const duration = 180; // 3 minutes in seconds
       
       const payload = {
         matchId: `single-${Date.now()}`,
         mode: 'single',
+        gameType: 'timed',
+        duration: duration,
         from_user_id: currentUserId,
         to_user_id: 'ai',
         playerNames: {
@@ -1475,12 +1592,7 @@
           [currentUserId]: GameCache.user.avatar_url || avatars[0],
           'ai': 'https://api.dicebear.com/7.x/bottts/svg?seed=ai'
         },
-        roundCount,
-        rounds,
-        playerProgress: {
-          [currentUserId]: 0,
-          'ai': 0
-        },
+        currentPuzzle: generateLetters(6),
         playerScores: {
           [currentUserId]: 0,
           'ai': 0
@@ -1502,7 +1614,7 @@
           'ai': 0
         },
         startedAt: Date.now(),
-        endsAt: Date.now() + 180000,
+        endsAt: Date.now() + (duration * 1000),
         status: 'active'
       };
       
@@ -1520,33 +1632,24 @@
           return;
         }
         
-        const aiProgress = GameCache.match.playerProgress['ai'];
-        if (aiProgress >= GameCache.match.roundCount) {
-          clearInterval(aiInterval);
-          return;
-        }
-        
-        // AI solves puzzles with random timing (5-15 seconds)
-        const solveTime = 5000 + Math.random() * 10000;
+        // AI solves puzzles with random timing (3-8 seconds)
+        const solveTime = 3000 + Math.random() * 5000;
         setTimeout(() => {
           if (!GameCache.match.active || GameCache.match.mode !== 'single') return;
           
-          const currentPuzzle = GameCache.match.rounds[aiProgress];
+          const currentPuzzle = GameCache.match.currentPuzzle;
           const word = currentPuzzle.solution;
           const score = calculateScore(word, Math.random() * 10 + 3, GameCache.match.playerStreaks['ai'], false);
           
           GameCache.match.playerScores['ai'] += score;
-          GameCache.match.playerProgress['ai']++;
           GameCache.match.playerStreaks['ai']++;
           GameCache.match.playerCorrectCount['ai']++;
           GameCache.match.playerSolveTimes['ai'].push(Math.random() * 10 + 3);
           
-          renderMatchUI();
+          // AI gets a new puzzle too
+          GameCache.match.currentPuzzle = generateLetters(6);
           
-          if (GameCache.match.playerProgress['ai'] >= GameCache.match.roundCount) {
-            clearInterval(aiInterval);
-            finishMatch(false);
-          }
+          renderMatchUI();
         }, solveTime);
       }, 1000);
     }
@@ -1563,8 +1666,7 @@
       const guess = document.getElementById('answerInput').value.trim().toLowerCase();
       if (!guess || guess.length < 2) return;
       
-      const myProgress = GameCache.match.playerProgress[currentUserId];
-      const currentPuzzle = GameCache.match.rounds[myProgress];
+      const currentPuzzle = GameCache.match.currentPuzzle;
       const letters = currentPuzzle.scrambled;
       
       if (!validWords.has(guess)) {
@@ -1588,11 +1690,13 @@
       const points = calculateScore(guess, solveTime, GameCache.match.playerStreaks[currentUserId], isComeback);
       
       GameCache.match.playerScores[currentUserId] += points;
-      GameCache.match.playerProgress[currentUserId]++;
       GameCache.match.playerStreaks[currentUserId]++;
       GameCache.match.playerCorrectCount[currentUserId]++;
       GameCache.match.playerSolveTimes[currentUserId].push(solveTime);
       GameCache.match.roundStartTime = Date.now();
+      
+      // Generate new puzzle for unlimited words
+      GameCache.match.currentPuzzle = generateLetters(6);
       
       let feedback = `+${points} points!`;
       let feedbackClass = 'feedback-correct';
@@ -1614,16 +1718,11 @@
             matchId: GameCache.match.matchId, 
             playerId: currentUserId, 
             score: GameCache.match.playerScores[currentUserId], 
-            progress: GameCache.match.playerProgress[currentUserId],
-            streak: GameCache.match.playerStreaks[currentUserId]
+            streak: GameCache.match.playerStreaks[currentUserId],
+            correctCount: GameCache.match.playerCorrectCount[currentUserId]
           } 
         }); 
       } catch(e) {}
-      
-      if (GameCache.match.playerProgress[currentUserId] >= GameCache.match.roundCount) {
-        finishMatch(true);
-        return;
-      }
       
       renderMatchUI();
     }
