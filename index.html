@@ -74,6 +74,12 @@
     .status-dot.online{ background:var(--success); box-shadow: 0 0 8px var(--success); }
     .status-dot.away{ background:var(--warning); }
     .leader-secondary{ background:rgba(255,255,255,.08); border:none; color:white; padding:8px 14px; border-radius:12px; cursor:pointer; font-weight:600; }
+    .answer-input.modern{ background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.14); color:var(--white); border-radius:18px; padding:14px 16px; font-size:15px; width:100%; outline:none; transition:.25s; }
+    .answer-input.modern:focus{ border-color:rgba(59,130,246,.8); box-shadow:0 0 0 4px rgba(59,130,246,.12); }
+    .btn.modern{ background:linear-gradient(135deg,#4f46e5,#3b82f6); color:white; border:none; border-radius:20px; padding:14px 18px; font-weight:700; letter-spacing:.03em; box-shadow:0 18px 35px rgba(59,130,246,.18); }
+    .btn.modern.secondary{ background:rgba(255,255,255,.08); color:white; border:1px solid rgba(255,255,255,.12); box-shadow:none; }
+    .fullscreen{ max-width:100% !important; width:100% !important; height:100% !important; max-height:100vh !important; border-radius:0 !important; }
+    .fullscreen #socialContent{ height:calc(100vh - 120px); overflow-y:auto; }
   </style>
 </head>
 <body>
@@ -296,8 +302,15 @@
 
     /* ========================================== DATA ========================================== */
     async function loadProfile(){
-      const { data: profile } = await sb.from('profiles').select('*').eq('id', currentUserId).maybeSingle();
+      let { data: profile } = await sb.from('profiles').select('*').eq('id', currentUserId).maybeSingle();
       const { data: { user: authUser } } = await sb.auth.getUser();
+      if(!profile) {
+        const fallbackName = authUser?.user_metadata?.full_name || authUser?.email?.split('@')[0] || 'Player';
+        const insertPayload = { id: currentUserId, display_name: fallbackName, avatar_url: avatars[0], mmr: 1000, wins: 0, losses: 0 };
+        const { error: createErr } = await sb.from('profiles').insert(insertPayload);
+        if (createErr) console.error('Profile creation failed', createErr);
+        profile = insertPayload;
+      }
       if(profile) {
         GameCache.user = { ...profile, email: authUser?.email || "" };
         document.getElementById("headerName").innerText = profile.display_name || "Player";
@@ -408,10 +421,29 @@
       openModal("profileModal");
     }
 
+    function openNotifications() {
+      const list = GameCache.notifications.map(n => {
+        const title = n.title || n.body || n.message || 'Notification';
+        const body = n.body || n.message || '';
+        return `<div class="social-item"><div><div style="font-weight:700">${title}</div><div style="font-size:12px;opacity:0.7">${body}</div></div></div>`;
+      }).join('') || "<p style='text-align:center;padding:20px;opacity:0.5'>No notifications</p>";
+      document.getElementById('notificationContent').innerHTML = list;
+      document.getElementById('headerNotifDot').style.display = 'none';
+      openModal('notificationModal');
+    }
+
+    function setSocialModalFullscreen(state) {
+      const content = document.querySelector('#socialModal .modal-content');
+      if (!content) return;
+      if (state) content.classList.add('fullscreen');
+      else content.classList.remove('fullscreen');
+    }
+
     function openFriends(){
+      setSocialModalFullscreen(false);
       document.getElementById('socialTitle').innerText = "Friends";
       const cont = document.getElementById('socialContent');
-      cont.innerHTML = `<div style="margin-bottom:18px;"><div style="display:flex;gap:10px;"><input id="friendSearch" class="answer-input" style="flex:1;font-size:14px;text-align:left;letter-spacing:0;" placeholder="Name or email..." /><button class="btn google-btn" style="width:80px;padding:0;" onclick="searchFriend()">Search</button></div><div id="searchResult" style="margin-top:12px;"></div></div><div id="friendsList"></div>`;
+      cont.innerHTML = `<div style="margin-bottom:18px;"><div style="display:flex;gap:10px;"><input id="friendSearch" class="answer-input modern" style="flex:1;" placeholder="Name or email..." /><button class="btn modern" style="width:100px;" onclick="searchFriend()">Search</button></div><div id="searchResult" style="margin-top:12px;"></div></div><div id="friendsList"></div>`;
       renderFriendsList();
       openModal('socialModal');
     }
@@ -428,6 +460,7 @@
     }
 
     function openMessages(){
+      setSocialModalFullscreen(false);
       document.getElementById('socialTitle').innerText = "Messages";
       document.getElementById('socialModal').dataset.activeChatId = "";
       const cont = document.getElementById('socialContent');
@@ -449,6 +482,7 @@
     }
 
     async function viewChat(otherId) {
+      setSocialModalFullscreen(true);
       const p = GameCache.profiles[otherId] || { display_name: "Player", avatar_url: avatars[0] };
       document.getElementById('socialTitle').innerText = `Chat with ${p.display_name}`;
       document.getElementById('socialModal').dataset.activeChatId = otherId;
@@ -460,11 +494,11 @@
       try{ socialChannel.send({ type: 'broadcast', event: 'read_receipt', payload: { fromId: otherId, seen_at: now } }); }catch(e){}
       updateBadges();
       const chatMsgs = GameCache.messages.filter(m => (m.from_user_id === otherId || m.to_user_id === otherId)).sort((a,b) => new Date(a.created_at) - new Date(b.created_at));
-      cont.innerHTML = `<div style="display:flex;flex-direction:column;height:400px;"><div id="chatBody" style="flex:1;overflow-y:auto;padding-bottom:10px;">${chatMsgs.map(m => {
+      cont.innerHTML = `<div style="display:flex;flex-direction:column;height:100%;"><div id="chatBody" style="flex:1;overflow-y:auto;padding-bottom:10px;">${chatMsgs.map(m => {
         const isMe = m.from_user_id === currentUserId;
         const sender = isMe ? { avatar_url: GameCache.user.avatar_url } : p;
         return `<div style="display:flex;align-items:flex-end;gap:8px;margin-bottom:8px;${isMe ? 'flex-direction:row-reverse;' : ''}"><img src="${sender.avatar_url || avatars[0]}" style="width:28px;height:28px;border-radius:50%;"><div class="chat-bubble ${isMe ? 'me' : 'them'}" style="margin:0;">${m.text}</div></div>`;
-      }).join('')}</div><div style="display:flex;gap:10px;"><input id="chatInput" class="answer-input" style="flex:1;font-size:14px;text-align:left;letter-spacing:0;" placeholder="Type..." /><button class="btn google-btn" style="width:70px;padding:0;" onclick="sendMsg('${otherId}')">Send</button></div></div>`;
+      }).join('')}</div><div style="display:flex;gap:10px;margin-top:10px;"><input id="chatInput" class="answer-input modern" style="flex:1;" placeholder="Type your message..." /><button class="btn modern" style="width:90px;" onclick="sendMsg('${otherId}')">Send</button></div></div>`;
       const cb = document.getElementById('chatBody'); cb.scrollTop = cb.scrollHeight;
     }
 
@@ -488,7 +522,7 @@
     };
 
     function openAboutModal(){ openModal("aboutModal"); }
-    function closeSocialModal() { closeModal('socialModal'); document.getElementById('socialModal').dataset.activeChatId = ""; }
+    function closeSocialModal() { setSocialModalFullscreen(false); closeModal('socialModal'); document.getElementById('socialModal').dataset.activeChatId = ""; }
     function getLeague(mmr){ if(mmr >= 2000) return "Mythic"; if(mmr >= 1500) return "Diamond"; return "Bronze"; }
     function openModal(id){ document.getElementById(id).classList.add("active"); }
     function closeModal(id){ document.getElementById(id).classList.remove("active"); }
@@ -571,10 +605,32 @@
     }
 
     async function sendMsg(toId) {
-      const text = document.getElementById('chatInput').value.trim();
-      if (!text) return;
-      const { data, error } = await sb.from('messages').insert({ from_user_id: currentUserId, to_user_id: toId, text: text }).select().single();
-      if (!error) { GameCache.messages.unshift(data); viewChat(toId); }
+      const messageText = document.getElementById('chatInput').value.trim();
+      if (!messageText) return;
+      const currentUser = { username: GameCache.user.display_name || 'Me', id: currentUserId };
+      const receiverUsername = GameCache.profiles[toId]?.display_name || 'Friend';
+      const receiverId = toId;
+      const supabase = sb;
+      const { data, error } = await supabase
+        .from('messages')
+        .insert([
+          {
+            from: currentUser.username,
+            to: receiverUsername,
+            from_user_id: currentUser.id,
+            to_user_id: receiverId,
+            text: messageText
+          }
+        ])
+        .select();
+
+      console.log(data);
+      console.log(error);
+      if (error) { console.error('sendMsg error', error); return; }
+      const row = Array.isArray(data) ? data[0] : data;
+      const message = row || { from: currentUser.username, to: receiverUsername, from_user_id: currentUser.id, to_user_id: receiverId, text: messageText, created_at: new Date().toISOString() };
+      GameCache.messages.unshift(message);
+      viewChat(toId);
     }
 
     async function respondInvite(id, status) {
