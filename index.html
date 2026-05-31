@@ -485,20 +485,51 @@
         renderMatchUI();
       });
       socialChannel.subscribe(async (status) => { if (status === 'SUBSCRIBED') await trackPresence('online'); });
+      
       dbChannel = sb.channel('db-sync');
       dbChannel
+        // Messages: INSERT for both sent and received messages
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `to_user_id=eq.${currentUserId}` }, async (p) => {
           if (!GameCache.profiles[p.new.from_user_id]) await fetchProfile(p.new.from_user_id);
           GameCache.messages.unshift(p.new); updateBadges(); refreshOpenSocialView();
+          // If chat with this user is open, append message immediately
+          const activeChatId = document.getElementById('socialModal').dataset.activeChatId;
+          if (activeChatId === p.new.from_user_id) {
+            const chatBody = document.getElementById('chatBody');
+            if (chatBody) {
+              const p = GameCache.profiles[p.new.from_user_id] || { avatar_url: avatars[0] };
+              const msgHtml = `<div style="display:flex;align-items:flex-end;gap:8px;margin-bottom:8px;"><img src="${p.avatar_url || avatars[0]}" style="width:28px;height:28px;border-radius:50%;"><div class="chat-bubble them" style="margin:0;">${p.new.text}</div></div>`;
+              chatBody.insertAdjacentHTML('beforeend', msgHtml);
+              chatBody.scrollTop = chatBody.scrollHeight;
+            }
+          }
+        })
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `from_user_id=eq.${currentUserId}` }, async (p) => {
+          if (!GameCache.profiles[p.new.to_user_id]) await fetchProfile(p.new.to_user_id);
+          GameCache.messages.unshift(p.new); refreshOpenSocialView();
+          // If chat with this user is open, append message immediately
+          const activeChatId = document.getElementById('socialModal').dataset.activeChatId;
+          if (activeChatId === p.new.to_user_id) {
+            const chatBody = document.getElementById('chatBody');
+            if (chatBody) {
+              const msgHtml = `<div style="display:flex;align-items:flex-end;gap:8px;margin-bottom:8px;flex-direction:row-reverse;"><img src="${GameCache.user.avatar_url || avatars[0]}" style="width:28px;height:28px;border-radius:50%;"><div class="chat-bubble me" style="margin:0;">${p.new.text}</div></div>`;
+              chatBody.insertAdjacentHTML('beforeend', msgHtml);
+              chatBody.scrollTop = chatBody.scrollHeight;
+            }
+          }
         })
         .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages' }, (p) => {
           const idx = GameCache.messages.findIndex(m => m.id === p.new.id);
           if (idx !== -1) { GameCache.messages[idx] = p.new; updateBadges(); refreshOpenSocialView(); }
         })
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'game_invites', filter: `or=(to_user_id.eq.${currentUserId},from_user_id.eq.${currentUserId})` }, async (p) => {
+        // Game Invites: INSERT for both sent and received
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'game_invites', filter: `to_user_id=eq.${currentUserId}` }, async (p) => {
           if (!GameCache.profiles[p.new.from_user_id]) await fetchProfile(p.new.from_user_id);
-          if (!GameCache.profiles[p.new.to_user_id]) await fetchProfile(p.new.to_user_id);
           GameCache.invites.unshift(p.new); updateBadges(); refreshOpenSocialView();
+        })
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'game_invites', filter: `from_user_id=eq.${currentUserId}` }, async (p) => {
+          if (!GameCache.profiles[p.new.to_user_id]) await fetchProfile(p.new.to_user_id);
+          GameCache.invites.unshift(p.new); refreshOpenSocialView();
         })
         .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'game_invites' }, (p) => {
           if (p.new.from_user_id !== currentUserId && p.new.to_user_id !== currentUserId) return;
@@ -509,14 +540,66 @@
           } else {
             if (idx !== -1) GameCache.invites.splice(idx, 1);
           }
-          refreshOpenSocialView();
+          updateBadges(); refreshOpenSocialView();
         })
+        // Friend Requests: INSERT for received requests
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'friend_requests', filter: `to_user_id=eq.${currentUserId}` }, async (p) => {
           if (!GameCache.profiles[p.new.from_user_id]) await fetchProfile(p.new.from_user_id);
           GameCache.friendRequests.unshift(p.new); updateBadges(); refreshOpenSocialView();
         })
+        // Friend Requests: UPDATE for accept/decline
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'friend_requests' }, (p) => {
+          if (p.new.from_user_id !== currentUserId && p.new.to_user_id !== currentUserId) return;
+          const idx = GameCache.friendRequests.findIndex(r => r.id === p.new.id);
+          if (idx !== -1) {
+            if (p.new.status !== 'pending') {
+              GameCache.friendRequests.splice(idx, 1);
+            } else {
+              GameCache.friendRequests[idx] = p.new;
+            }
+          }
+          updateBadges(); refreshOpenSocialView();
+        })
+        // Friends: INSERT for new friendships
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'friends', filter: `user_id=eq.${currentUserId}` }, async (p) => {
+          if (!GameCache.friends.includes(p.new.friend_id)) {
+            GameCache.friends.push(p.new.friend_id);
+            if (!GameCache.profiles[p.new.friend_id]) await fetchProfile(p.new.friend_id);
+          }
+          refreshOpenSocialView();
+        })
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'friends', filter: `friend_id=eq.${currentUserId}` }, async (p) => {
+          if (!GameCache.friends.includes(p.new.user_id)) {
+            GameCache.friends.push(p.new.user_id);
+            if (!GameCache.profiles[p.new.user_id]) await fetchProfile(p.new.user_id);
+          }
+          refreshOpenSocialView();
+        })
+        // Friends: DELETE for removed friendships
+        .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'friends', filter: `user_id=eq.${currentUserId}` }, (p) => {
+          const idx = GameCache.friends.indexOf(p.old.friend_id);
+          if (idx !== -1) GameCache.friends.splice(idx, 1);
+          refreshOpenSocialView();
+        })
+        .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'friends', filter: `friend_id=eq.${currentUserId}` }, (p) => {
+          const idx = GameCache.friends.indexOf(p.old.user_id);
+          if (idx !== -1) GameCache.friends.splice(idx, 1);
+          refreshOpenSocialView();
+        })
+        // Notifications: INSERT for new notifications
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${currentUserId}` }, (p) => {
           GameCache.notifications.unshift(p.new); updateBadges(); refreshOpenSocialView();
+        })
+        // Notifications: UPDATE for read status
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'notifications', filter: `user_id=eq.${currentUserId}` }, (p) => {
+          const idx = GameCache.notifications.findIndex(n => n.id === p.new.id);
+          if (idx !== -1) {
+            GameCache.notifications[idx] = p.new;
+            if (p.new.is_read) {
+              GameCache.notifications.splice(idx, 1);
+            }
+          }
+          updateBadges(); refreshOpenSocialView();
         })
         .subscribe();
     }
