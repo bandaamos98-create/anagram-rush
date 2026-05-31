@@ -563,6 +563,19 @@
         }
       });
 
+      // Friend requests (outgoing) - for search results
+      gameChannel.on('postgres_changes', { event: '*', schema: 'public', table: 'friend_requests', filter: `from_user_id=eq.${currentUserId}` }, payload => {
+        console.log('Outgoing friend request realtime:', payload);
+        // Refresh search results if the friends modal is open
+        if(document.getElementById('socialModal').classList.contains('active') && document.getElementById('socialTitle').innerText.toLowerCase().includes('friends')){
+          const searchResultDiv = document.getElementById('searchResult');
+          if(searchResultDiv && searchResultDiv.innerHTML && searchResultDiv.innerHTML.trim().length > 0){
+            // Re-run the search to update status
+            searchFriendByEmail();
+          }
+        }
+      });
+
       // Friends list changes for this user
       gameChannel.on('postgres_changes', { event: '*', schema: 'public', table: 'friends', filter: `user_id=eq.${currentUserId}` }, payload => {
         console.log('Friends realtime:', payload);
@@ -830,6 +843,17 @@
         <div id="friendsList">Loading friends...</div>
       `;
       renderFriendsList();
+      
+      // Add listener for search input to enable real-time search
+      const searchInput = document.getElementById('friendSearchEmail');
+      if(searchInput) {
+        searchInput.addEventListener('keypress', (e) => {
+          if(e.key === 'Enter') {
+            searchFriendByEmail();
+          }
+        });
+      }
+      
       openModal("socialModal");
     }
 
@@ -856,7 +880,6 @@
       if(!query) return;
       resDiv.innerHTML = '<div style="opacity:.7">Searching...</div>';
 
-      // Use case-insensitive partial match on email or display_name
       try{
         const orFilter = `email.ilike.%${query}%,display_name.ilike.%${query}%`;
         const { data, error } = await sb.from('profiles')
@@ -867,24 +890,55 @@
         if(error){ console.error('Search error:', error); resDiv.innerHTML = '<div style="color:var(--danger);">Search failed.</div>'; return; }
         if(!data || data.length === 0){ resDiv.innerHTML = '<div style="color:var(--danger);font-size:13px;">Player not found.</div>'; return; }
 
-        // render results
-        const items = data.filter(d => d.id !== currentUserId).map(d => `
-          <div class="social-item">
-            <div class="social-top">
-              <div class="social-user">
-                <img class="small-avatar" src="${d.avatar_url || avatars[0]}">
-                <div>
-                  <div style="font-weight:700">${d.display_name}</div>
-                  <div style="font-size:11px;opacity:0.6">${d.email || ''}</div>
+        // Get list of users we already have friend requests pending with
+        const { data: pendingRequests } = await sb.from('friend_requests')
+          .select('to_user_id, status')
+          .eq('from_user_id', currentUserId);
+        const pendingMap = {};
+        if(pendingRequests) {
+          pendingRequests.forEach(req => {
+            pendingMap[req.to_user_id] = req.status;
+          });
+        }
+
+        // Get list of actual friends
+        const { data: friends } = await sb.from('friends')
+          .select('friend_id')
+          .eq('user_id', currentUserId);
+        const friendIds = {};
+        if(friends) {
+          friends.forEach(f => {
+            friendIds[f.friend_id] = true;
+          });
+        }
+
+        // render results - only show friend request button for search results
+        const items = data.filter(d => d.id !== currentUserId).map(d => {
+          let buttonHTML = '';
+          if(friendIds[d.id]) {
+            buttonHTML = '<button class="mini-btn accept" disabled style="opacity:0.7;cursor:default;">✅ Friends</button>';
+          } else if(pendingMap[d.id] === 'pending') {
+            buttonHTML = '<button class="mini-btn accept" disabled style="opacity:0.7;cursor:default;">⏳ Pending...</button>';
+          } else {
+            buttonHTML = `<button class="mini-btn accept" id="friendBtn_${d.id}" onclick="sendFriendRequest('${d.id}','${d.display_name.replace(/'/g, "\\'")}')">🤝 Send Request</button>`;
+          }
+          return `
+            <div class="social-item">
+              <div class="social-top">
+                <div class="social-user">
+                  <img class="small-avatar" src="${d.avatar_url || avatars[0]}">
+                  <div>
+                    <div style="font-weight:700">${d.display_name}</div>
+                    <div style="font-size:11px;opacity:0.6">${d.email || ''}</div>
+                  </div>
+                </div>
+                <div style="display:flex;gap:8px;">
+                  ${buttonHTML}
                 </div>
               </div>
-              <div style="display:flex;gap:8px;">
-                <button class="mini-btn accept" onclick="sendFriendRequest('${d.id}','${d.display_name.replace(/'/g, "\\'")}')">🤝 Friend</button>
-                <button class="mini-btn accept" onclick="sendGameInvite('${d.id}','${d.display_name.replace(/'/g, "\\'")}')">🎮 Invite</button>
-              </div>
             </div>
-          </div>
-        `).join('');
+          `;
+        }).join('');
 
         resDiv.innerHTML = items || '<div style="opacity:.7">No matches.</div>';
       }catch(e){ console.error('Search exception:', e); resDiv.innerHTML = '<div style="color:var(--danger);">Search error.</div>'; }
@@ -901,7 +955,7 @@
               </div>
             </div>
             <div style="display:flex;gap:8px;">
-              <button class="mini-btn accept" onclick="sendGameInvite('${p.id}','${p.display_name.replace(/'/g, "\\'")}')">Invite</button>
+              <button class="mini-btn accept" onclick="sendGameInvite('${p.id}','${p.display_name.replace(/'/g, "\\'")}')">🎮 Invite Game</button>
               <button class="msg-btn" onclick="openMessages('${p.display_name.replace(/'/g, "\\'")}')">Message</button>
             </div>
           </div>
@@ -918,13 +972,82 @@
       if(ids.length === 0){ document.getElementById("socialContent").className = 'online-players-list'; document.getElementById("socialContent").innerHTML = '<div class="message">No players online found.</div>'; openModal("socialModal"); document.getElementById('socialModal').classList.add('fullscreen'); document.getElementById('bottomBar').classList.add('hidden'); return; }
       const { data: profiles, error: profileError } = await sb.from('profiles').select('id,display_name,avatar_url').in('id', ids);
       if(profileError){ console.error('Supabase profile lookup error:', profileError); }
-      const html = (profiles || []).map(p => { const name = p.display_name || 'Player'; const safeName = escapeHtml(name); const safeAvatar = p.avatar_url || `https://i.pravatar.cc/150?u=${encodeURIComponent(name)}`; return `<div class="online-player-card"><div class="social-user"><img class="small-avatar" src="${safeAvatar}"><div><div style="font-weight:700">${safeName}</div><div style="font-size:12px;opacity:.7">🟢 Online</div></div></div><div class="online-actions"><button class="online-btn" onclick="sendFriendRequest('${p.id}','${safeName.replace(/'/g, "\\'")}')">🤝 Friend</button><button class="online-btn" onclick="sendGameInvite('${p.id}','${safeName.replace(/'/g, "\\'")}')">🎮 Invite</button></div></div>`; }).join('') || '<div class="message">No players online found.</div>';
+      const html = (profiles || []).map(p => { const name = p.display_name || 'Player'; const safeName = escapeHtml(name); const safeAvatar = p.avatar_url || `https://i.pravatar.cc/150?u=${encodeURIComponent(name)}`; return `<div class="online-player-card"><div class="social-user"><img class="small-avatar" src="${safeAvatar}"><div><div style="font-weight:700">${safeName}</div><div style="font-size:12px;opacity:.7">🟢 Online</div></div></div><div class="online-actions"><button class="online-btn" id="friendBtn_${p.id}" onclick="sendFriendRequest('${p.id}','${safeName.replace(/'/g, "\\'")}')">🤝 Send Request</button></div></div>`; }).join('') || '<div class="message">No players online found.</div>';
       const socialContent = document.getElementById("socialContent"); socialContent.className = 'online-players-list'; socialContent.innerHTML = html;
       const socialModal = document.getElementById('socialModal'); socialModal.classList.add('fullscreen'); document.getElementById('bottomBar').classList.add('hidden'); openModal("socialModal");
     }
 
-    async function sendFriendRequest(targetId, targetName){ if(!currentUserId) return; const { error } = await sb.from('friend_requests').insert({ from_user_id: currentUserId, to_user_id: targetId, status: 'pending', created_at: new Date().toISOString() }); if(error){ console.error('Supabase friend request error:', error); return; } showPopupNotification(`Friend request sent to ${targetName}`); }
-    async function sendGameInvite(targetId, targetName){ if(!currentUserId) return; const { error } = await sb.from('game_invites').insert({ from_user_id: currentUserId, to_user_id: targetId, mode: 'quick', status: 'pending', created_at: new Date().toISOString() }); if(error){ console.error('Supabase game invite error:', error); return; } showPopupNotification(`Game invite sent to ${targetName}`); }
+    async function sendFriendRequest(targetId, targetName){
+      if(!currentUserId) return;
+      const btn = document.getElementById(`friendBtn_${targetId}`);
+      if(btn) {
+        btn.disabled = true;
+        btn.innerText = '⏳ Pending...';
+        btn.style.opacity = '0.6';
+      }
+      const { error } = await sb.from('friend_requests').insert({
+        from_user_id: currentUserId,
+        to_user_id: targetId,
+        status: 'pending',
+        created_at: new Date().toISOString()
+      });
+      if(error){
+        console.error('Supabase friend request error:', error);
+        if(btn) {
+          btn.disabled = false;
+          btn.innerText = '🤝 Send Request';
+          btn.style.opacity = '1';
+        }
+        return;
+      }
+      showPopupNotification(`Friend request sent to ${targetName}`);
+      // Update UI to show pending status
+      if(btn) {
+        setTimeout(() => {
+          if(btn) {
+            btn.innerHTML = '✅ Request Sent';
+            btn.style.pointerEvents = 'none';
+            btn.style.opacity = '0.7';
+          }
+        }, 300);
+      }
+    }
+    
+    async function sendGameInvite(targetId, targetName){
+      if(!currentUserId) return;
+      const btn = event?.target;
+      if(btn) {
+        btn.disabled = true;
+        btn.innerText = '⏳ Sending...';
+        btn.style.opacity = '0.6';
+      }
+      const { error } = await sb.from('game_invites').insert({
+        from_user_id: currentUserId,
+        to_user_id: targetId,
+        mode: 'quick',
+        status: 'pending',
+        created_at: new Date().toISOString()
+      });
+      if(error){
+        console.error('Supabase game invite error:', error);
+        if(btn) {
+          btn.disabled = false;
+          btn.innerText = '🎮 Invite Game';
+          btn.style.opacity = '1';
+        }
+        return;
+      }
+      showPopupNotification(`Game invite sent to ${targetName}`);
+      if(btn) {
+        setTimeout(() => {
+          if(btn) {
+            btn.innerHTML = '✅ Invited';
+            btn.style.pointerEvents = 'none';
+            btn.style.opacity = '0.7';
+          }
+        }, 300);
+      }
+    }
     function showPopupNotification(message){ const toast = document.createElement('div'); toast.style.cssText='position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:rgba(15,23,42,.95);color:white;padding:14px 18px;border-radius:18px;box-shadow:0 10px 30px rgba(0,0,0,.25);z-index:2000;opacity:0;transition:.3s;max-width:90%;text-align:center;font-weight:700;'; toast.innerText = message; document.body.appendChild(toast); requestAnimationFrame(()=>toast.style.opacity='1'); setTimeout(()=>{ toast.style.opacity='0'; setTimeout(()=>{ if(toast.parentNode) toast.parentNode.removeChild(toast); }, 400); }, 2600); }
     async function loadMessages(){ if(currentUserId){ const { data, error } = await sb.from('messages').select('*').order('created_at', { ascending: true }); if(error){ console.error('Supabase load messages error:', error); return []; } return (data || []).filter(m => (m.from === user.name || m.to === user.name) && new Date(m.created_at).getTime() >= Date.now() - 72 * 3600 * 1000); } return []; }
     async function sendMessage(to, text){
@@ -986,7 +1109,22 @@
 
     async function acceptInvite(inviteId){ const { data, error } = await sb.from('game_invites').select('*').eq('id', inviteId).single(); if(error){ console.error('Accept invite error:', error); return; } await sb.from('game_invites').update({ status: 'accepted' }).eq('id', inviteId); closeModal('socialModal'); findMatch(data?.mode || 'quick'); }
     async function declineGameInvite(inviteId){ await sb.from('game_invites').update({ status: 'declined' }).eq('id', inviteId); openInvites(); }
-    async function acceptFriendRequest(requestId){ const { data, error } = await sb.from('friend_requests').select('*').eq('id', requestId).single(); if(error){ console.error('Accept request error:', error); return; } await sb.from('friend_requests').update({ status: 'accepted' }).eq('id', requestId); if(data){ await sb.from('friends').upsert([ { user_id: currentUserId, friend_id: data.from_user_id }, { user_id: data.from_user_id, friend_id: currentUserId } ], { onConflict: ['user_id','friend_id'] }); } openInvites(); showPopupNotification('Friend request accepted!'); }
+    async function acceptFriendRequest(requestId){
+      const { data, error } = await sb.from('friend_requests').select('*').eq('id', requestId).single();
+      if(error){ console.error('Accept request error:', error); return; }
+      
+      await sb.from('friend_requests').update({ status: 'accepted' }).eq('id', requestId);
+      
+      if(data){
+        await sb.from('friends').upsert([
+          { user_id: currentUserId, friend_id: data.from_user_id },
+          { user_id: data.from_user_id, friend_id: currentUserId }
+        ], { onConflict: ['user_id','friend_id'] });
+      }
+      
+      openInvites();
+      showPopupNotification('Friend request accepted! Now you can invite them to games.'); 
+    }
     async function declineFriendRequest(requestId){ await sb.from('friend_requests').update({ status: 'declined' }).eq('id', requestId); openInvites(); }
 
     async function openInvites(){
