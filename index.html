@@ -702,26 +702,63 @@
     // Attach event listener directly
     document.getElementById("googleLogin").addEventListener("click", signInWithGoogle);
 
+    let isLoggingOut = false;
     async function logout(){
-      document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
+      if(isLoggingOut) return;
+      isLoggingOut = true;
+      console.log('Logout clicked');
+      // Close all modals immediately
+      document.querySelectorAll('.modal').forEach(m => {
+        m.classList.remove('active');
+        m.classList.remove('fullscreen');
+      });
+      // Run sign out
       await signOutSupabase();
+      isLoggingOut = false;
     }
 
     async function signOutSupabase(){
+      console.log('Starting sign out...');
+      
+      // Try to set offline status
       try{
-        await setOnlineStatus(false);
+        if(currentUserId) await setOnlineStatus(false);
       }catch(e){
-        console.warn('Failed to update presence during sign-out (ignored):', e);
+        console.warn('Failed to update presence during sign-out:', e);
       }
+      
+      // Try to sign out from Supabase Auth
       try{
-        const { error } = await sb.auth.signOut();
-        if(error){ console.warn('Supabase sign-out warning:', error.message); }
-      }catch(e){ console.warn('Supabase sign-out failed (ignored):', e); }
+        if(sb && sb.auth){
+          const { error } = await sb.auth.signOut();
+          if(error) console.warn('Supabase sign-out warning:', error.message);
+        }
+      }catch(e){ 
+        console.warn('Supabase sign-out failed:', e); 
+      }
 
-      // Reset UI regardless of errors
-      try{ document.getElementById("mainApp").classList.add("hidden"); }catch(e){}
-      try{ document.getElementById("bottomBar").classList.add("hidden"); }catch(e){}
-      try{ document.getElementById("loginScreen").classList.remove("hidden"); }catch(e){}
+      // Clear all user data and state
+      currentUserId = null;
+      user = { name:"Guest", avatar:avatars[0], wins:0, losses:0, draws:0, mmr:1000, email:"" };
+      notifications = [];
+      gameChannel = null;
+      matchmakingTimeout = null;
+      currentMatchId = null;
+      
+      // Clear localStorage
+      try{ localStorage.removeItem('prevMMR'); }catch(e){}
+
+      // Reset UI immediately
+      document.getElementById("mainApp").classList.add("hidden");
+      document.getElementById("bottomBar").classList.add("hidden");
+      document.getElementById("loginScreen").classList.remove("hidden");
+      
+      console.log('Sign out completed, reloading page...');
+      
+      // Reload page to ensure clean state
+      setTimeout(() => {
+        window.location.reload();
+      }, 500);
     }
 
     function updateUI(){
@@ -918,7 +955,7 @@
           if(friendIds[d.id]) {
             buttonHTML = '<button class="mini-btn accept" disabled style="opacity:0.7;cursor:default;">✅ Friends</button>';
           } else if(pendingMap[d.id] === 'pending') {
-            buttonHTML = '<button class="mini-btn accept" disabled style="opacity:0.7;cursor:default;">⏳ Pending...</button>';
+            buttonHTML = '<button class="mini-btn accept" disabled style="opacity:0.7;cursor:default;background:rgba(59,130,246,0.5);">⏳ Pending...</button>';
           } else {
             buttonHTML = `<button class="mini-btn accept" id="friendBtn_${d.id}" onclick="sendFriendRequest('${d.id}','${d.display_name.replace(/'/g, "\\'")}')">🤝 Send Request</button>`;
           }
@@ -979,18 +1016,33 @@
 
     async function sendFriendRequest(targetId, targetName){
       if(!currentUserId) return;
+      
+      // Check if request already exists to prevent duplicates
+      const { data: existing } = await sb.from('friend_requests')
+        .select('id, status')
+        .eq('from_user_id', currentUserId)
+        .eq('to_user_id', targetId)
+        .maybeSingle();
+      
+      if(existing && existing.status === 'pending'){
+        showPopupNotification(`Friend request already pending with ${targetName}`);
+        return;
+      }
+      
       const btn = document.getElementById(`friendBtn_${targetId}`);
       if(btn) {
         btn.disabled = true;
-        btn.innerText = '⏳ Pending...';
+        btn.innerText = '⏳ Sending...';
         btn.style.opacity = '0.6';
       }
+      
       const { error } = await sb.from('friend_requests').insert({
         from_user_id: currentUserId,
         to_user_id: targetId,
         status: 'pending',
         created_at: new Date().toISOString()
       });
+      
       if(error){
         console.error('Supabase friend request error:', error);
         if(btn) {
@@ -998,18 +1050,17 @@
           btn.innerText = '🤝 Send Request';
           btn.style.opacity = '1';
         }
+        showPopupNotification(`Failed to send request to ${targetName}`);
         return;
       }
+      
       showPopupNotification(`Friend request sent to ${targetName}`);
       // Update UI to show pending status
       if(btn) {
-        setTimeout(() => {
-          if(btn) {
-            btn.innerHTML = '✅ Request Sent';
-            btn.style.pointerEvents = 'none';
-            btn.style.opacity = '0.7';
-          }
-        }, 300);
+        btn.innerHTML = '⏳ Pending...';
+        btn.style.pointerEvents = 'none';
+        btn.style.opacity = '0.7';
+        btn.style.background = 'rgba(59,130,246,0.5)';
       }
     }
     
@@ -1301,39 +1352,4 @@
           const path = `avatars/${currentUserId}/${Date.now()}_${selectedAvatarFile.name}`;
           const { data: uploadData, error: uploadError } = await sb.storage.from('avatars').upload(path, selectedAvatarFile, { upsert: true });
           if(uploadError){
-            console.error('Avatar upload error:', uploadError);
-            // fallback: keep data URL but warn
-            showPopupNotification('Avatar upload failed, saving name only.');
-          } else {
-            const { data: publicData } = sb.storage.from('avatars').getPublicUrl(path);
-            avatarUrlToSave = publicData?.publicUrl || avatarUrlToSave;
-            // clear selected file after successful upload
-            selectedAvatarFile = null;
-          }
-        }
-
-        const { error } = await sb.from('profiles').upsert({ id: currentUserId, display_name: newName, avatar_url: avatarUrlToSave, email: user.email }, { onConflict: 'id' });
-        if(error){
-          console.error("Save profile error:", error);
-          alert("Failed to save changes.");
-          return;
-        }
-
-        user.name = newName;
-        user.avatar = avatarUrlToSave;
-        updateUI();
-        closeModal('profileModal');
-        showPopupNotification("Profile updated!");
-      }catch(e){ console.error('Save profile exception:', e); alert('Failed to save changes.'); }
-    });
-
-    document.getElementById("avatarUpload").addEventListener("change", handleAvatarUpload);
-    function escapeHtml(s){ return String(s).replace(/[&<>"']/g, (c)=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' })[c]); }
-
-    // Start everything
-    initSupabase();
-
-    document.getElementById("answerInput").addEventListener("keypress",(e)=>{ if(e.key === "Enter"){ submitAnswer(); } });
-  </script>
-</body>
-</html>
+            console.erro
