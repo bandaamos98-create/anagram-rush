@@ -139,19 +139,28 @@
 
       <!-- GAME SCREEN -->
       <div id="gameScreen" class="hidden game-screen">
-        <div class="timer" id="timer">60</div>
-        <div class="versus">
-          <div class="player-side"><img id="meAvatar" src=""><div id="meName">YOU</div><div class="score" id="myScore">0</div></div>
-          <div class="vs">VS</div>
-          <div class="player-side"><img id="oppAvatar" src=""><div id="oppName">RIVAL</div><div class="score" id="oppScore">0</div></div>
-        </div>
-        <div class="card glass">
+        <div class="timer" id="timer">180</div>
+        <div class="card glass" style="margin-bottom:18px;padding:20px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:12px;flex-wrap:wrap;">
+            <div>
+              <div style="font-size:12px;opacity:.7;margin-bottom:6px;">Current scramble</div>
+              <div id="scrambleWord" style="font-size:28px;font-weight:800;letter-spacing:8px;color:var(--blue);"></div>
+            </div>
+            <div style="text-align:right;min-width:100px;">
+              <div style="font-size:12px;opacity:.7;">Round</div>
+              <div id="roundCount" style="font-size:18px;font-weight:800;">1/5</div>
+            </div>
+          </div>
           <div class="tiles" id="tiles"></div>
-          <input id="answerInput" class="answer-input" placeholder="TYPE WORD" autofocus />
-          <button class="btn submit-btn" onclick="submitAnswer()"> Submit </button>
-          <div class="feedback" id="feedback"></div>
+          <input id="answerInput" class="answer-input modern" placeholder="Type your answer..." autofocus />
+          <button class="btn modern" onclick="submitAnswer()" style="width:100%;margin-top:12px;">Submit</button>
+          <div class="feedback" id="feedback" style="margin-top:12px;font-size:14px;opacity:.85;"></div>
         </div>
-        <button class="btn guest-btn" onclick="endMatch()" style="margin-top:18px;"> Exit Match </button>
+        <div class="card glass" style="padding:18px;margin-bottom:16px;">
+          <div style="font-weight:700;margin-bottom:12px;">Words to unscramble</div>
+          <div id="wordProgress" style="display:flex;flex-wrap:wrap;gap:10px;"></div>
+        </div>
+        <button class="btn guest-btn" onclick="endMatch()" style="margin-top:4px;"> Exit Match </button>
       </div>
     </div>
 
@@ -250,10 +259,12 @@
       friends: [],
       messages: [],
       invites: [],
+      friendRequests: [],
       notifications: [],
       onlineUsers: {},
       leaderboard: [],
-      profiles: {}
+      profiles: {},
+      match: { active: false }
     };
 
     const avatars = ["https://i.pravatar.cc/150?img=1","https://i.pravatar.cc/150?img=2","https://i.pravatar.cc/150?img=3"];
@@ -329,15 +340,17 @@
         console.log('MESSAGES DATA:', dbgData);
         console.log('MESSAGES ERROR:', dbgErr);
       }catch(e){ console.warn('Debug messages fetch failed', e); }
-      const [msgs, invs, notifs, leaders, friends] = await Promise.all([
+      const [msgs, invs, friendReqs, notifs, leaders, friends] = await Promise.all([
         sb.from('messages').select('*').or(`to_user_id.eq.${currentUserId},from_user_id.eq.${currentUserId}`).order('created_at', {ascending: false}),
-        sb.from('game_invites').select('*').eq('to_user_id', currentUserId).eq('status', 'pending'),
+        sb.from('game_invites').select('*').or(`to_user_id.eq.${currentUserId},from_user_id.eq.${currentUserId}`).eq('status', 'pending'),
+        sb.from('friend_requests').select('*').eq('to_user_id', currentUserId).eq('status', 'pending'),
         sb.from('notifications').select('*').eq('user_id', currentUserId).eq('is_read', false),
         sb.from('profiles').select('id, display_name, mmr, avatar_url').order('mmr', {ascending: false}).limit(100),
         sb.from('friends').select('friend_id').eq('user_id', currentUserId)
       ]);
       GameCache.messages = msgs.data || [];
       GameCache.invites = invs.data || [];
+      GameCache.friendRequests = friendReqs.data || [];
       GameCache.notifications = notifs.data || [];
       GameCache.leaderboard = leaders.data || [];
       GameCache.friends = (friends.data || []).map(f => f.friend_id);
@@ -366,9 +379,16 @@
         GameCache.onlineUsers = socialChannel.presenceState();
         refreshOpenSocialView();
       }).on('broadcast', { event: 'read_receipt' }, ({ payload }) => {
-        // mark messages locally as read indicator (no DB column change)
         GameCache.messages.forEach(m => { if (m.from_user_id === payload.fromId && m.to_user_id === currentUserId) m._read = true; });
         updateBadges(); refreshOpenSocialView();
+      }).on('broadcast', { event: 'match_start' }, ({ payload }) => {
+        if (!payload || !payload.matchId) return;
+        startMatchSession(payload);
+      }).on('broadcast', { event: 'match_progress' }, ({ payload }) => {
+        if (!GameCache.match.active || GameCache.match.matchId !== payload.matchId) return;
+        GameCache.match.currentIndex = payload.nextIndex;
+        GameCache.match.solved = payload.solved || GameCache.match.solved || [];
+        renderMatchUI();
       });
       socialChannel.subscribe(async (status) => { if (status === 'SUBSCRIBED') await trackPresence('online'); });
       dbChannel = sb.channel('db-sync');
@@ -381,9 +401,25 @@
           const idx = GameCache.messages.findIndex(m => m.id === p.new.id);
           if (idx !== -1) { GameCache.messages[idx] = p.new; updateBadges(); refreshOpenSocialView(); }
         })
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'game_invites', filter: `to_user_id=eq.${currentUserId}` }, async (p) => {
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'game_invites', filter: `or=(to_user_id.eq.${currentUserId},from_user_id.eq.${currentUserId})` }, async (p) => {
           if (!GameCache.profiles[p.new.from_user_id]) await fetchProfile(p.new.from_user_id);
+          if (!GameCache.profiles[p.new.to_user_id]) await fetchProfile(p.new.to_user_id);
           GameCache.invites.unshift(p.new); updateBadges(); refreshOpenSocialView();
+        })
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'game_invites' }, (p) => {
+          if (p.new.from_user_id !== currentUserId && p.new.to_user_id !== currentUserId) return;
+          const idx = GameCache.invites.findIndex(i => i.id === p.new.id);
+          if (p.new.status === 'pending') {
+            if (idx === -1) GameCache.invites.unshift(p.new);
+            else GameCache.invites[idx] = p.new;
+          } else {
+            if (idx !== -1) GameCache.invites.splice(idx, 1);
+          }
+          refreshOpenSocialView();
+        })
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'friend_requests', filter: `to_user_id=eq.${currentUserId}` }, async (p) => {
+          if (!GameCache.profiles[p.new.from_user_id]) await fetchProfile(p.new.from_user_id);
+          GameCache.friendRequests.unshift(p.new); updateBadges(); refreshOpenSocialView();
         })
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${currentUserId}` }, (p) => {
           GameCache.notifications.unshift(p.new); updateBadges(); refreshOpenSocialView();
@@ -446,17 +482,6 @@
       cont.innerHTML = `<div style="margin-bottom:18px;"><div style="display:flex;gap:10px;"><input id="friendSearch" class="answer-input modern" style="flex:1;" placeholder="Name or email..." /><button class="btn modern" style="width:100px;" onclick="searchFriend()">Search</button></div><div id="searchResult" style="margin-top:12px;"></div></div><div id="friendsList"></div>`;
       renderFriendsList();
       openModal('socialModal');
-    }
-
-    function openInvites(){
-      document.getElementById('socialTitle').innerText = "Invites";
-      const cont = document.getElementById('socialContent');
-      cont.innerHTML = GameCache.invites.map(i => {
-          const p = GameCache.profiles[i.from_user_id] || { display_name: "Player" };
-          return `<div class="social-item"><div><div style="font-weight:700">Invite from ${p.display_name}</div><div style="font-size:12px;opacity:0.6">Mode: ${i.mode}</div></div><button class="leader-secondary" onclick="respondInvite('${i.id}', 'accepted')">Accept</button></div>`
-      }).join('') || "<p style='text-align:center;padding:20px;opacity:0.5'>No invites</p>";
-      openModal('socialModal');
-      document.getElementById('invBadge').classList.add('hidden');
     }
 
     function openMessages(){
@@ -545,7 +570,7 @@
     }
     function updateBadges(){
       const unreadMsgs = GameCache.messages.filter(m => m.to_user_id === currentUserId && (!getLastSeen(m.from_user_id) || new Date(m.created_at) > new Date(getLastSeen(m.from_user_id)))).length;
-      const unreadInvs = GameCache.invites.length;
+      const unreadInvs = GameCache.invites.length + GameCache.friendRequests.length;
       const mB = document.getElementById('msgBadge'); if(unreadMsgs > 0) { mB.innerText = unreadMsgs; mB.classList.remove('hidden'); } else mB.classList.add('hidden');
       const iB = document.getElementById('invBadge'); if(unreadInvs > 0) { iB.innerText = unreadInvs; iB.classList.remove('hidden'); } else iB.classList.add('hidden');
       document.getElementById('headerNotifDot').style.display = GameCache.notifications.length > 0 ? 'block' : 'none';
@@ -561,7 +586,12 @@
       openModal('socialModal');
     }
     async function logout(){ await trackPresence('offline'); cleanupRealtime(); await sb.auth.signOut(); window.location.reload(); }
-    function endMatch(){ document.getElementById("gameScreen").classList.add("hidden"); document.getElementById("dashboardPage").classList.remove("hidden"); }
+    function endMatch(){
+      if (GameCache.match.timer) clearInterval(GameCache.match.timer);
+      GameCache.match.active = false;
+      document.getElementById("gameScreen").classList.add("hidden");
+      document.getElementById("dashboardPage").classList.remove("hidden");
+    }
 
     function openOnlinePlayers(){
       document.getElementById('socialTitle').innerText = "Players Online";
@@ -580,15 +610,18 @@
       if (!q) return;
       const res = document.getElementById('searchResult');
       res.innerHTML = "Searching...";
-      const { data } = await sb.from('profiles').select('id, display_name, avatar_url, mmr').or(`display_name.ilike.%${q}%,email.eq.${q}`).limit(5);
+      const { data } = await sb.from('profiles').select('id, display_name, avatar_url, mmr, email').or(`display_name.ilike.%${q}%,email.ilike.%${q}%`).limit(8);
       if (data) {
-        res.innerHTML = data.map(p => `<div class="social-item"><div style="display:flex;align-items:center;gap:10px;"><img src="${p.avatar_url || avatars[0]}" style="width:32px;height:32px;border-radius:50%;"><div><div style="font-weight:700">${p.display_name}</div><div style="font-size:11px;opacity:0.6">${getLeague(p.mmr)}</div></div></div><button class="leader-secondary" onclick="sendFriendRequest('${p.id}')">Add</button></div>`).join('') || "No users found";
+        res.innerHTML = data.map(p => `<div class="social-item"><div style="display:flex;align-items:center;gap:10px;"><img src="${p.avatar_url || avatars[0]}" style="width:32px;height:32px;border-radius:50%;"><div><div style="font-weight:700">${p.display_name}</div><div style="font-size:11px;opacity:0.6">${p.email || ''}</div></div></div><button class="leader-secondary" onclick="sendFriendRequest('${p.id}')">Add</button></div>`).join('') || "No users found";
       }
     }
 
     async function sendFriendRequest(toId) {
-      await sb.from('friend_requests').insert({ from_user_id: currentUserId, to_user_id: toId, status: 'pending' });
-      alert("Request sent!");
+      if (toId === currentUserId) return alert('You cannot add yourself.');
+      const { data, error } = await sb.from('friend_requests').insert({ from_user_id: currentUserId, to_user_id: toId, status: 'pending' }).select().single();
+      if (error) { console.error('Friend request failed', error); return alert('Unable to send request.'); }
+      if (data) GameCache.friendRequests.unshift(data);
+      alert("Friend request sent!");
     }
 
     function renderFriendsList() {
@@ -600,8 +633,59 @@
     }
 
     async function sendInvite(toId) {
-      await sb.from('game_invites').insert({ from_user_id: currentUserId, to_user_id: toId, mode: 'quick', status: 'pending' });
+      if (toId === currentUserId) return alert('You cannot invite yourself.');
+      const { data, error } = await sb.from('game_invites').insert({ from_user_id: currentUserId, to_user_id: toId, mode: 'quick', status: 'pending' }).select().single();
+      if (error) { console.error('Invite failed', error); return alert('Unable to send invite.'); }
+      if (data) GameCache.invites.unshift(data);
       alert("Invite sent!");
+    }
+
+    function openInvites(){
+      document.getElementById('socialTitle').innerText = "Invites";
+      const cont = document.getElementById('socialContent');
+      const friendItems = GameCache.friendRequests.map(r => {
+        const p = GameCache.profiles[r.from_user_id] || { display_name: 'Player', avatar_url: avatars[0] };
+        return `<div class="social-item"><div style="display:flex;align-items:center;gap:10px;"><img src="${p.avatar_url || avatars[0]}" style="width:32px;height:32px;border-radius:50%;"><div><div style="font-weight:700">Friend request from ${p.display_name}</div><div style="font-size:12px;opacity:0.65">${p.display_name}</div></div></div><div><button class="leader-secondary" onclick="respondFriendRequest('${r.id}', 'accepted')">Accept</button><button class="leader-secondary" style="margin-left:8px;" onclick="respondFriendRequest('${r.id}', 'declined')">Decline</button></div></div>`;
+      });
+      const gameItems = GameCache.invites.map(i => {
+        const p = GameCache.profiles[i.from_user_id] || { display_name: 'Player', avatar_url: avatars[0] };
+        const label = i.from_user_id === currentUserId ? `Invite sent to ${GameCache.profiles[i.to_user_id]?.display_name || 'Player'}` : `Game invite from ${p.display_name}`;
+        return `<div class="social-item"><div><div style="font-weight:700">${label}</div><div style="font-size:12px;opacity:0.65">Mode: ${i.mode}</div></div><div>${i.to_user_id === currentUserId ? `<button class="leader-secondary" onclick="respondGameInvite('${i.id}', 'accepted')">Accept</button><button class="leader-secondary" style="margin-left:8px;" onclick="respondGameInvite('${i.id}', 'declined')">Decline</button>` : ''}</div></div>`;
+      });
+      const sections = [];
+      if (friendItems.length) sections.push(`<div style="margin-bottom:14px;font-weight:700;">Friend Requests</div>${friendItems.join('')}`);
+      if (gameItems.length) sections.push(`<div style="margin-bottom:14px;font-weight:700;">Game Invites</div>${gameItems.join('')}`);
+      cont.innerHTML = sections.join('') || "<p style='text-align:center;padding:20px;opacity:0.5'>No invites yet</p>";
+      openModal('socialModal');
+      document.getElementById('invBadge').classList.add('hidden');
+    }
+
+    async function respondFriendRequest(id, status) {
+      const req = GameCache.friendRequests.find(r => r.id === id);
+      if (!req) return;
+      if (status === 'accepted') {
+        const otherId = req.from_user_id;
+        await sb.from('friends').insert([{ user_id: currentUserId, friend_id: otherId }, { user_id: otherId, friend_id: currentUserId }]);
+        GameCache.friends.push(otherId);
+      }
+      await sb.from('friend_requests').update({ status }).eq('id', id);
+      GameCache.friendRequests = GameCache.friendRequests.filter(r => r.id !== id);
+      updateBadges();
+      openInvites();
+    }
+
+    async function respondGameInvite(id, status) {
+      const invite = GameCache.invites.find(i => i.id === id);
+      if (!invite) return;
+      await sb.from('game_invites').update({ status }).eq('id', id);
+      GameCache.invites = GameCache.invites.filter(i => i.id !== id);
+      updateBadges();
+      if (status === 'accepted') {
+        const matchPayload = createMatchPayload(invite);
+        startMatchSession(matchPayload);
+        try { socialChannel.send({ type: 'broadcast', event: 'match_start', payload: matchPayload }); } catch(e) {}
+      }
+      openInvites();
     }
 
     async function sendMsg(toId) {
@@ -633,11 +717,82 @@
       viewChat(toId);
     }
 
-    async function respondInvite(id, status) {
-      await sb.from('game_invites').update({ status }).eq('id', id);
-      GameCache.invites = GameCache.invites.filter(i => i.id !== id);
-      updateBadges();
-      openInvites();
+    const matchWords = ['planet','mirror','stream','orange','castle','flight','chance','garden','silver','market','planet','forest','apple','rocket','window'];
+    function shuffleWord(word) {
+      const letters = word.split('');
+      for (let i = letters.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [letters[i], letters[j]] = [letters[j], letters[i]];
+      }
+      return letters.join('');
+    }
+
+    function createMatchPayload(invite) {
+      const words = [];
+      const shuffled = [...matchWords].sort(() => Math.random() - 0.5).slice(0, 5);
+      shuffled.forEach(w => words.push(w));
+      return {
+        matchId: `match-${invite.id}-${Date.now()}`,
+        inviteId: invite.id,
+        from_user_id: invite.from_user_id,
+        to_user_id: invite.to_user_id,
+        playerNames: {
+          [invite.from_user_id]: GameCache.profiles[invite.from_user_id]?.display_name || 'Player',
+          [invite.to_user_id]: GameCache.profiles[invite.to_user_id]?.display_name || 'Player'
+        },
+        words,
+        scrambles: words.map(w => shuffleWord(w)),
+        currentIndex: 0,
+        solved: [],
+        startedAt: Date.now(),
+        endsAt: Date.now() + 180000
+      };
+    }
+
+    function startMatchSession(payload) {
+      if (GameCache.match.active && GameCache.match.matchId === payload.matchId) return;
+      GameCache.match = {
+        active: true,
+        ...payload,
+        timer: null
+      };
+      document.getElementById('dashboardPage').classList.add('hidden');
+      document.getElementById('gameScreen').classList.remove('hidden');
+      renderMatchUI();
+      if (GameCache.match.timer) clearInterval(GameCache.match.timer);
+      GameCache.match.timer = setInterval(() => {
+        const remaining = Math.max(0, Math.round((GameCache.match.endsAt - Date.now()) / 1000));
+        document.getElementById('timer').innerText = remaining;
+        if (remaining <= 0) {
+          clearInterval(GameCache.match.timer);
+          finishMatch(false);
+        }
+      }, 250);
+    }
+
+    function renderMatchUI() {
+      const wordIndex = GameCache.match.currentIndex || 0;
+      const scramble = GameCache.match.scrambles[wordIndex] || '';
+      const currentWord = GameCache.match.words[wordIndex] || '';
+      document.getElementById('scrambleWord').innerText = scramble.toUpperCase();
+      document.getElementById('roundCount').innerText = `${wordIndex + 1}/${GameCache.match.words.length}`;
+      const progress = document.getElementById('wordProgress');
+      progress.innerHTML = GameCache.match.words.map((w, idx) => `<div style="padding:10px 12px;border-radius:14px;background:rgba(255,255,255,.05);border:1px solid ${idx <= wordIndex ? 'rgba(59,130,246,.8)' : 'rgba(255,255,255,.08)'};opacity:${idx < wordIndex ? '1' : '0.75'};">${idx < wordIndex ? w : '?????'}</div>`).join('');
+      document.getElementById('feedback').innerText = `Unscramble the letters to find: ${currentWord.length}-letter word`;
+      document.getElementById('answerInput').value = '';
+      const tiles = document.getElementById('tiles');
+      tiles.innerHTML = scramble.split('').map(l => `<div class="tile">${l.toUpperCase()}</div>`).join('');
+    }
+
+    function finishMatch(won) {
+      if (!GameCache.match.active) return;
+      GameCache.match.active = false;
+      clearInterval(GameCache.match.timer);
+      const solvedCount = GameCache.match.solved.length;
+      const total = GameCache.match.words.length;
+      const resultText = won ? `Complete! ${solvedCount}/${total} words solved.` : `Time's up! ${solvedCount}/${total} words solved.`;
+      document.getElementById('feedback').innerText = resultText;
+      setTimeout(() => endMatch(), 2000);
     }
 
     function refreshOpenSocialView() {
@@ -656,7 +811,26 @@
 
     /* ========================================== GAME LOGIC ========================================== */
     function startGame(mode){ document.getElementById("dashboardPage").classList.add("hidden"); document.getElementById("gameScreen").classList.remove("hidden"); }
-    function submitAnswer(){}
+    function submitAnswer(){
+      if (!GameCache.match.active) return;
+      const guess = document.getElementById('answerInput').value.trim().toLowerCase();
+      if (!guess) return;
+      const current = GameCache.match.words[GameCache.match.currentIndex];
+      if (guess === current.toLowerCase()) {
+        GameCache.match.solved.push(current);
+        const nextIndex = GameCache.match.currentIndex + 1;
+        GameCache.match.currentIndex = nextIndex;
+        GameCache.match.solved = [...new Set(GameCache.match.solved)];
+        try { socialChannel.send({ type: 'broadcast', event: 'match_progress', payload: { matchId: GameCache.match.matchId, nextIndex, solved: GameCache.match.solved } }); } catch(e) {}
+        if (nextIndex >= GameCache.match.words.length) {
+          finishMatch(true);
+          return;
+        }
+        renderMatchUI();
+      } else {
+        document.getElementById('feedback').innerText = 'Not quite, try again.';
+      }
+    }
 
     document.getElementById("googleLogin").onclick = () => sb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin + window.location.pathname } });
     initSupabase();
