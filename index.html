@@ -247,7 +247,7 @@
             </div>
           </div>
         </div>
-        <div style="text-align:center;margin-bottom:14px;font-size:13px;opacity:.7;">Round <span id="roundCount">1/5</span></div>
+        <div style="text-align:center;margin-bottom:14px;font-size:13px;opacity:.7;"><span id="roundCount">3:00</span></div>
         <div class="card glass" style="margin-bottom:18px;padding:20px;">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:12px;flex-wrap:wrap;">
             <div>
@@ -537,12 +537,16 @@
         }
         renderMatchUI();
       });
-      socialChannel.subscribe(async (status) => { if (status === 'SUBSCRIBED') await trackPresence('online'); });
+      socialChannel.subscribe(async (status) => { 
+        console.log('[Realtime] Social channel status:', status);
+        if (status === 'SUBSCRIBED') await trackPresence('online'); 
+      });
       
       dbChannel = sb.channel('db-sync');
       dbChannel
         // Messages: INSERT for both sent and received messages
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `to_user_id=eq.${currentUserId}` }, async (p) => {
+          console.log('[Realtime] New message received:', p.new);
           if (!GameCache.profiles[p.new.from_user_id]) await fetchProfile(p.new.from_user_id);
           GameCache.messages.unshift(p.new); updateBadges(); refreshOpenSocialView();
           // Show toast notification
@@ -561,6 +565,7 @@
           }
         })
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `from_user_id=eq.${currentUserId}` }, async (p) => {
+          console.log('[Realtime] Message sent confirmation:', p.new);
           if (!GameCache.profiles[p.new.to_user_id]) await fetchProfile(p.new.to_user_id);
           GameCache.messages.unshift(p.new); refreshOpenSocialView();
           // If chat with this user is open, append message immediately
@@ -580,6 +585,7 @@
         })
         // Game Invites: INSERT for both sent and received
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'game_invites', filter: `to_user_id=eq.${currentUserId}` }, async (p) => {
+          console.log('[Realtime] New game invite received:', p.new);
           if (!GameCache.profiles[p.new.from_user_id]) await fetchProfile(p.new.from_user_id);
           GameCache.invites.unshift(p.new); updateBadges(); refreshOpenSocialView();
           // Show toast notification
@@ -587,10 +593,12 @@
           showToast('invite', `Game Invite from ${sender}`, 'Click to accept or decline', () => openInvites());
         })
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'game_invites', filter: `from_user_id=eq.${currentUserId}` }, async (p) => {
+          console.log('[Realtime] Game invite sent:', p.new);
           if (!GameCache.profiles[p.new.to_user_id]) await fetchProfile(p.new.to_user_id);
           GameCache.invites.unshift(p.new); refreshOpenSocialView();
         })
         .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'game_invites' }, (p) => {
+          console.log('[Realtime] Game invite updated:', p.new);
           if (p.new.from_user_id !== currentUserId && p.new.to_user_id !== currentUserId) return;
           const idx = GameCache.invites.findIndex(i => i.id === p.new.id);
           if (p.new.status === 'pending') {
@@ -603,6 +611,7 @@
         })
         // Friend Requests: INSERT for received requests
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'friend_requests', filter: `to_user_id=eq.${currentUserId}` }, async (p) => {
+          console.log('[Realtime] New friend request received:', p.new);
           if (!GameCache.profiles[p.new.from_user_id]) await fetchProfile(p.new.from_user_id);
           GameCache.friendRequests.unshift(p.new); updateBadges(); refreshOpenSocialView();
           // Show toast notification
@@ -611,6 +620,7 @@
         })
         // Friend Requests: UPDATE for accept/decline
         .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'friend_requests' }, (p) => {
+          console.log('[Realtime] Friend request updated:', p.new);
           if (p.new.from_user_id !== currentUserId && p.new.to_user_id !== currentUserId) return;
           const idx = GameCache.friendRequests.findIndex(r => r.id === p.new.id);
           if (idx !== -1) {
@@ -624,6 +634,7 @@
         })
         // Friends: INSERT for new friendships
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'friends', filter: `user_id=eq.${currentUserId}` }, async (p) => {
+          console.log('[Realtime] New friendship added:', p.new);
           if (!GameCache.friends.includes(p.new.friend_id)) {
             GameCache.friends.push(p.new.friend_id);
             if (!GameCache.profiles[p.new.friend_id]) await fetchProfile(p.new.friend_id);
@@ -631,6 +642,7 @@
           refreshOpenSocialView();
         })
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'friends', filter: `friend_id=eq.${currentUserId}` }, async (p) => {
+          console.log('[Realtime] Friendship added (as friend):', p.new);
           if (!GameCache.friends.includes(p.new.user_id)) {
             GameCache.friends.push(p.new.user_id);
             if (!GameCache.profiles[p.new.user_id]) await fetchProfile(p.new.user_id);
@@ -639,17 +651,20 @@
         })
         // Friends: DELETE for removed friendships
         .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'friends', filter: `user_id=eq.${currentUserId}` }, (p) => {
+          console.log('[Realtime] Friendship removed:', p.old);
           const idx = GameCache.friends.indexOf(p.old.friend_id);
           if (idx !== -1) GameCache.friends.splice(idx, 1);
           refreshOpenSocialView();
         })
         .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'friends', filter: `friend_id=eq.${currentUserId}` }, (p) => {
+          console.log('[Realtime] Friendship removed (as friend):', p.old);
           const idx = GameCache.friends.indexOf(p.old.user_id);
           if (idx !== -1) GameCache.friends.splice(idx, 1);
           refreshOpenSocialView();
         })
         // Notifications: INSERT for new notifications
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${currentUserId}` }, (p) => {
+          console.log('[Realtime] New notification received:', p.new);
           GameCache.notifications.unshift(p.new); updateBadges(); refreshOpenSocialView();
           // Show toast notification
           const title = p.new.title || 'Notification';
@@ -658,6 +673,7 @@
         })
         // Notifications: UPDATE for read status
         .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'notifications', filter: `user_id=eq.${currentUserId}` }, (p) => {
+          console.log('[Realtime] Notification updated:', p.new);
           const idx = GameCache.notifications.findIndex(n => n.id === p.new.id);
           if (idx !== -1) {
             GameCache.notifications[idx] = p.new;
@@ -667,7 +683,9 @@
           }
           updateBadges(); refreshOpenSocialView();
         })
-        .subscribe();
+        .subscribe((status) => {
+          console.log('[Realtime] DB channel status:', status);
+        });
     }
 
     /* ========= Toast Notifications ========= */
@@ -1295,6 +1313,7 @@
       if (GameCache.match.timer) clearInterval(GameCache.match.timer);
       GameCache.match.timer = setInterval(() => {
         const remaining = Math.max(0, Math.round((GameCache.match.endsAt - Date.now()) / 1000));
+        document.getElementById('timer').innerText = remaining;
         if (remaining <= 0) {
           clearInterval(GameCache.match.timer);
           finishMatch(false);
