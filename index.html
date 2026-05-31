@@ -1352,4 +1352,39 @@
           const path = `avatars/${currentUserId}/${Date.now()}_${selectedAvatarFile.name}`;
           const { data: uploadData, error: uploadError } = await sb.storage.from('avatars').upload(path, selectedAvatarFile, { upsert: true });
           if(uploadError){
-            console.erro
+            console.error('Avatar upload error:', uploadError);
+            // fallback: keep data URL but warn
+            showPopupNotification('Avatar upload failed, saving name only.');
+          } else {
+            const { data: publicData } = sb.storage.from('avatars').getPublicUrl(path);
+            avatarUrlToSave = publicData?.publicUrl || avatarUrlToSave;
+            // clear selected file after successful upload
+            selectedAvatarFile = null;
+          }
+        }
+
+        const { error } = await sb.from('profiles').upsert({ id: currentUserId, display_name: newName, avatar_url: avatarUrlToSave, email: user.email }, { onConflict: 'id' });
+        if(error){
+          console.error("Save profile error:", error);
+          alert("Failed to save changes.");
+          return;
+        }
+
+        user.name = newName;
+        user.avatar = avatarUrlToSave;
+        updateUI();
+        closeModal('profileModal');
+        showPopupNotification("Profile updated!");
+      }catch(e){ console.error('Save profile exception:', e); alert('Failed to save changes.'); }
+    });
+
+    document.getElementById("avatarUpload").addEventListener("change", handleAvatarUpload);
+    function escapeHtml(s){ return String(s).replace(/[&<>"']/g, (c)=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' })[c]); }
+
+    // Start everything
+    initSupabase();
+
+    document.getElementById("answerInput").addEventListener("keypress",(e)=>{ if(e.key === "Enter"){ submitAnswer(); } });
+  </script>
+</body>
+</html>
