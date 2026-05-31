@@ -636,8 +636,13 @@
       const list = document.getElementById('friendsList');
       list.innerHTML = GameCache.friends.map(fid => {
         const p = GameCache.profiles[fid] || { display_name: 'Player', avatar_url: avatars[0] };
-        return `<div class="social-item"><div style="display:flex;align-items:center;gap:10px;"><img src="${p.avatar_url || avatars[0]}" style="width:32px;height:32px;border-radius:50%;"><div style="font-weight:700">${p.display_name}</div></div><button class="leader-secondary" onclick="sendInvite('${fid}')">Invite</button></div>`;
+        return `<div class="social-item"><div style="display:flex;align-items:center;gap:10px;"><img src="${p.avatar_url || avatars[0]}" style="width:32px;height:32px;border-radius:50%;"><div style="font-weight:700">${p.display_name}</div></div><div><button class="leader-secondary" style="background:var(--blue);margin-right:8px;" onclick="findAndStartChat('${fid}')">💬</button><button class="leader-secondary" onclick="sendInvite('${fid}')">Invite</button></div></div>`;
       }).join('') || "<p style='text-align:center;opacity:0.5'>No friends yet</p>";
+    }
+
+    function findAndStartChat(friendId) {
+      document.getElementById('socialModal').dataset.activeChatId = friendId;
+      viewChat(friendId);
     }
 
     async function sendInvite(toId) {
