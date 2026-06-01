@@ -685,7 +685,11 @@
           if (!GameCache.messages.some(m => m.id === p.new.id)) {
             GameCache.messages.unshift(p.new);
           }
-          // Ensure message cache and unread count stay accurate
+          // Always update badges and show toast immediately
+          updateBadges();
+          const sender = GameCache.profiles[p.new.from_user_id]?.display_name || 'Someone';
+          showToast('message', `New message from ${sender}`, p.new.text, () => viewChat(p.new.from_user_id));
+          // Then load messages from database
           const activeChatId = document.getElementById('socialModal').dataset.activeChatId;
           if (activeChatId === p.new.from_user_id) {
             await loadMessagesFromDatabase(p.new.from_user_id);
@@ -693,11 +697,6 @@
             await loadMessagesFromDatabase(p.new.from_user_id).catch(() => {});
             refreshOpenSocialView();
           }
-          // Always update badges when receiving a message
-          updateBadges();
-          // Always show toast notification when receiving a message
-          const sender = GameCache.profiles[p.new.from_user_id]?.display_name || 'Someone';
-          showToast('message', `New message from ${sender}`, p.new.text, () => viewChat(p.new.from_user_id));
         })
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `from_user_id=eq.${currentUserId}` }, async (p) => {
           console.log('[Realtime] Message sent confirmation from database:', p.new);
@@ -722,12 +721,13 @@
           if (!GameCache.invites.some(i => i.id === p.new.id)) {
             GameCache.invites.unshift(p.new);
           }
-          await loadInvitesFromDatabase().catch(() => {});
+          // Always update badges and show toast immediately
           updateBadges();
-          refreshOpenSocialView();
-          // Always show toast notification when receiving an invite
           const sender = GameCache.profiles[p.new.from_user_id]?.display_name || 'Someone';
           showToast('invite', `Game Invite from ${sender}`, 'Click to accept or decline', () => openInvites());
+          // Then load invites from database
+          await loadInvitesFromDatabase().catch(() => {});
+          refreshOpenSocialView();
         })
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'game_invites', filter: `from_user_id=eq.${currentUserId}` }, async (p) => {
           console.log('[Realtime] Game invite sent confirmation from database:', p.new);
@@ -756,8 +756,10 @@
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'friend_requests', filter: `to_user_id=eq.${currentUserId}` }, async (p) => {
           console.log('[Realtime] New friend request received:', p.new);
           if (!GameCache.profiles[p.new.from_user_id]) await fetchProfile(p.new.from_user_id);
-          GameCache.friendRequests.unshift(p.new); updateBadges(); refreshOpenSocialView();
-          // Show toast notification
+          GameCache.friendRequests.unshift(p.new);
+          updateBadges();
+          refreshOpenSocialView();
+          // Always show toast notification when receiving a friend request
           const sender = GameCache.profiles[p.new.from_user_id]?.display_name || 'Someone';
           showToast('friend', `Friend Request from ${sender}`, 'Click to accept or decline', () => openInvites());
         })
@@ -1206,19 +1208,18 @@
       }catch(e){ console.warn('showApp error', e); }
     }
     function updateBadges(){
-      const unreadMsgs = GameCache.messages.filter(m => {
-        if (m.to_user_id !== currentUserId) return false;
+      const unreadMsgs = GameCache.messages.reduce((count, m) => {
+        if (m.to_user_id !== currentUserId) return count;
         const lastSeen = getLastSeen(m.from_user_id);
-        if (!lastSeen) return true;
+        if (!lastSeen) return count + 1;
         const messageTime = new Date(m.created_at);
         const lastSeenTime = new Date(lastSeen);
-        if (isNaN(messageTime.getTime())) {
-          return true;
-        }
-        return messageTime > lastSeenTime;
-      }).length;
-      const unreadInvs = GameCache.invites.length + GameCache.friendRequests.length;
-      console.log('[Badges] Updating - unreadMsgs:', unreadMsgs, 'unreadInvs:', unreadInvs);
+        if (isNaN(messageTime.getTime())) return count + 1;
+        return messageTime > lastSeenTime ? count + 1 : count;
+      }, 0);
+      const pendingInvites = GameCache.invites.filter(i => i && i.status === 'pending');
+      const unreadInvs = pendingInvites.length + GameCache.friendRequests.length;
+      console.log('[Badges] Updating - unreadMsgs:', unreadMsgs, 'unreadInvs:', unreadInvs, 'messages:', GameCache.messages.length, 'invites:', pendingInvites.length, 'friendReqs:', GameCache.friendRequests.length);
       const mB = document.getElementById('msgBadge');
       console.log('[Badges] msgBadge element:', mB);
       if(mB) {
@@ -1233,7 +1234,6 @@
       } else {
         console.error('[Badges] msgBadge element not found');
       }
-      // Show invites badge regardless of modal state
       const iB = document.getElementById('invBadge');
       console.log('[Badges] invBadge element:', iB);
       if(iB) {
@@ -1549,7 +1549,6 @@
       // Open modal immediately with loading state
       cont.innerHTML = `<p style='text-align:center;padding:20px;opacity:0.5'>Loading invites...</p>`;
       openModal('socialModal');
-      document.getElementById('invBadge').classList.add('hidden');
 
       // Load invites from database after modal is open
       const invites = (await loadInvitesFromDatabase()) || GameCache.invites || [];
