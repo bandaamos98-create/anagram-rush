@@ -689,16 +689,10 @@
           // Always show toast notification when receiving a message
           const sender = GameCache.profiles[p.new.from_user_id]?.display_name || 'Someone';
           showToast('message', `New message from ${sender}`, p.new.text, () => viewChat(p.new.from_user_id));
-          // If chat with this user is open, append message immediately for better UX
+          // If chat with this user is open, reload the conversation so live updates always appear
           const activeChatId = document.getElementById('socialModal').dataset.activeChatId;
           if (activeChatId === p.new.from_user_id) {
-            const chatBody = document.getElementById('chatBody');
-            if (chatBody) {
-              const senderProfile = GameCache.profiles[p.new.from_user_id] || { avatar_url: avatars[0] };
-              const msgHtml = `<div style="display:flex;align-items:flex-end;gap:8px;margin-bottom:8px;"><img src="${senderProfile.avatar_url || avatars[0]}" style="width:28px;height:28px;border-radius:50%;"><div class="chat-bubble them" style="margin:0;">${p.new.text}</div></div>`;
-              chatBody.insertAdjacentHTML('beforeend', msgHtml);
-              chatBody.scrollTop = chatBody.scrollHeight;
-            }
+            await loadMessagesFromDatabase(p.new.from_user_id);
           } else {
             refreshOpenSocialView();
           }
@@ -1106,6 +1100,7 @@
       if (currentActiveChatId === otherId && currentTitle.startsWith('Chat with')) {
         console.log('[Chat] Refreshing already open chat with:', otherId);
         await loadMessagesFromDatabase(otherId);
+        updateBadges();
         return;
       }
 
@@ -2313,14 +2308,21 @@
       const modal = document.getElementById('socialModal');
       if (!modal.classList.contains('active')) return;
       const title = document.getElementById('socialTitle').innerText;
-      if (title === "Messages") openMessages();
-      else if (title === "Invites") openInvites();
-      else if (title === "Players Online") openOnlinePlayers();
-      else if (title === "Friends") openFriends();
-      else if (title.startsWith("Chat with")) {
+      if (title === "Messages") {
+        openMessages();
+      } else if (title === "Invites") {
+        openInvites();
+      } else if (title === "Players Online") {
+        openOnlinePlayers();
+      } else if (title === "Friends") {
+        openFriends();
+      } else if (title.startsWith("Chat with")) {
         const otherId = modal.dataset.activeChatId;
-        if (otherId) viewChat(otherId);
+        if (otherId) {
+          viewChat(otherId);
+        }
       }
+      updateBadges();
     }
 
     /* ========================================== GAME LOGIC ========================================== */
