@@ -1136,13 +1136,8 @@
       const receiverId = toId;
       const supabase = sb;
 
-      // Immediately append message to chat body for sender (before async operation)
-      const chatBody = document.getElementById('chatBody');
-      if (chatBody) {
-        const msgHtml = `<div style="display:flex;align-items:flex-end;gap:8px;margin-bottom:8px;flex-direction:row-reverse;"><img src="${GameCache.user.avatar_url || avatars[0]}" style="width:28px;height:28px;border-radius:50%;"><div class="chat-bubble me" style="margin:0;">${messageText}</div></div>`;
-        chatBody.insertAdjacentHTML('beforeend', msgHtml);
-        chatBody.scrollTop = chatBody.scrollHeight;
-      }
+      // Clear input first to prevent duplicate sends
+      chatInput.value = '';
 
       const { data, error } = await supabase
         .from('messages')
@@ -1159,9 +1154,9 @@
 
       console.log(data);
       console.log(error);
-      if (error) { console.error('sendMsg error', error); return; }
-      // Clear input and maintain focus
-      chatInput.value = '';
+      if (error) { console.error('sendMsg error', error); chatInput.value = messageText; return; }
+
+      // Maintain focus after sending
       chatInput.focus();
       // Don't manually add to cache - realtime listener will handle it to prevent duplicates
     }
