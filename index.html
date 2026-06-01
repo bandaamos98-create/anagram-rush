@@ -687,10 +687,11 @@
           if (!GameCache.profiles[p.new.from_user_id]) await fetchProfile(p.new.from_user_id);
           if (!p.new.created_at) p.new.created_at = new Date().toISOString();
           // Prevent duplicate messages in cache
+          console.log('[Badge] Realtime message received');
           if (!GameCache.messages.some(m => m.id === p.new.id)) {
             GameCache.messages.unshift(p.new);
           }
-          // Always update badges and show toast immediately
+          // Always update badges immediately when a new message arrives
           updateBadges();
           const sender = GameCache.profiles[p.new.from_user_id]?.display_name || 'Someone';
           showToast('message', `New message from ${sender}`, p.new.text, () => viewChat(p.new.from_user_id));
@@ -723,10 +724,11 @@
           console.log('[Realtime] New game invite received from database:', p.new);
           if (!GameCache.profiles[p.new.from_user_id]) await fetchProfile(p.new.from_user_id);
           // Prevent duplicate invites in cache
+          console.log('[Badge] Realtime invite received');
           if (!GameCache.invites.some(i => i.id === p.new.id)) {
             GameCache.invites.unshift(p.new);
           }
-          // Always update badges and show toast immediately
+          // Always update badges immediately when a new invite arrives
           updateBadges();
           const sender = GameCache.profiles[p.new.from_user_id]?.display_name || 'Someone';
           showToast('invite', `Game Invite from ${sender}`, 'Click to accept or decline', () => openInvites());
@@ -761,6 +763,7 @@
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'friend_requests', filter: `to_user_id=eq.${currentUserId}` }, async (p) => {
           console.log('[Realtime] New friend request received:', p.new);
           if (!GameCache.profiles[p.new.from_user_id]) await fetchProfile(p.new.from_user_id);
+          console.log('[Badge] Realtime friend request received');
           GameCache.friendRequests.unshift(p.new);
           updateBadges();
           refreshOpenSocialView();
@@ -1216,26 +1219,19 @@
       }catch(e){ console.warn('showApp error', e); }
     }
     function updateBadges(){
-      // Count unread messages using same logic as openMessages
-      const threads = {};
-      GameCache.messages.forEach(m => {
-        const otherId = m.from_user_id === currentUserId ? m.to_user_id : m.from_user_id;
-        if (!threads[otherId]) threads[otherId] = { unread: 0 };
-        if (m.to_user_id === currentUserId) {
-          const seen = getLastSeen(otherId);
-          if (!seen || new Date(m.created_at) > new Date(seen)) threads[otherId].unread++;
-        }
-      });
-      const unreadMsgs = Object.values(threads).reduce((sum, t) => sum + t.unread, 0);
-      const incomingMessages = GameCache.messages.filter(m => m.to_user_id === currentUserId);
-      const outgoingMessages = GameCache.messages.filter(m => m.from_user_id === currentUserId);
-      const pendingInvites = GameCache.invites.filter(i => i && i.status === 'pending');
-      const unreadInvs = pendingInvites.length + GameCache.friendRequests.length;
-      console.log('[Badges] currentUserId:', currentUserId);
-      console.log('[Badges] thread keys:', Object.keys(threads));
-      console.log('[Badges] Updating - unreadMsgs:', unreadMsgs, 'unreadInvs:', unreadInvs, 'messages:', GameCache.messages.length, 'incoming:', incomingMessages.length, 'outgoing:', outgoingMessages.length, 'invites:', pendingInvites.length, 'friendReqs:', GameCache.friendRequests.length);
-      console.log('[Badges] Incoming sample:', incomingMessages.slice(0,5));
-      console.log('[Badges] LastSeen map:', LastSeen);
+      console.log('[Badge] Updating badges');
+      const unreadMsgs = GameCache.messages.filter(m => {
+        if (String(m.to_user_id) !== String(currentUserId)) return false;
+        const lastSeen = getLastSeen(m.from_user_id);
+        if (!lastSeen) return true;
+        const messageTime = new Date(m.created_at);
+        const lastSeenTime = new Date(lastSeen);
+        return isNaN(messageTime.getTime()) ? true : messageTime > lastSeenTime;
+      }).length;
+      const unreadInvs = GameCache.invites.filter(i => String(i.to_user_id) === String(currentUserId) && i.status === 'pending').length;
+      const unreadFriendReqs = GameCache.friendRequests.filter(r => String(r.to_user_id) === String(currentUserId) && r.status === 'pending').length;
+      const totalUnreadInvs = unreadInvs + unreadFriendReqs;
+      console.log('[Badge] unreadMsgs:', unreadMsgs, 'unreadInvs:', totalUnreadInvs, 'messages:', GameCache.messages.length, 'invites:', unreadInvs, 'friendReqs:', unreadFriendReqs);
       const mB = document.getElementById('msgBadge');
       console.log('[Badges] msgBadge element:', mB);
       if(mB) {
@@ -1253,10 +1249,10 @@
       const iB = document.getElementById('invBadge');
       console.log('[Badges] invBadge element:', iB);
       if(iB) {
-        if(unreadInvs > 0) {
-          iB.innerText = unreadInvs;
+        if(totalUnreadInvs > 0) {
+          iB.innerText = totalUnreadInvs;
           iB.classList.remove('hidden');
-          console.log('[Badges] Showing invBadge with count:', unreadInvs);
+          console.log('[Badges] Showing invBadge with count:', totalUnreadInvs);
         } else {
           iB.classList.add('hidden');
           console.log('[Badges] Hiding invBadge');
