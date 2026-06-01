@@ -1208,15 +1208,8 @@
       }catch(e){ console.warn('showApp error', e); }
     }
     function updateBadges(){
-      const unreadMsgs = GameCache.messages.reduce((count, m) => {
-        if (m.to_user_id !== currentUserId) return count;
-        const lastSeen = getLastSeen(m.from_user_id);
-        if (!lastSeen) return count + 1;
-        const messageTime = new Date(m.created_at);
-        const lastSeenTime = new Date(lastSeen);
-        if (isNaN(messageTime.getTime())) return count + 1;
-        return messageTime > lastSeenTime ? count + 1 : count;
-      }, 0);
+      // Simplified: count all received messages as unread
+      const unreadMsgs = GameCache.messages.filter(m => m.to_user_id === currentUserId).length;
       const pendingInvites = GameCache.invites.filter(i => i && i.status === 'pending');
       const unreadInvs = pendingInvites.length + GameCache.friendRequests.length;
       console.log('[Badges] Updating - unreadMsgs:', unreadMsgs, 'unreadInvs:', unreadInvs, 'messages:', GameCache.messages.length, 'invites:', pendingInvites.length, 'friendReqs:', GameCache.friendRequests.length);
