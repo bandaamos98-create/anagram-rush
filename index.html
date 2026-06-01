@@ -685,10 +685,16 @@
             GameCache.messages.unshift(p.new);
             updateBadges();
           }
-          // If chat with this user is open, reload from database to ensure consistency
+          // If chat with this user is open, append message immediately for better UX
           const activeChatId = document.getElementById('socialModal').dataset.activeChatId;
           if (activeChatId === p.new.from_user_id) {
-            await loadMessagesFromDatabase(p.new.from_user_id);
+            const chatBody = document.getElementById('chatBody');
+            if (chatBody) {
+              const senderProfile = GameCache.profiles[p.new.from_user_id] || { avatar_url: avatars[0] };
+              const msgHtml = `<div style="display:flex;align-items:flex-end;gap:8px;margin-bottom:8px;"><img src="${senderProfile.avatar_url || avatars[0]}" style="width:28px;height:28px;border-radius:50%;"><div class="chat-bubble them" style="margin:0;">${p.new.text}</div></div>`;
+              chatBody.insertAdjacentHTML('beforeend', msgHtml);
+              chatBody.scrollTop = chatBody.scrollHeight;
+            }
           } else {
             // Only show toast and refresh social view if chat is not open
             const sender = GameCache.profiles[p.new.from_user_id]?.display_name || 'Someone';
@@ -1005,8 +1011,39 @@
       openShop(); // Refresh shop
     }
 
-    function openNotifications() {
-      const list = GameCache.notifications.map(n => {
+    async function loadNotificationsFromDatabase() {
+      console.log('[Notification] Loading notifications from database');
+      const { data, error } = await sb
+        .from('notifications')
+        .select('*')
+        .eq('user_id', currentUserId)
+        .eq('is_read', false)
+        .order('created_at', { ascending: false });
+
+      console.log('[Notification] Database notifications loaded:', data?.length);
+      console.log('[Notification] Database notifications error:', error);
+
+      if (error) {
+        console.error('[Notification] Failed to load notifications:', error);
+        return;
+      }
+
+      // Update cache with fresh data from database
+      const existingIds = new Set(GameCache.notifications.map(n => n.id));
+      data.forEach(notification => {
+        if (!existingIds.has(notification.id)) {
+          GameCache.notifications.push(notification);
+        }
+      });
+
+      return data || [];
+    }
+
+    async function openNotifications() {
+      // Load notifications from database instead of using cache
+      const notifications = await loadNotificationsFromDatabase();
+
+      const list = notifications.map(n => {
         const title = n.title || n.body || n.message || 'Notification';
         const body = n.body || n.message || '';
         return `<div class="social-item"><div><div style="font-weight:700">${title}</div><div style="font-size:12px;opacity:0.7">${body}</div></div></div>`;
@@ -1335,10 +1372,7 @@
         return alert('You are already in a game. Finish your current match before inviting others.');
       }
 
-      // Check if the invited player is already in a game (via broadcast status)
-      // We'll need to track this via presence or a separate mechanism
-      // For now, we'll send the invite and let the recipient check
-
+      // Allow multiple pending invites - it's up to the recipient to accept or decline
       const { data, error } = await sb.from('game_invites').insert({
         from_user_id: currentUserId,
         to_user_id: toId,
@@ -1527,10 +1561,15 @@
         GameCache.messages.unshift(data[0]);
       }
 
-      // Refresh chat view from database to ensure consistency
+      // Append message to chat UI immediately for better UX
       const activeChatId = document.getElementById('socialModal').dataset.activeChatId;
       if (activeChatId === toId) {
-        await loadMessagesFromDatabase(toId);
+        const chatBody = document.getElementById('chatBody');
+        if (chatBody) {
+          const msgHtml = `<div style="display:flex;align-items:flex-end;gap:8px;margin-bottom:8px;flex-direction:row-reverse;"><img src="${GameCache.user.avatar_url || avatars[0]}" style="width:28px;height:28px;border-radius:50%;"><div class="chat-bubble me" style="margin:0;">${messageText}</div></div>`;
+          chatBody.insertAdjacentHTML('beforeend', msgHtml);
+          chatBody.scrollTop = chatBody.scrollHeight;
+        }
       }
 
       // Maintain focus after sending
