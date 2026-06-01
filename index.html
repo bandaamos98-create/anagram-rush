@@ -428,17 +428,34 @@
           avatar_url: avatars[0], 
           mmr: 1000, 
           wins: 0, 
-          losses: 0, 
-          email: authUser?.email || '',
-          xp: 0,
-          level: 1,
-          coins: 0,
-          streak: 0,
-          daily_streak: 0
+          losses: 0,
+          email: authUser?.email || ''
         };
-        const { error: createErr } = await sb.from('profiles').insert(insertPayload);
-        if (createErr) console.error('Profile creation failed', createErr);
-        profile = insertPayload;
+        console.log('[Profile] Creating new profile with payload:', insertPayload);
+        const { data: createdData, error: createErr } = await sb.from('profiles').insert(insertPayload).select().single();
+        if (createErr) {
+          console.error('[Profile] Profile creation failed:', createErr);
+          // If email column doesn't exist, try without it
+          if (createErr.code === 'PGRST204' && createErr.message.includes('email')) {
+            console.log('[Profile] Email column not found, retrying without email');
+            const payloadWithoutEmail = { ...insertPayload };
+            delete payloadWithoutEmail.email;
+            const { data: retryData, error: retryErr } = await sb.from('profiles').insert(payloadWithoutEmail).select().single();
+            if (retryErr) {
+              console.error('[Profile] Profile creation failed (retry):', retryErr);
+              alert('Failed to create profile. Please try again.');
+              return;
+            }
+            console.log('[Profile] Profile created successfully (without email):', retryData);
+            profile = retryData;
+          } else {
+            alert('Failed to create profile. Please try again.');
+            return;
+          }
+        } else {
+          console.log('[Profile] Profile created successfully:', createdData);
+          profile = createdData;
+        }
       }
       if(profile) {
         GameCache.user = { 
@@ -555,9 +572,6 @@
             GameCache.messages.unshift(p.new);
             updateBadges();
           }
-          // Show toast notification
-          const sender = GameCache.profiles[p.new.from_user_id]?.display_name || 'Someone';
-          showToast('message', `New message from ${sender}`, p.new.text, () => viewChat(p.new.from_user_id));
           // If chat with this user is open, append message immediately
           const activeChatId = document.getElementById('socialModal').dataset.activeChatId;
           if (activeChatId === p.new.from_user_id) {
@@ -569,7 +583,9 @@
               chatBody.scrollTop = chatBody.scrollHeight;
             }
           } else {
-            // Only refresh social view if chat is not open (to update messages list)
+            // Only show toast and refresh social view if chat is not open
+            const sender = GameCache.profiles[p.new.from_user_id]?.display_name || 'Someone';
+            showToast('message', `New message from ${sender}`, p.new.text, () => viewChat(p.new.from_user_id));
             refreshOpenSocialView();
           }
         })
@@ -940,7 +956,10 @@
       const unreadMsgs = GameCache.messages.filter(m => m.to_user_id === currentUserId && (!getLastSeen(m.from_user_id) || new Date(m.created_at) > new Date(getLastSeen(m.from_user_id)))).length;
       const unreadInvs = GameCache.invites.length + GameCache.friendRequests.length;
       const mB = document.getElementById('msgBadge'); if(unreadMsgs > 0) { mB.innerText = unreadMsgs; mB.classList.remove('hidden'); } else mB.classList.add('hidden');
-      const iB = document.getElementById('invBadge'); if(unreadInvs > 0) { iB.innerText = unreadInvs; iB.classList.remove('hidden'); } else iB.classList.add('hidden');
+      // Only show invites badge if invites modal is not currently open
+      const socialModal = document.getElementById('socialModal');
+      const isInvitesOpen = socialModal.classList.contains('active') && document.getElementById('socialTitle').innerText === "Invites";
+      const iB = document.getElementById('invBadge'); if(unreadInvs > 0 && !isInvitesOpen) { iB.innerText = unreadInvs; iB.classList.remove('hidden'); } else iB.classList.add('hidden');
       document.getElementById('headerNotifDot').style.display = GameCache.notifications.length > 0 ? 'block' : 'none';
     }
     function renderLeaderboardPreview(){
@@ -989,7 +1008,24 @@
       res.innerHTML = "Searching...";
       const { data } = await sb.from('profiles').select('id, display_name, avatar_url, mmr, email').or(`display_name.ilike.%${q}%,email.ilike.%${q}%`).limit(8);
       if (data) {
-        res.innerHTML = data.map(p => `<div class="social-item"><div style="display:flex;align-items:center;gap:10px;"><img src="${p.avatar_url || avatars[0]}" style="width:32px;height:32px;border-radius:50%;"><div><div style="font-weight:700">${p.display_name}</div><div style="font-size:11px;opacity:0.6">${p.email || ''}</div></div></div><button class="leader-secondary" onclick="sendFriendRequest('${p.id}')">Add</button></div>`).join('') || "No users found";
+        res.innerHTML = data.map(p => {
+          // Check if friend request already sent
+          const requestSent = GameCache.friendRequests.some(r => r.from_user_id === currentUserId && r.to_user_id === p.id);
+          const isFriend = GameCache.friends.includes(p.id);
+          let buttonText = 'Add';
+          let buttonAction = `sendFriendRequest('${p.id}')`;
+          let buttonDisabled = '';
+          if (isFriend) {
+            buttonText = 'Friends';
+            buttonAction = '';
+            buttonDisabled = 'disabled style="opacity:0.5"';
+          } else if (requestSent) {
+            buttonText = 'Requested';
+            buttonAction = '';
+            buttonDisabled = 'disabled style="opacity:0.5"';
+          }
+          return `<div class="social-item"><div style="display:flex;align-items:center;gap:10px;"><img src="${p.avatar_url || avatars[0]}" style="width:32px;height:32px;border-radius:50%;"><div><div style="font-weight:700">${p.display_name}</div><div style="font-size:11px;opacity:0.6">${p.email || ''}</div></div></div><button class="leader-secondary" ${buttonDisabled} onclick="${buttonAction}">${buttonText}</button></div>`;
+        }).join('') || "No users found";
       }
     }
 
@@ -998,14 +1034,24 @@
       const { data, error } = await sb.from('friend_requests').insert({ from_user_id: currentUserId, to_user_id: toId, status: 'pending' }).select().single();
       if (error) { console.error('Friend request failed', error); return alert('Unable to send request.'); }
       if (data) GameCache.friendRequests.unshift(data);
-      alert("Friend request sent!");
+      showToast('friend', 'Friend Request Sent', 'Your request has been sent successfully.');
+      // Refresh the search results to update button state
+      searchUsers();
     }
 
     function renderFriendsList() {
       const list = document.getElementById('friendsList');
       list.innerHTML = GameCache.friends.map(fid => {
         const p = GameCache.profiles[fid] || { display_name: 'Player', avatar_url: avatars[0] };
-        return `<div class="social-item"><div style="display:flex;align-items:center;gap:10px;"><img src="${p.avatar_url || avatars[0]}" style="width:32px;height:32px;border-radius:50%;"><div style="font-weight:700">${p.display_name}</div></div><div><button class="leader-secondary" style="background:var(--blue);margin-right:8px;" onclick="findAndStartChat('${fid}')">💬</button><button class="leader-secondary" onclick="sendInvite('${fid}')">Invite</button></div></div>`;
+        // Check if invite already sent to this friend
+        const inviteSent = GameCache.invites.some(i => i.from_user_id === currentUserId && i.to_user_id === fid);
+        let inviteButtonText = 'Invite';
+        let inviteButtonDisabled = '';
+        if (inviteSent) {
+          inviteButtonText = 'Sent';
+          inviteButtonDisabled = 'disabled style="opacity:0.5"';
+        }
+        return `<div class="social-item"><div style="display:flex;align-items:center;gap:10px;"><img src="${p.avatar_url || avatars[0]}" style="width:32px;height:32px;border-radius:50%;"><div style="font-weight:700">${p.display_name}</div></div><div><button class="leader-secondary" style="background:var(--blue);margin-right:8px;" onclick="findAndStartChat('${fid}')">💬</button><button class="leader-secondary" ${inviteButtonDisabled} onclick="${inviteButtonDisabled ? '' : `sendInvite('${fid}')`}">${inviteButtonText}</button></div></div>`;
       }).join('') || "<p style='text-align:center;opacity:0.5'>No friends yet</p>";
     }
 
@@ -1020,7 +1066,9 @@
       if (error) { console.error('Invite failed', error); return alert('Unable to send invite.'); }
       if (data) {
         GameCache.invites.unshift(data);
-        openInvites();
+        showToast('invite', 'Game Invite Sent', 'Your invite has been sent successfully.');
+        // Refresh friends list to update button state
+        renderFriendsList();
       }
     }
 
@@ -1637,7 +1685,7 @@
         to_user_id: 'ai',
         playerNames: {
           [currentUserId]: GameCache.user.display_name || 'You',
-          'ai': 'AI Opponent'
+          'ai': '🤖 AI AGENT'
         },
         playerAvatars: {
           [currentUserId]: GameCache.user.avatar_url || avatars[0],
@@ -1676,30 +1724,45 @@
     let aiInterval = null;
     function startAI() {
       if (aiInterval) clearInterval(aiInterval);
-      
+
       aiInterval = setInterval(() => {
         if (!GameCache.match.active || GameCache.match.mode !== 'single') {
           clearInterval(aiInterval);
           return;
         }
-        
-        // AI solves puzzles with random timing (3-8 seconds)
-        const solveTime = 3000 + Math.random() * 5000;
+
+        // AI is not smart: 40% chance to skip, slower timing (5-15 seconds)
+        if (Math.random() < 0.4) {
+          // AI skips this puzzle
+          return;
+        }
+
+        const solveTime = 5000 + Math.random() * 10000;
         setTimeout(() => {
           if (!GameCache.match.active || GameCache.match.mode !== 'single') return;
-          
+
           const currentPuzzle = GameCache.match.currentPuzzle;
           const word = currentPuzzle.solution;
-          const score = calculateScore(word, Math.random() * 10 + 3, GameCache.match.playerStreaks['ai'], false);
-          
-          GameCache.match.playerScores['ai'] += score;
-          GameCache.match.playerStreaks['ai']++;
-          GameCache.match.playerCorrectCount['ai']++;
-          GameCache.match.playerSolveTimes['ai'].push(Math.random() * 10 + 3);
-          
+
+          // AI is not smart: 30% chance to get it wrong
+          if (Math.random() < 0.3) {
+            // Wrong answer - don't add score, reset streak
+            GameCache.match.playerStreaks['ai'] = 0;
+            GameCache.match.playerWrongCount['ai']++;
+          } else {
+            // Correct answer but with random slower time (5-15 seconds)
+            const solveTimeSeconds = 5 + Math.random() * 10;
+            const score = calculateScore(word, solveTimeSeconds, GameCache.match.playerStreaks['ai'], false);
+
+            GameCache.match.playerScores['ai'] += score;
+            GameCache.match.playerStreaks['ai']++;
+            GameCache.match.playerCorrectCount['ai']++;
+            GameCache.match.playerSolveTimes['ai'].push(solveTimeSeconds);
+          }
+
           // AI gets a new puzzle too
           GameCache.match.currentPuzzle = generateLetters(6);
-          
+
           // Update only opponent score without re-rendering entire UI
           const oppScoreEl = document.getElementById('oppScore');
           if (oppScoreEl) oppScoreEl.innerText = GameCache.match.playerScores['ai'];
