@@ -683,8 +683,9 @@
           // Prevent duplicate messages in cache
           if (!GameCache.messages.some(m => m.id === p.new.id)) {
             GameCache.messages.unshift(p.new);
-            updateBadges();
           }
+          // Always update badges when receiving a message
+          updateBadges();
           // If chat with this user is open, append message immediately for better UX
           const activeChatId = document.getElementById('socialModal').dataset.activeChatId;
           if (activeChatId === p.new.from_user_id) {
@@ -855,17 +856,22 @@
 
     /* ========= Toast Notifications ========= */
     function showToast(type, title, message, onClick = null) {
+      console.log('[Toast] Showing toast:', type, title, message);
       const container = document.getElementById('toastContainer');
+      if (!container) {
+        console.error('[Toast] Toast container not found');
+        return;
+      }
       const toast = document.createElement('div');
       toast.className = `toast ${type}`;
-      
+
       const icons = {
         message: '💬',
         invite: '🎮',
         friend: '👋',
         notification: '🔔'
       };
-      
+
       toast.innerHTML = `
         <div class="toast-header">
           <span>${icons[type] || '📢'}</span>
@@ -873,7 +879,7 @@
         </div>
         <div class="toast-body">${message}</div>
       `;
-      
+
       if (onClick) {
         toast.onclick = () => {
           onClick();
@@ -882,13 +888,13 @@
       } else {
         toast.onclick = () => removeToast(toast);
       }
-      
+
       container.appendChild(toast);
-      
+      console.log('[Toast] Toast appended to container');
       // Auto-remove after 5 seconds
       setTimeout(() => removeToast(toast), 5000);
     }
-    
+
     function removeToast(toast) {
       toast.style.animation = 'slideOutRight 0.3s ease-out';
       setTimeout(() => {
@@ -1202,10 +1208,11 @@
     function updateBadges(){
       const unreadMsgs = GameCache.messages.filter(m => m.to_user_id === currentUserId && (!getLastSeen(m.from_user_id) || new Date(m.created_at) > new Date(getLastSeen(m.from_user_id)))).length;
       const unreadInvs = GameCache.invites.length + GameCache.friendRequests.length;
-      const mB = document.getElementById('msgBadge'); if(unreadMsgs > 0) { mB.innerText = unreadMsgs; mB.classList.remove('hidden'); } else mB.classList.add('hidden');
+      console.log('[Badges] Updating - unreadMsgs:', unreadMsgs, 'unreadInvs:', unreadInvs);
+      const mB = document.getElementById('msgBadge'); if(mB) { if(unreadMsgs > 0) { mB.innerText = unreadMsgs; mB.classList.remove('hidden'); } else mB.classList.add('hidden'); }
       // Show invites badge regardless of modal state
-      const iB = document.getElementById('invBadge'); if(unreadInvs > 0) { iB.innerText = unreadInvs; iB.classList.remove('hidden'); } else iB.classList.add('hidden');
-      document.getElementById('headerNotifDot').style.display = GameCache.notifications.length > 0 ? 'block' : 'none';
+      const iB = document.getElementById('invBadge'); if(iB) { if(unreadInvs > 0) { iB.innerText = unreadInvs; iB.classList.remove('hidden'); } else iB.classList.add('hidden'); }
+      const hN = document.getElementById('headerNotifDot'); if(hN) hN.style.display = GameCache.notifications.length > 0 ? 'block' : 'none';
     }
     function renderLeaderboardPreview(){
       const cont = document.getElementById('leaderboardPreview');
