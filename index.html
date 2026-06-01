@@ -686,6 +686,9 @@
           }
           // Always update badges when receiving a message
           updateBadges();
+          // Always show toast notification when receiving a message
+          const sender = GameCache.profiles[p.new.from_user_id]?.display_name || 'Someone';
+          showToast('message', `New message from ${sender}`, p.new.text, () => viewChat(p.new.from_user_id));
           // If chat with this user is open, append message immediately for better UX
           const activeChatId = document.getElementById('socialModal').dataset.activeChatId;
           if (activeChatId === p.new.from_user_id) {
@@ -697,9 +700,6 @@
               chatBody.scrollTop = chatBody.scrollHeight;
             }
           } else {
-            // Only show toast and refresh social view if chat is not open
-            const sender = GameCache.profiles[p.new.from_user_id]?.display_name || 'Someone';
-            showToast('message', `New message from ${sender}`, p.new.text, () => viewChat(p.new.from_user_id));
             refreshOpenSocialView();
           }
         })
@@ -728,7 +728,7 @@
           }
           updateBadges();
           refreshOpenSocialView();
-          // Show toast notification
+          // Always show toast notification when receiving an invite
           const sender = GameCache.profiles[p.new.from_user_id]?.display_name || 'Someone';
           showToast('invite', `Game Invite from ${sender}`, 'Click to accept or decline', () => openInvites());
         })
@@ -1209,10 +1209,37 @@
       const unreadMsgs = GameCache.messages.filter(m => m.to_user_id === currentUserId && (!getLastSeen(m.from_user_id) || new Date(m.created_at) > new Date(getLastSeen(m.from_user_id)))).length;
       const unreadInvs = GameCache.invites.length + GameCache.friendRequests.length;
       console.log('[Badges] Updating - unreadMsgs:', unreadMsgs, 'unreadInvs:', unreadInvs);
-      const mB = document.getElementById('msgBadge'); if(mB) { if(unreadMsgs > 0) { mB.innerText = unreadMsgs; mB.classList.remove('hidden'); } else mB.classList.add('hidden'); }
+      const mB = document.getElementById('msgBadge');
+      console.log('[Badges] msgBadge element:', mB);
+      if(mB) {
+        if(unreadMsgs > 0) {
+          mB.innerText = unreadMsgs;
+          mB.classList.remove('hidden');
+          console.log('[Badges] Showing msgBadge with count:', unreadMsgs);
+        } else {
+          mB.classList.add('hidden');
+          console.log('[Badges] Hiding msgBadge');
+        }
+      } else {
+        console.error('[Badges] msgBadge element not found');
+      }
       // Show invites badge regardless of modal state
-      const iB = document.getElementById('invBadge'); if(iB) { if(unreadInvs > 0) { iB.innerText = unreadInvs; iB.classList.remove('hidden'); } else iB.classList.add('hidden'); }
-      const hN = document.getElementById('headerNotifDot'); if(hN) hN.style.display = GameCache.notifications.length > 0 ? 'block' : 'none';
+      const iB = document.getElementById('invBadge');
+      console.log('[Badges] invBadge element:', iB);
+      if(iB) {
+        if(unreadInvs > 0) {
+          iB.innerText = unreadInvs;
+          iB.classList.remove('hidden');
+          console.log('[Badges] Showing invBadge with count:', unreadInvs);
+        } else {
+          iB.classList.add('hidden');
+          console.log('[Badges] Hiding invBadge');
+        }
+      } else {
+        console.error('[Badges] invBadge element not found');
+      }
+      const hN = document.getElementById('headerNotifDot');
+      if(hN) hN.style.display = GameCache.notifications.length > 0 ? 'block' : 'none';
     }
     function renderLeaderboardPreview(){
       const cont = document.getElementById('leaderboardPreview');
@@ -1514,7 +1541,12 @@
       document.getElementById('socialModal').dataset.activeChatId = "";
       const cont = document.getElementById('socialContent');
 
-      // Load invites from database instead of using cache
+      // Open modal immediately with loading state
+      cont.innerHTML = `<p style='text-align:center;padding:20px;opacity:0.5'>Loading invites...</p>`;
+      openModal('socialModal');
+      document.getElementById('invBadge').classList.add('hidden');
+
+      // Load invites from database after modal is open
       const invites = await loadInvitesFromDatabase();
 
       const friendItems = GameCache.friendRequests.map(r => {
@@ -1530,8 +1562,6 @@
       if (friendItems.length) sections.push(`<div style="margin-bottom:14px;font-weight:700;">Friend Requests</div>${friendItems.join('')}`);
       if (gameItems.length) sections.push(`<div style="margin-bottom:14px;font-weight:700;">Game Invites</div>${gameItems.join('')}`);
       cont.innerHTML = sections.join('') || "<p style='text-align:center;padding:20px;opacity:0.5'>No invites yet</p>";
-      openModal('socialModal');
-      document.getElementById('invBadge').classList.add('hidden');
     }
 
     async function respondFriendRequest(id, status) {
