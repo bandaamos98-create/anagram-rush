@@ -1101,10 +1101,11 @@
     }
 
     async function viewChat(otherId) {
-      // Prevent duplicate calls to viewChat for the same user
       const currentActiveChatId = document.getElementById('socialModal').dataset.activeChatId;
-      if (currentActiveChatId === otherId) {
-        console.log('[Chat] Already viewing chat with:', otherId);
+      const currentTitle = document.getElementById('socialTitle').innerText;
+      if (currentActiveChatId === otherId && currentTitle.startsWith('Chat with')) {
+        console.log('[Chat] Refreshing already open chat with:', otherId);
+        await loadMessagesFromDatabase(otherId);
         return;
       }
 
