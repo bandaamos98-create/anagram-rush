@@ -551,9 +551,27 @@
           GameCache.match.playerScores[opponentId] = payload.score;
           GameCache.match.playerStreaks[opponentId] = payload.streak || 0;
           GameCache.match.playerCorrectCount[opponentId] = payload.correctCount || 0;
+          GameCache.match.playerPuzzleIndex[opponentId] = payload.puzzleIndex || 0;
+
+          // Sync puzzles array if opponent has more puzzles
+          if (payload.puzzles && payload.puzzles.length > GameCache.match.puzzles.length) {
+            GameCache.match.puzzles = payload.puzzles;
+          }
+
           // Update only the opponent score without re-rendering entire UI
           const oppScoreEl = document.getElementById('oppScore');
           if (oppScoreEl) oppScoreEl.innerText = payload.score;
+
+          // Update current puzzle to the one the player should be on
+          const myPuzzleIndex = GameCache.match.playerPuzzleIndex[currentUserId] || 0;
+          GameCache.match.currentPuzzle = GameCache.match.puzzles[myPuzzleIndex];
+
+          // Update puzzle tiles if needed
+          const newPuzzle = GameCache.match.currentPuzzle;
+          const tiles = document.getElementById('tiles');
+          if (tiles) {
+            tiles.innerHTML = newPuzzle.scrambled.split('').map(l => `<div class="tile">${l.toUpperCase()}</div>`).join('');
+          }
         }
       });
       socialChannel.subscribe(async (status) => { 
@@ -576,9 +594,7 @@
           const activeChatId = document.getElementById('socialModal').dataset.activeChatId;
           if (activeChatId === p.new.from_user_id) {
             const chatBody = document.getElementById('chatBody');
-            const chatInput = document.getElementById('chatInput');
-            // Only append if user is not currently typing (to prevent keyboard closing on mobile)
-            if (chatBody && document.activeElement !== chatInput) {
+            if (chatBody) {
               const p = GameCache.profiles[p.new.from_user_id] || { avatar_url: avatars[0] };
               const msgHtml = `<div style="display:flex;align-items:flex-end;gap:8px;margin-bottom:8px;"><img src="${p.avatar_url || avatars[0]}" style="width:28px;height:28px;border-radius:50%;"><div class="chat-bubble them" style="margin:0;">${p.new.text}</div></div>`;
               chatBody.insertAdjacentHTML('beforeend', msgHtml);
@@ -598,21 +614,8 @@
           if (!GameCache.messages.some(m => m.id === p.new.id)) {
             GameCache.messages.unshift(p.new);
           }
-          // If chat with this user is open, append message immediately
-          const activeChatId = document.getElementById('socialModal').dataset.activeChatId;
-          if (activeChatId === p.new.to_user_id) {
-            const chatBody = document.getElementById('chatBody');
-            const chatInput = document.getElementById('chatInput');
-            // Only append if user is not currently typing (to prevent keyboard closing on mobile)
-            if (chatBody && document.activeElement !== chatInput) {
-              const msgHtml = `<div style="display:flex;align-items:flex-end;gap:8px;margin-bottom:8px;flex-direction:row-reverse;"><img src="${GameCache.user.avatar_url || avatars[0]}" style="width:28px;height:28px;border-radius:50%;"><div class="chat-bubble me" style="margin:0;">${p.new.text}</div></div>`;
-              chatBody.insertAdjacentHTML('beforeend', msgHtml);
-              chatBody.scrollTop = chatBody.scrollHeight;
-            }
-          } else {
-            // Only refresh social view if chat is not open (to update messages list)
-            refreshOpenSocialView();
-          }
+          // Don't append message here - it's already appended in sendMsg function
+          // This listener is just for cache update and sync
         })
         .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages' }, (p) => {
           const idx = GameCache.messages.findIndex(m => m.id === p.new.id);
@@ -1132,6 +1135,15 @@
       const receiverUsername = GameCache.profiles[toId]?.display_name || 'Friend';
       const receiverId = toId;
       const supabase = sb;
+
+      // Immediately append message to chat body for sender (before async operation)
+      const chatBody = document.getElementById('chatBody');
+      if (chatBody) {
+        const msgHtml = `<div style="display:flex;align-items:flex-end;gap:8px;margin-bottom:8px;flex-direction:row-reverse;"><img src="${GameCache.user.avatar_url || avatars[0]}" style="width:28px;height:28px;border-radius:50%;"><div class="chat-bubble me" style="margin:0;">${messageText}</div></div>`;
+        chatBody.insertAdjacentHTML('beforeend', msgHtml);
+        chatBody.scrollTop = chatBody.scrollHeight;
+      }
+
       const { data, error } = await supabase
         .from('messages')
         .insert([
@@ -1152,8 +1164,6 @@
       chatInput.value = '';
       chatInput.focus();
       // Don't manually add to cache - realtime listener will handle it to prevent duplicates
-      // Don't call viewChat - it rebuilds the entire UI and causes keyboard to close
-      // Realtime listener will append the message to chat if it's open
     }
 
     const validWords = new Set(['able','acid','aged','aims','airs','also','arch','area','arts','baby','back','bags','ball','band','bang','bank','bare','barn','base','bath','bean','bear','beat','beds','been','bell','belt','bend','bent','best','bias','bike','bird','blow','blue','boat','body','bone','book','born','both','bowl','bulk','burn','bush','busy','cafe','cage','cake','call','came','card','care','case','cast','cell','cent','chat','chin','chip','chop','city','clay','club','coal','coat','code','coin','cold','come','cone','cook','cool','copy','corn','cost','crew','crop','crow','cube','curl','cute','damp','dare','dark','dart','data','date','dawn','days','dead','deal','dear','deck','deep','desk','dial','dice','diet','dish','down','draw','drew','drop','drug','dual','duck','dumb','dump','dust','duty','dyed','each','earl','earn','ease','east','easy','edge','edit','else','emit','ends','epic','even','ever','evil','exam','exit','face','fact','fade','fail','fair','fall','farm','fast','fate','fear','feel','feet','fell','felt','file','fill','film','find','fine','fire','firm','fish','fist','five','flat','flee','flew','flip','flow','folk','food','fool','foot','fork','form','fort','foul','four','free','from','fuel','full','fund','funk','gain','game','gang','gate','gave','gaze','gene','gift','girl','give','glad','glen','goal','goat','gold','golf','gone','good','grab','gray','grew','grey','grid','grin','grip','grow','gulf','hack','hair','half','hall','halt','hand','hang','hard','harm','hate','have','head','heal','heap','hear','heat','heel','held','help','herb','herd','here','hero','high','hill','hind','hint','hire','hold','hole','holy','home','hood','hook','hope','horn','host','hour','huge','hull','hung','hunt','hurt','hush','idle','inch','into','iris','iron','isle','item','jail','jazz','jean','jest','join','joke','jump','june','junk','jury','just','keen','keep','kept','kick','kill','kind','king','kiss','knee','knew','knit','knot','know','lace','lack','lady','laid','lake','lamb','lamp','land','lane','last','late','lead','leaf','lean','leap','left','lend','lens','lent','less','liar','lice','lick','lied','lies','life','lift','like','lily','limb','lime','limp','line','lint','lion','list','live','load','loaf','loan','lock','loft','lone','long','look','loop','lord','lose','loss','lost','loud','love','luck','lump','lung','lure','lush','lust','mace','made','maid','mail','main','make','male','mall','many','mark','mars','mart','mask','mass','mate','math','meal','mean','meat','meet','menu','mess','mice','mild','mile','milk','mill','mind','mine','mint','miss','mist','mode','mood','moon','more','most','moth','move','much','mule','mute','myth','nail','name','navy','near','neat','neck','need','nest','news','next','nice','nick','nine','node','none','noon','nose','note','noun','null','numb','oath','obey','odds','odor','okay','once','only','onto','open','oral','orca','oven','over','pace','pack','page','paid','pain','pair','pale','palm','park','part','pass','past','path','peak','pear','peel','pent','pest','pick','pill','pine','ping','pink','pint','pipe','plan','play','plea','plot','plow','plug','plum','poem','poet','pole','pond','pony','pool','poor','pork','port','pose','post','pour','pray','prep','prey','pull','pulp','pump','punk','push','quit','race','rack','rain','rake','rank','rare','rate','read','real','ream','rear','redo','reed','reef','reel','rely','rent','rest','rice','rich','ride','ring','rise','risk','road','roam','roar','robe','rock','role','roll','roof','room','root','rope','rose','rote','rude','rule','rung','runt','rush','rust','sack','safe','sage','said','sail','sake','sale','salt','same','sand','sang','sank','save','seal','seam','seat','seed','seek','seem','seen','self','sell','send','sent','sept','shed','shew','ship','shot','show','shut','sick','side','sigh','sign','silk','sill','sine','sing','sink','site','size','skin','slip','slow','snap','snow','soap','soar','sock','soft','soil','sold','sole','some','song','soon','soot','sore','sort','soul','spot','stab','stag','star','stay','stem','step','stew','stop','stub','stud','such','suit','sulk','sump','sung','sunk','sure','surf','sway','swim','tail','take','tale','talk','tall','tame','tank','tape','task','team','tear','teen','tell','tend','tent','term','test','text','than','that','them','then','they','thin','this','thou','thus','tick','tide','tied','tier','ties','tilt','time','tint','tiny','tire','toad','toes','tofu','toga','told','toll','tomb','tone','took','tool','tops','tore','torn','toss','tour','town','trap','tray','tree','trek','trim','trio','trip','trod','trot','true','tuba','tube','tuck','tuft','tune','turn','twig','twin','type','ugly','unit','upon','urchin','urge','used','user','vain','vane','vary','vast','veal','veil','vein','verb','very','vest','veto','vice','view','vine','vise','void','vote','wade','wage','wait','wake','walk','wall','wand','want','warm','warn','wash','wasp','wave','wavy','weak','wear','weep','well','went','were','west','what','when','whey','whip','wick','wide','wife','wild','will','wilt','wind','wine','wing','wink','wipe','wire','wise','wish','with','wolf','womb','wont','wood','wool','word','wore','work','worm','worn','wrap','wren','writ','yard','yarn','year','yell','yoke','your','yuan','yule','zero','zest','zinc','zone','zoom']);
@@ -1180,30 +1190,24 @@
       return true;
     }
     
-    function calculateScore(word, solveTime, streak, isComeback) {
-      const len = word.length;
-      let basePoints = 10;
-      if (len === 3) basePoints = 10;
-      else if (len === 4) basePoints = 20;
-      else if (len === 5) basePoints = 35;
-      else if (len === 6) basePoints = 50;
-      else if (len === 7) basePoints = 70;
-      else if (len >= 8) basePoints = 100;
-      
+    function calculateScore(word, solveTime, streak, isFirstSolve, isComeback) {
+      // Base points: First to solve = 100, Second to solve = 50
+      let basePoints = isFirstSolve ? 100 : 50;
+
+      // Speed bonus
       let speedBonus = 0;
-      if (solveTime <= 3) speedBonus = 0.5;
-      else if (solveTime <= 5) speedBonus = 0.3;
-      else if (solveTime <= 10) speedBonus = 0.15;
-      
+      if (solveTime <= 3) speedBonus = 50;
+      else if (solveTime <= 5) speedBonus = 25;
+      else if (solveTime <= 10) speedBonus = 10;
+
+      // Streak bonus
       let streakBonus = 0;
       if (streak >= 10) streakBonus = 100;
       else if (streak >= 5) streakBonus = 50;
-      else if (streak >= 3) streakBonus = 20;
-      
-      let comebackBonus = isComeback ? 0.1 : 0;
-      
-      const total = basePoints * (1 + speedBonus + comebackBonus) + streakBonus;
-      return Math.round(total);
+      else if (streak >= 3) streakBonus = 25;
+
+      const total = basePoints + speedBonus + streakBonus;
+      return total;
     }
     
     function calculateMMRChange(winnerMMR, loserMMR, isRanked) {
@@ -1328,6 +1332,7 @@
 
     function createMatchPayload(invite) {
       const duration = 180; // 3 minutes in seconds
+      const initialPuzzle = generateLetters(6);
       return {
         matchId: `match-${invite.id}-${Date.now()}`,
         inviteId: invite.id,
@@ -1344,7 +1349,13 @@
           [invite.from_user_id]: GameCache.profiles[invite.from_user_id]?.avatar_url || avatars[0],
           [invite.to_user_id]: GameCache.profiles[invite.to_user_id]?.avatar_url || avatars[0]
         },
-        currentPuzzle: generateLetters(6),
+        currentPuzzle: initialPuzzle,
+        puzzleIndex: 0,
+        playerPuzzleIndex: {
+          [invite.from_user_id]: 0,
+          [invite.to_user_id]: 0
+        },
+        puzzles: [initialPuzzle],
         playerScores: {
           [invite.from_user_id]: 0,
           [invite.to_user_id]: 0
@@ -1679,7 +1690,8 @@
     
     function startSinglePlayer() {
       const duration = 180; // 3 minutes in seconds
-      
+      const initialPuzzle = generateLetters(6);
+
       const payload = {
         matchId: `single-${Date.now()}`,
         mode: 'single',
@@ -1695,7 +1707,13 @@
           [currentUserId]: GameCache.user.avatar_url || avatars[0],
           'ai': 'https://api.dicebear.com/7.x/bottts/svg?seed=ai'
         },
-        currentPuzzle: generateLetters(6),
+        currentPuzzle: initialPuzzle,
+        puzzleIndex: 0,
+        playerPuzzleIndex: {
+          [currentUserId]: 0,
+          'ai': 0
+        },
+        puzzles: [initialPuzzle],
         playerScores: {
           [currentUserId]: 0,
           'ai': 0
@@ -1720,7 +1738,7 @@
         endsAt: Date.now() + (duration * 1000),
         status: 'active'
       };
-      
+
       startMatchSession(payload);
       startAI();
     }
@@ -1745,7 +1763,12 @@
         setTimeout(() => {
           if (!GameCache.match.active || GameCache.match.mode !== 'single') return;
 
-          const currentPuzzle = GameCache.match.currentPuzzle;
+          // Get AI's current puzzle based on its puzzle index
+          const aiPuzzleIndex = GameCache.match.playerPuzzleIndex['ai'] || 0;
+          const currentPuzzle = GameCache.match.puzzles[aiPuzzleIndex];
+
+          if (!currentPuzzle) return;
+
           const word = currentPuzzle.solution;
 
           // AI is not smart: 30% chance to get it wrong
@@ -1756,16 +1779,33 @@
           } else {
             // Correct answer but with random slower time (5-15 seconds)
             const solveTimeSeconds = 5 + Math.random() * 10;
-            const score = calculateScore(word, solveTimeSeconds, GameCache.match.playerStreaks['ai'], false);
+            const isFirstSolve = !GameCache.match.wordSolvers || !GameCache.match.wordSolvers[word];
+            if (isFirstSolve) {
+              if (!GameCache.match.wordSolvers) GameCache.match.wordSolvers = {};
+              GameCache.match.wordSolvers[word] = ['ai'];
+            }
+
+            const score = calculateScore(word, solveTimeSeconds, GameCache.match.playerStreaks['ai'], isFirstSolve, false);
 
             GameCache.match.playerScores['ai'] += score;
             GameCache.match.playerStreaks['ai']++;
             GameCache.match.playerCorrectCount['ai']++;
             GameCache.match.playerSolveTimes['ai'].push(solveTimeSeconds);
-          }
 
-          // AI gets a new puzzle too
-          GameCache.match.currentPuzzle = generateLetters(6);
+            // Update AI's puzzle index
+            GameCache.match.playerPuzzleIndex['ai'] = aiPuzzleIndex + 1;
+
+            // Check if we need to generate a new puzzle
+            const nextPuzzleIndex = Math.max(
+              GameCache.match.playerPuzzleIndex['ai'],
+              GameCache.match.playerPuzzleIndex[currentUserId] || 0
+            );
+
+            if (nextPuzzleIndex >= GameCache.match.puzzles.length) {
+              const newPuzzle = generateLetters(6);
+              GameCache.match.puzzles.push(newPuzzle);
+            }
+          }
 
           // Update only opponent score without re-rendering entire UI
           const oppScoreEl = document.getElementById('oppScore');
@@ -1806,24 +1846,48 @@
       const myScore = GameCache.match.playerScores[currentUserId] || 0;
       const oppScore = GameCache.match.playerScores[opponentId] || 0;
       const isComeback = myScore < oppScore && (oppScore - myScore) / Math.max(oppScore, 1) >= 0.25;
-      
-      const points = calculateScore(guess, solveTime, GameCache.match.playerStreaks[currentUserId], isComeback);
-      
+
+      // Track if this is the first solve for this word
+      const currentWord = GameCache.match.currentPuzzle.solution;
+      if (!GameCache.match.wordSolvers) GameCache.match.wordSolvers = {};
+      const isFirstSolve = !GameCache.match.wordSolvers[currentWord];
+      GameCache.match.wordSolvers[currentWord] = GameCache.match.wordSolvers[currentWord] || [];
+      GameCache.match.wordSolvers[currentWord].push(currentUserId);
+
+      const points = calculateScore(guess, solveTime, GameCache.match.playerStreaks[currentUserId], isFirstSolve, isComeback);
+
       GameCache.match.playerScores[currentUserId] += points;
       GameCache.match.playerStreaks[currentUserId]++;
       GameCache.match.playerCorrectCount[currentUserId]++;
       GameCache.match.playerSolveTimes[currentUserId].push(solveTime);
       GameCache.match.roundStartTime = Date.now();
-      
-      // Generate new puzzle for unlimited words
-      GameCache.match.currentPuzzle = generateLetters(6);
-      
+
+      // Update player's puzzle index
+      GameCache.match.playerPuzzleIndex[currentUserId] = (GameCache.match.playerPuzzleIndex[currentUserId] || 0) + 1;
+
+      // Check if we need to generate a new puzzle (for the next word)
+      const nextPuzzleIndex = Math.max(
+        GameCache.match.playerPuzzleIndex[currentUserId],
+        GameCache.match.playerPuzzleIndex[opponentId] || 0
+      );
+
+      if (nextPuzzleIndex >= GameCache.match.puzzles.length) {
+        // Generate new puzzle for the next word
+        const newPuzzle = generateLetters(6);
+        GameCache.match.puzzles.push(newPuzzle);
+      }
+
+      // Set current puzzle to the one the player should be on
+      GameCache.match.currentPuzzle = GameCache.match.puzzles[GameCache.match.playerPuzzleIndex[currentUserId]];
+
       let feedback = `+${points} points!`;
       let feedbackClass = 'feedback-correct';
+      if (isFirstSolve) { feedback = `🏆 FIRST TO SOLVE! +${points} points!`; feedbackClass = 'feedback-first'; }
       if (solveTime <= 3) { feedback = `⚡ LIGHTNING FAST! +${points} points!`; feedbackClass = 'feedback-speed'; }
       else if (solveTime <= 5) { feedback = `🔥 Great speed! +${points} points!`; feedbackClass = 'feedback-speed'; }
-      if (GameCache.match.playerStreaks[currentUserId] >= 5) { feedback = `🔥 ${GameCache.match.playerStreaks[currentUserId]} STREAK! +${points} points!`; feedbackClass = 'feedback-streak'; }
-      else if (GameCache.match.playerStreaks[currentUserId] >= 3) { feedback = `🎯 ${GameCache.match.playerStreaks[currentUserId]} streak! +${points} points!`; feedbackClass = 'feedback-streak'; }
+      if (GameCache.match.playerStreaks[currentUserId] >= 10) { feedback = `🔥 STREAK x10! +${points} points!`; feedbackClass = 'feedback-streak'; }
+      else if (GameCache.match.playerStreaks[currentUserId] >= 5) { feedback = `🔥 STREAK x5! +${points} points!`; feedbackClass = 'feedback-streak'; }
+      else if (GameCache.match.playerStreaks[currentUserId] >= 3) { feedback = `🎯 STREAK x3! +${points} points!`; feedbackClass = 'feedback-streak'; }
       if (isComeback) { feedback = `💪 COMEBACK! +${points} points!`; feedbackClass = 'feedback-comeback'; }
       
       const feedbackEl = document.getElementById('feedback');
@@ -1831,16 +1895,18 @@
       setTimeout(() => feedbackEl.querySelector('span')?.classList.remove(feedbackClass), 500);
       
       try {
-        socialChannel.send({ 
-          type: 'broadcast', 
-          event: 'match_progress', 
-          payload: { 
-            matchId: GameCache.match.matchId, 
-            playerId: currentUserId, 
-            score: GameCache.match.playerScores[currentUserId], 
+        socialChannel.send({
+          type: 'broadcast',
+          event: 'match_progress',
+          payload: {
+            matchId: GameCache.match.matchId,
+            playerId: currentUserId,
+            score: GameCache.match.playerScores[currentUserId],
             streak: GameCache.match.playerStreaks[currentUserId],
-            correctCount: GameCache.match.playerCorrectCount[currentUserId]
-          } 
+            correctCount: GameCache.match.playerCorrectCount[currentUserId],
+            puzzleIndex: GameCache.match.playerPuzzleIndex[currentUserId],
+            puzzles: GameCache.match.puzzles
+          }
         }); 
       } catch(e) {}
       
