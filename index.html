@@ -678,24 +678,17 @@
       dbChannel
         // Messages: INSERT for both sent and received messages
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `to_user_id=eq.${currentUserId}` }, async (p) => {
-          console.log('[Realtime] New message received:', p.new);
+          console.log('[Realtime] New message received from database:', p.new);
           if (!GameCache.profiles[p.new.from_user_id]) await fetchProfile(p.new.from_user_id);
           // Prevent duplicate messages in cache
           if (!GameCache.messages.some(m => m.id === p.new.id)) {
             GameCache.messages.unshift(p.new);
             updateBadges();
           }
-          // If chat with this user is open, append message immediately
+          // If chat with this user is open, reload from database to ensure consistency
           const activeChatId = document.getElementById('socialModal').dataset.activeChatId;
           if (activeChatId === p.new.from_user_id) {
-            const chatBody = document.getElementById('chatBody');
-            // Always append message to prevent missing messages
-            if (chatBody) {
-              const p = GameCache.profiles[p.new.from_user_id] || { avatar_url: avatars[0] };
-              const msgHtml = `<div style="display:flex;align-items:flex-end;gap:8px;margin-bottom:8px;"><img src="${p.avatar_url || avatars[0]}" style="width:28px;height:28px;border-radius:50%;"><div class="chat-bubble them" style="margin:0;">${p.new.text}</div></div>`;
-              chatBody.insertAdjacentHTML('beforeend', msgHtml);
-              chatBody.scrollTop = chatBody.scrollHeight;
-            }
+            await loadMessagesFromDatabase(p.new.from_user_id);
           } else {
             // Only show toast and refresh social view if chat is not open
             const sender = GameCache.profiles[p.new.from_user_id]?.display_name || 'Someone';
@@ -704,7 +697,7 @@
           }
         })
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `from_user_id=eq.${currentUserId}` }, async (p) => {
-          console.log('[Realtime] Message sent confirmation:', p.new);
+          console.log('[Realtime] Message sent confirmation from database:', p.new);
           if (!GameCache.profiles[p.new.to_user_id]) await fetchProfile(p.new.to_user_id);
           // Prevent duplicate messages in cache
           if (!GameCache.messages.some(m => m.id === p.new.id)) {
@@ -714,22 +707,33 @@
           // This listener is just for cache update and sync
         })
         .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages' }, (p) => {
+          console.log('[Realtime] Message updated in database:', p.new);
           const idx = GameCache.messages.findIndex(m => m.id === p.new.id);
           if (idx !== -1) { GameCache.messages[idx] = p.new; updateBadges(); refreshOpenSocialView(); }
         })
         // Game Invites: INSERT for both sent and received
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'game_invites', filter: `to_user_id=eq.${currentUserId}` }, async (p) => {
-          console.log('[Realtime] New game invite received:', p.new);
+          console.log('[Realtime] New game invite received from database:', p.new);
           if (!GameCache.profiles[p.new.from_user_id]) await fetchProfile(p.new.from_user_id);
-          GameCache.invites.unshift(p.new); updateBadges(); refreshOpenSocialView();
+          // Prevent duplicate invites in cache
+          if (!GameCache.invites.some(i => i.id === p.new.id)) {
+            GameCache.invites.unshift(p.new);
+          }
+          updateBadges();
+          refreshOpenSocialView();
           // Show toast notification
           const sender = GameCache.profiles[p.new.from_user_id]?.display_name || 'Someone';
           showToast('invite', `Game Invite from ${sender}`, 'Click to accept or decline', () => openInvites());
         })
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'game_invites', filter: `from_user_id=eq.${currentUserId}` }, async (p) => {
-          console.log('[Realtime] Game invite sent:', p.new);
+          console.log('[Realtime] Game invite sent confirmation from database:', p.new);
           if (!GameCache.profiles[p.new.to_user_id]) await fetchProfile(p.new.to_user_id);
-          GameCache.invites.unshift(p.new); refreshOpenSocialView();
+          // Prevent duplicate invites in cache
+          if (!GameCache.invites.some(i => i.id === p.new.id)) {
+            GameCache.invites.unshift(p.new);
+          }
+          updateBadges();
+          refreshOpenSocialView();
         })
         .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'game_invites' }, (p) => {
           console.log('[Realtime] Game invite updated:', p.new);
@@ -1062,13 +1066,10 @@
       // notify other clients that we've read (so their UI can update if they track reads)
       try{ socialChannel.send({ type: 'broadcast', event: 'read_receipt', payload: { fromId: otherId, seen_at: now } }); }catch(e){}
       updateBadges();
-      const chatMsgs = GameCache.messages.filter(m => (m.from_user_id === otherId || m.to_user_id === otherId)).sort((a,b) => new Date(a.created_at) - new Date(b.created_at));
-      cont.innerHTML = `<div style="display:flex;flex-direction:column;height:100%;"><div id="chatBody" style="flex:1;overflow-y:auto;padding-bottom:10px;">${chatMsgs.map(m => {
-        const isMe = m.from_user_id === currentUserId;
-        const sender = isMe ? { avatar_url: GameCache.user.avatar_url } : p;
-        return `<div style="display:flex;align-items:flex-end;gap:8px;margin-bottom:8px;${isMe ? 'flex-direction:row-reverse;' : ''}"><img src="${sender.avatar_url || avatars[0]}" style="width:28px;height:28px;border-radius:50%;"><div class="chat-bubble ${isMe ? 'me' : 'them'}" style="margin:0;">${m.text}</div></div>`;
-      }).join('')}</div><div style="display:flex;gap:10px;margin-top:10px;"><input id="chatInput" class="answer-input modern" style="flex:1;" placeholder="Type your message..." inputmode="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" /><button class="btn modern" style="width:90px;" onclick="sendMsg('${otherId}')">Send</button></div></div>`;
-      const cb = document.getElementById('chatBody'); cb.scrollTop = cb.scrollHeight;
+
+      // Load messages from database instead of cache
+      cont.innerHTML = `<div style="display:flex;flex-direction:column;height:100%;"><div id="chatBody" style="flex:1;overflow-y:auto;padding-bottom:10px;"></div><div style="display:flex;gap:10px;margin-top:10px;"><input id="chatInput" class="answer-input modern" style="flex:1;" placeholder="Type your message..." inputmode="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" /><button class="btn modern" style="width:90px;" onclick="sendMsg('${otherId}')">Send</button></div></div>`;
+      await loadMessagesFromDatabase(otherId);
     }
 
     async function handleAvatarUpload(e){
@@ -1320,6 +1321,8 @@
     async function sendInvite(toId) {
       if (toId === currentUserId) return alert('You cannot invite yourself.');
 
+      console.log('[Invite] Sending invite to:', toId);
+
       // Check if player is online
       const isOnline = GameCache.onlineUsers[toId] !== undefined;
       if (!isOnline) {
@@ -1336,24 +1339,78 @@
       // We'll need to track this via presence or a separate mechanism
       // For now, we'll send the invite and let the recipient check
 
-      const { data, error } = await sb.from('game_invites').insert({ from_user_id: currentUserId, to_user_id: toId, mode: 'quick', status: 'pending' }).select().single();
-      if (error) { console.error('Invite failed', error); return alert('Unable to send invite.'); }
-      if (data) {
-        GameCache.invites.unshift(data);
-        showToast('invite', 'Game Invite Sent', 'Your invite has been sent successfully.');
-        // Refresh friends list to update button state
-        renderFriendsList();
+      const { data, error } = await sb.from('game_invites').insert({
+        from_user_id: currentUserId,
+        to_user_id: toId,
+        mode: 'quick',
+        status: 'pending'
+      }).select().single();
+
+      console.log('[Invite] Insert result:', data);
+      console.log('[Invite] Insert error:', error);
+
+      if (error) {
+        console.error('[Invite] Failed to send invite:', error);
+        return alert(`Unable to send invite: ${error.message || 'Unknown error'}`);
       }
+
+      if (!data) {
+        console.error('[Invite] No data returned from insert');
+        return alert('Failed to send invite: No data returned');
+      }
+
+      console.log('[Invite] Invite successfully inserted with ID:', data.id);
+
+      // Add to cache
+      if (!GameCache.invites.some(i => i.id === data.id)) {
+        GameCache.invites.unshift(data);
+      }
+
+      showToast('invite', 'Game Invite Sent', 'Your invite has been sent successfully.');
+      // Refresh friends list to update button state
+      renderFriendsList();
     }
 
-    function openInvites(){
+    async function loadInvitesFromDatabase() {
+      console.log('[Invite] Loading invites from database');
+      const { data, error } = await sb
+        .from('game_invites')
+        .select('*')
+        .or(`to_user_id.eq.${currentUserId},from_user_id.eq.${currentUserId}`)
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false });
+
+      console.log('[Invite] Database invites loaded:', data?.length);
+      console.log('[Invite] Database invites error:', error);
+
+      if (error) {
+        console.error('[Invite] Failed to load invites:', error);
+        return;
+      }
+
+      // Update cache with fresh data from database
+      const existingIds = new Set(GameCache.invites.map(i => i.id));
+      data.forEach(invite => {
+        if (!existingIds.has(invite.id)) {
+          GameCache.invites.push(invite);
+        }
+      });
+
+      return data || [];
+    }
+
+    async function openInvites(){
       document.getElementById('socialTitle').innerText = "Invites";
       const cont = document.getElementById('socialContent');
+
+      // Load invites from database instead of using cache
+      const invites = await loadInvitesFromDatabase();
+
       const friendItems = GameCache.friendRequests.map(r => {
         const p = GameCache.profiles[r.from_user_id] || { display_name: 'Player', avatar_url: avatars[0] };
         return `<div class="social-item"><div style="display:flex;align-items:center;gap:10px;"><img src="${p.avatar_url || avatars[0]}" style="width:32px;height:32px;border-radius:50%;"><div><div style="font-weight:700">Friend request from ${p.display_name}</div><div style="font-size:12px;opacity:0.65">${p.display_name}</div></div></div><div><button class="leader-secondary" onclick="respondFriendRequest('${r.id}', 'accepted')">Accept</button><button class="leader-secondary" style="margin-left:8px;" onclick="respondFriendRequest('${r.id}', 'declined')">Decline</button></div></div>`;
       });
-      const gameItems = GameCache.invites.map(i => {
+      const gameItems = invites.map(i => {
         const p = GameCache.profiles[i.from_user_id] || { display_name: 'Player', avatar_url: avatars[0] };
         const label = i.from_user_id === currentUserId ? `Invite sent to ${GameCache.profiles[i.to_user_id]?.display_name || 'Player'}` : `Game invite from ${p.display_name}`;
         return `<div class="social-item"><div><div style="font-weight:700">${label}</div><div style="font-size:12px;opacity:0.65">Mode: ${i.mode}</div></div><div>${i.to_user_id === currentUserId ? `<button class="leader-secondary" style="background:var(--success);margin-right:12px;" onclick="respondGameInvite('${i.id}', 'accepted')">Accept</button><button class="leader-secondary" style="background:var(--danger);" onclick="respondGameInvite('${i.id}', 'declined')">Decline</button>` : ''}</div></div>`;
@@ -1428,6 +1485,8 @@
       const receiverUsername = GameCache.profiles[toId]?.display_name || 'Friend';
       const receiverId = toId;
 
+      console.log('[Message] Sending message to:', receiverId, 'text:', messageText);
+
       // Clear input first to prevent duplicate sends
       chatInput.value = '';
 
@@ -1444,25 +1503,75 @@
         ])
         .select();
 
-      console.log('Message sent:', data);
-      console.log('Message error:', error);
+      console.log('[Message] Insert result:', data);
+      console.log('[Message] Insert error:', error);
+
       if (error) {
-        console.error('sendMsg error', error);
+        console.error('[Message] sendMsg error:', error);
         chatInput.value = messageText;
-        alert('Failed to send message. Please try again.');
+        alert(`Failed to send message: ${error.message || 'Unknown error'}`);
         return;
       }
 
-      // Immediately append message to chat body for sender
-      const chatBody = document.getElementById('chatBody');
-      if (chatBody) {
-        const msgHtml = `<div style="display:flex;align-items:flex-end;gap:8px;margin-bottom:8px;flex-direction:row-reverse;"><img src="${GameCache.user.avatar_url || avatars[0]}" style="width:28px;height:28px;border-radius:50%;"><div class="chat-bubble me" style="margin:0;">${messageText}</div></div>`;
-        chatBody.insertAdjacentHTML('beforeend', msgHtml);
-        chatBody.scrollTop = chatBody.scrollHeight;
+      if (!data || data.length === 0) {
+        console.error('[Message] No data returned from insert');
+        chatInput.value = messageText;
+        alert('Failed to send message: No data returned');
+        return;
+      }
+
+      console.log('[Message] Message successfully inserted with ID:', data[0].id);
+
+      // Add to cache
+      if (!GameCache.messages.some(m => m.id === data[0].id)) {
+        GameCache.messages.unshift(data[0]);
+      }
+
+      // Refresh chat view from database to ensure consistency
+      const activeChatId = document.getElementById('socialModal').dataset.activeChatId;
+      if (activeChatId === toId) {
+        await loadMessagesFromDatabase(toId);
       }
 
       // Maintain focus after sending
       chatInput.focus();
+    }
+
+    async function loadMessagesFromDatabase(otherId) {
+      console.log('[Message] Loading messages from database for user:', otherId);
+      const { data, error } = await sb
+        .from('messages')
+        .select('*')
+        .or(`and(from_user_id.eq.${currentUserId},to_user_id.eq.${otherId}),and(from_user_id.eq.${otherId},to_user_id.eq.${currentUserId})`)
+        .order('created_at', { ascending: true });
+
+      console.log('[Message] Database messages loaded:', data?.length);
+      console.log('[Message] Database messages error:', error);
+
+      if (error) {
+        console.error('[Message] Failed to load messages:', error);
+        return;
+      }
+
+      // Update cache with fresh data from database
+      const existingIds = new Set(GameCache.messages.map(m => m.id));
+      data.forEach(msg => {
+        if (!existingIds.has(msg.id)) {
+          GameCache.messages.push(msg);
+        }
+      });
+
+      // Render chat UI
+      const chatBody = document.getElementById('chatBody');
+      if (chatBody) {
+        const p = GameCache.profiles[otherId] || { avatar_url: avatars[0] };
+        chatBody.innerHTML = data.map(m => {
+          const isMe = m.from_user_id === currentUserId;
+          const sender = isMe ? { avatar_url: GameCache.user.avatar_url } : p;
+          return `<div style="display:flex;align-items:flex-end;gap:8px;margin-bottom:8px;${isMe ? 'flex-direction:row-reverse;' : ''}"><img src="${sender.avatar_url || avatars[0]}" style="width:28px;height:28px;border-radius:50%;"><div class="chat-bubble ${isMe ? 'me' : 'them'}" style="margin:0;">${m.text}</div></div>`;
+        }).join('');
+        chatBody.scrollTop = chatBody.scrollHeight;
+      }
     }
 
     const validWords = new Set(['able','acid','aged','aims','airs','also','arch','area','arts','baby','back','bags','ball','band','bang','bank','bare','barn','base','bath','bean','bear','beat','beds','been','bell','belt','bend','bent','best','bias','bike','bird','blow','blue','boat','body','bone','book','born','both','bowl','bulk','burn','bush','busy','cafe','cage','cake','call','came','card','care','case','cast','cell','cent','chat','chin','chip','chop','city','clay','club','coal','coat','code','coin','cold','come','cone','cook','cool','copy','corn','cost','crew','crop','crow','cube','curl','cute','damp','dare','dark','dart','data','date','dawn','days','dead','deal','dear','deck','deep','desk','dial','dice','diet','dish','down','draw','drew','drop','drug','dual','duck','dumb','dump','dust','duty','dyed','each','earl','earn','ease','east','easy','edge','edit','else','emit','ends','epic','even','ever','evil','exam','exit','face','fact','fade','fail','fair','fall','farm','fast','fate','fear','feel','feet','fell','felt','file','fill','film','find','fine','fire','firm','fish','fist','five','flat','flee','flew','flip','flow','folk','food','fool','foot','fork','form','fort','foul','four','free','from','fuel','full','fund','funk','gain','game','gang','gate','gave','gaze','gene','gift','girl','give','glad','glen','goal','goat','gold','golf','gone','good','grab','gray','grew','grey','grid','grin','grip','grow','gulf','hack','hair','half','hall','halt','hand','hang','hard','harm','hate','have','head','heal','heap','hear','heat','heel','held','help','herb','herd','here','hero','high','hill','hind','hint','hire','hold','hole','holy','home','hood','hook','hope','horn','host','hour','huge','hull','hung','hunt','hurt','hush','idle','inch','into','iris','iron','isle','item','jail','jazz','jean','jest','join','joke','jump','june','junk','jury','just','keen','keep','kept','kick','kill','kind','king','kiss','knee','knew','knit','knot','know','lace','lack','lady','laid','lake','lamb','lamp','land','lane','last','late','lead','leaf','lean','leap','left','lend','lens','lent','less','liar','lice','lick','lied','lies','life','lift','like','lily','limb','lime','limp','line','lint','lion','list','live','load','loaf','loan','lock','loft','lone','long','look','loop','lord','lose','loss','lost','loud','love','luck','lump','lung','lure','lush','lust','mace','made','maid','mail','main','make','male','mall','many','mark','mars','mart','mask','mass','mate','math','meal','mean','meat','meet','menu','mess','mice','mild','mile','milk','mill','mind','mine','mint','miss','mist','mode','mood','moon','more','most','moth','move','much','mule','mute','myth','nail','name','navy','near','neat','neck','need','nest','news','next','nice','nick','nine','node','none','noon','nose','note','noun','null','numb','oath','obey','odds','odor','okay','once','only','onto','open','oral','orca','oven','over','pace','pack','page','paid','pain','pair','pale','palm','park','part','pass','past','path','peak','pear','peel','pent','pest','pick','pill','pine','ping','pink','pint','pipe','plan','play','plea','plot','plow','plug','plum','poem','poet','pole','pond','pony','pool','poor','pork','port','pose','post','pour','pray','prep','prey','pull','pulp','pump','punk','push','quit','race','rack','rain','rake','rank','rare','rate','read','real','ream','rear','redo','reed','reef','reel','rely','rent','rest','rice','rich','ride','ring','rise','risk','road','roam','roar','robe','rock','role','roll','roof','room','root','rope','rose','rote','rude','rule','rung','runt','rush','rust','sack','safe','sage','said','sail','sake','sale','salt','same','sand','sang','sank','save','seal','seam','seat','seed','seek','seem','seen','self','sell','send','sent','sept','shed','shew','ship','shot','show','shut','sick','side','sigh','sign','silk','sill','sine','sing','sink','site','size','skin','slip','slow','snap','snow','soap','soar','sock','soft','soil','sold','sole','some','song','soon','soot','sore','sort','soul','spot','stab','stag','star','stay','stem','step','stew','stop','stub','stud','such','suit','sulk','sump','sung','sunk','sure','surf','sway','swim','tail','take','tale','talk','tall','tame','tank','tape','task','team','tear','teen','tell','tend','tent','term','test','text','than','that','them','then','they','thin','this','thou','thus','tick','tide','tied','tier','ties','tilt','time','tint','tiny','tire','toad','toes','tofu','toga','told','toll','tomb','tone','took','tool','tops','tore','torn','toss','tour','town','trap','tray','tree','trek','trim','trio','trip','trod','trot','true','tuba','tube','tuck','tuft','tune','turn','twig','twin','type','ugly','unit','upon','urchin','urge','used','user','vain','vane','vary','vast','veal','veil','vein','verb','very','vest','veto','vice','view','vine','vise','void','vote','wade','wage','wait','wake','walk','wall','wand','want','warm','warn','wash','wasp','wave','wavy','weak','wear','weep','well','went','were','west','what','when','whey','whip','wick','wide','wife','wild','will','wilt','wind','wine','wing','wink','wipe','wire','wise','wish','with','wolf','womb','wont','wood','wool','word','wore','work','worm','worn','wrap','wren','writ','yard','yarn','year','yell','yoke','your','yuan','yule','zero','zest','zinc','zone','zoom']);
@@ -2071,6 +2180,8 @@
         return;
       }
 
+      console.log('[Match] Finding match mode:', mode);
+
       // For quick/ranked matches, show searching UI
       alert(`Searching for ${mode} match...`);
 
@@ -2103,6 +2214,8 @@
         targetPlayerId = onlinePlayers[Math.floor(Math.random() * onlinePlayers.length)];
       }
 
+      console.log('[Match] Target player:', targetPlayerId);
+
       // Send a real game invite to the database
       const { data, error } = await sb.from('game_invites').insert({
         from_user_id: currentUserId,
@@ -2111,18 +2224,31 @@
         status: 'pending'
       }).select().single();
 
+      console.log('[Match] Insert result:', data);
+      console.log('[Match] Insert error:', error);
+
       if (error) {
-        console.error('Failed to send game invite:', error);
-        alert('Failed to send game invite. Please try again.');
+        console.error('[Match] Failed to send game invite:', error);
+        alert(`Failed to send game invite: ${error.message || 'Unknown error'}`);
         return;
       }
 
-      if (data) {
-        GameCache.invites.unshift(data);
-        showToast('invite', 'Game Invite Sent', `Your ${mode} match invite has been sent to ${GameCache.profiles[targetPlayerId]?.display_name || 'Player'}.`);
-        updateBadges();
-        openInvites();
+      if (!data) {
+        console.error('[Match] No data returned from insert');
+        alert('Failed to send game invite: No data returned');
+        return;
       }
+
+      console.log('[Match] Invite successfully inserted with ID:', data.id);
+
+      // Add to cache
+      if (!GameCache.invites.some(i => i.id === data.id)) {
+        GameCache.invites.unshift(data);
+      }
+
+      showToast('invite', 'Game Invite Sent', `Your ${mode} match invite has been sent to ${GameCache.profiles[targetPlayerId]?.display_name || 'Player'}.`);
+      updateBadges();
+      openInvites();
     }
     
     function startSinglePlayer() {
