@@ -204,9 +204,13 @@
           
           <div class="stats-grid">
             <div class="stat-box"><div class="stat-title">Wins</div><div class="stat-value" id="wins">0</div></div>
-            <div class="stat-box"><div class="stat-title">MMR</div><div class="stat-value" id="mmr">1000</div></div>
+            <div class="stat-box"><div class="stat-title">MMR</div><div class="stat-value" id="mmr">0</div></div>
             <div class="stat-box"><div class="stat-title">Losses</div><div class="stat-value" id="losses">0</div></div>
-            <div class="stat-box"><div class="stat-title">Win Rate</div><div class="stat-value" id="winrate">0%</div></div>
+            <div class="stat-box"><div class="stat-title">Draws</div><div class="stat-value" id="draws">0</div></div>
+          </div>
+          <div style="margin-top:18px; display:flex; gap:10px;">
+            <button class="leader-secondary" style="flex:1;padding:16px;" onclick="openDraws()">🤝 View Draws</button>
+            <button class="leader-secondary" style="flex:1;padding:16px;" onclick="openAchievements()">🏆 Achievements</button>
           </div>
           <div style="margin-top:18px; display:flex; gap:10px;">
             <button class="leader-secondary" style="flex:1;padding:16px;" onclick="openOnlinePlayers()">🟢 Players Online</button>
@@ -238,12 +242,14 @@
               <div id="meName" style="font-weight:700;margin-bottom:4px;font-size:13px;">You</div>
               <div id="meAvatar" style="width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,.08);margin:0 auto 8px;border:2px solid var(--blue);background-size:cover;background-position:center;"></div>
               <div id="myScore" style="font-size:20px;font-weight:800;color:var(--blue);">0</div>
+              <div id="myMMR" style="font-size:11px;opacity:0.7;margin-top:4px;">MMR: 0</div>
             </div>
             <div style="text-align:center;flex:1;opacity:.7;font-size:14px;">VS</div>
             <div style="text-align:center;flex:1;">
               <div id="oppName" style="font-weight:700;margin-bottom:4px;font-size:13px;">Opponent</div>
               <div id="oppAvatar" style="width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,.08);margin:0 auto 8px;border:2px solid var(--purple);background-size:cover;background-position:center;"></div>
               <div id="oppScore" style="font-size:20px;font-weight:800;color:var(--purple);">0</div>
+              <div id="oppMMR" style="font-size:11px;opacity:0.7;margin-top:4px;">MMR: 0</div>
             </div>
           </div>
         </div>
@@ -317,28 +323,82 @@
             <input type="file" id="avatarInput" hidden accept="image/*" onchange="handleAvatarUpload(event)">
         </div>
       </div>
-      <div style="margin-top:24px;">
-        <h3 style="margin-bottom:12px;">Achievements</h3>
-        <div id="achievementsList" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;"></div>
-      </div>
       <div style="display:flex;gap:10px;margin-top:24px;">
         <button class="btn google-btn" style="flex:1;" id="saveProfileBtn">Save Changes</button>
         <button class="btn guest-btn" style="flex:1;" onclick="openAboutModal()">About Us</button>
       </div>
+      <div style="display:flex;gap:10px;margin-top:10px;">
+        <button class="btn modern" style="flex:1;" onclick="openHowToPlay()">📖 How to Play</button>
+      </div>
       <button class="btn decline" style="width:100%;margin-top:10px;" onclick="logout()">Logout</button>
+    </div>
+  </div>
+
+  <div class="modal" id="achievementsModal">
+    <div class="modal-content glass">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+        <div class="modal-title">Achievements</div>
+        <div class="icon-btn" onclick="closeModal('achievementsModal')">✕</div>
+      </div>
+      <div id="achievementsContent" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;"></div>
+    </div>
+  </div>
+
+  <div class="modal" id="drawsModal">
+    <div class="modal-content glass">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+        <div class="modal-title">Draws History</div>
+        <div class="icon-btn" onclick="closeModal('drawsModal')">✕</div>
+      </div>
+      <div id="drawsContent"></div>
     </div>
   </div>
 
   <div class="modal" id="aboutModal">
     <div class="modal-content glass">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
-        <div class="modal-title">About Amos' Anagram Rush</div>
+        <div class="modal-title">About Us</div>
         <div class="icon-btn" onclick="closeModal('aboutModal')">✕</div>
       </div>
       <div style="line-height:1.6; opacity:0.9;">
-        <p>Premium multiplayer word battle experience built for speed and competition.</p>
+        <div style="background:rgba(255,255,255,0.05);padding:16px;border-radius:12px;margin-bottom:16px;">
+          <h3 style="margin-bottom:12px;color:var(--blue);">Developer</h3>
+          <div><strong>Name:</strong> Amos Banda</div>
+          <div><strong>Email:</strong> bandaamos98@gmail.com</div>
+          <div><strong>Location:</strong> Zambia</div>
+        </div>
+        <div style="background:rgba(255,255,255,0.05);padding:16px;border-radius:12px;margin-bottom:16px;">
+          <h3 style="margin-bottom:12px;color:var(--purple);">Our Games</h3>
+          <div>1. Anagram Rush</div>
+          <div>2. Wordfury</div>
+        </div>
         <p style="margin-top:12px;font-weight:700;color:var(--blue);">Version 2.0 - Realtime Social Update</p>
-        <p style="margin-top:12px;">Developed by Amos Banda.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="howToPlayModal">
+    <div class="modal-content glass">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+        <div class="modal-title">How to Play</div>
+        <div class="icon-btn" onclick="closeModal('howToPlayModal')">✕</div>
+      </div>
+      <div style="line-height:1.6; opacity:0.9;">
+        <div style="background:rgba(255,255,255,0.05);padding:16px;border-radius:12px;margin-bottom:16px;">
+          <h3 style="margin-bottom:12px;color:var(--blue);">Game Rules</h3>
+          <p>1. Form valid English words from the given letters</p>
+          <p>2. Both players receive the same letters for fairness</p>
+          <p>3. Games start simultaneously - no one is left behind</p>
+          <p>4. Solve words faster to earn more points</p>
+          <p>5. Build streaks for bonus points</p>
+        </div>
+        <div style="background:rgba(255,255,255,0.05);padding:16px;border-radius:12px;margin-bottom:16px;">
+          <h3 style="margin-bottom:12px;color:var(--purple);">Scoring</h3>
+          <p>• First to solve: +100 points</p>
+          <p>• Second to solve: +50 points</p>
+          <p>• Speed bonus: +50 (≤3s), +25 (≤5s), +10 (≤10s)</p>
+          <p>• Streak bonus: +25 (3 streak), +50 (5 streak), +100 (10 streak)</p>
+        </div>
       </div>
     </div>
   </div>
@@ -359,7 +419,7 @@
     let dbChannel = null;
 
     const GameCache = {
-      user: { mmr: 1000, xp: 0, level: 1, coins: 0, streak: 0, dailyStreak: 0, lastDaily: null, achievements: [] },
+      user: { mmr: 0, xp: 0, level: 1, coins: 0, streak: 0, dailyStreak: 0, lastDaily: null, achievements: [] },
       friends: [],
       messages: [],
       invites: [],
@@ -432,7 +492,6 @@
           draws: 0,
           xp: 0,
           level: 1,
-          coins: 0,
           streak: 0,
           email: authUser?.email || ''
         };
@@ -463,26 +522,29 @@
         }
       }
       if(profile) {
-        GameCache.user = { 
-          ...profile, 
+        GameCache.user = {
+          ...profile,
           email: authUser?.email || profile.email || "",
           xp: profile.xp || 0,
           level: profile.level || 1,
           coins: profile.coins || 0,
           streak: profile.streak || 0,
-          dailyStreak: profile.daily_streak || 0
+          dailyStreak: profile.daily_streak || 0,
+          mmr: 0 // Force MMR to 0
         };
         document.getElementById("headerName").innerText = profile.display_name || "Player";
         document.getElementById("headerAvatar").src = profile.avatar_url || avatars[0];
-        document.getElementById("mmr").innerText = profile.mmr;
+        document.getElementById("mmr").innerText = 0;
         document.getElementById("wins").innerText = profile.wins || 0;
         document.getElementById("losses").innerText = profile.losses || 0;
-        document.getElementById("leagueBadge").innerText = `💎 ${getLeague(profile.mmr)}`;
-        document.getElementById("headerRank").innerText = `${getLeague(profile.mmr)} League`;
+        document.getElementById("draws").innerText = profile.draws || 0;
+        document.getElementById("leagueBadge").innerText = `💎 ${getLeague(0)}`;
+        document.getElementById("headerRank").innerText = `${getLeague(0)} League`;
         
         // Update new progression UI
         document.getElementById("levelDisplay").innerText = GameCache.user.level;
-        document.getElementById("coinsDisplay").innerText = GameCache.user.coins;
+        const coinsDisplay = document.getElementById("coinsDisplay");
+        if (coinsDisplay) coinsDisplay.innerText = GameCache.user.coins || 0;
 
         const xpProgress = getXPProgress();
         const xpBar = document.getElementById("xpBar");
@@ -493,16 +555,12 @@
           const neededXP = getLevelXP(GameCache.user.level + 1) - getLevelXP(GameCache.user.level);
           xpText.innerText = `${Math.max(0, currentXP)} / ${neededXP}`;
         }
-
-        // Calculate win rate
-        const totalGames = (profile.wins || 0) + (profile.losses || 0);
-        const winRate = totalGames > 0 ? Math.round((profile.wins / totalGames) * 100) : 0;
-        document.getElementById("winrate").innerText = `${winRate}%`;
       }
     }
 
     async function preloadData(){
       console.log("[Cache] Preloading state...");
+
       // Debug: fetch raw messages to inspect schema and errors
       try{
         const { data: dbgData, error: dbgErr } = await sb.from('messages').select('*');
@@ -521,16 +579,16 @@
       GameCache.invites = invs.data || [];
       GameCache.friendRequests = friendReqs.data || [];
       GameCache.notifications = notifs.data || [];
-      GameCache.leaderboard = leaders.data || [];
+      GameCache.leaderboard = (leaders.data || []).map(p => ({ ...p, mmr: 0 }));
       GameCache.friends = (friends.data || []).map(f => f.friend_id);
-      GameCache.leaderboard.forEach(p => GameCache.profiles[p.id] = p);
+      GameCache.leaderboard.forEach(p => GameCache.profiles[p.id] = { ...p, mmr: 0 });
       const neededIds = new Set();
       GameCache.messages.forEach(m => { neededIds.add(m.from_user_id); neededIds.add(m.to_user_id); });
       GameCache.friends.forEach(fid => neededIds.add(fid));
       const missingIds = Array.from(neededIds).filter(id => !GameCache.profiles[id]);
       if (missingIds.length > 0) {
         const { data: pData } = await sb.from('profiles').select('id, display_name, avatar_url, mmr').in('id', missingIds);
-        if (pData) pData.forEach(p => GameCache.profiles[p.id] = p);
+        if (pData) pData.forEach(p => GameCache.profiles[p.id] = { ...p, mmr: 0 });
       }
       // Ensure created_at is present and parseable
       GameCache.messages = GameCache.messages.map(m => ({ ...m, created_at: m.created_at || new Date().toISOString() }));
@@ -791,7 +849,7 @@
 
     async function fetchProfile(id) {
       const { data } = await sb.from('profiles').select('id, display_name, avatar_url, mmr').eq('id', id).maybeSingle();
-      if (data) GameCache.profiles[id] = data;
+      if (data) GameCache.profiles[id] = { ...data, mmr: 0 };
     }
 
     async function trackPresence(status) {
@@ -808,47 +866,46 @@
       document.getElementById("profileLeagueBadge").innerText = getLeague(data.mmr) + " League";
       document.getElementById("displayNameInput").value = data.display_name || "";
 
-      // Add stats display to profile
-      const wins = data.wins || 0;
-      const losses = data.losses || 0;
-      const draws = data.draws || 0;
+      openModal("profileModal");
+    }
 
-      const statsHTML = `
-        <div style="background:rgba(255,255,255,0.05);padding:16px;border-radius:12px;margin-top:20px;">
-          <h3 style="margin-bottom:12px;">Stats</h3>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:14px;">
-            <div>Level: <strong>${data.level || 1}</strong></div>
-            <div>XP: <strong>${data.xp || 0}</strong></div>
-            <div>Coins: <strong>${data.coins || 0}</strong></div>
-            <div>MMR: <strong>${data.mmr || 0}</strong></div>
-            <div>Wins: <strong style="color:var(--success);">${wins}</strong></div>
-            <div>Losses: <strong style="color:var(--danger);">${losses}</strong></div>
-            <div>Draws: <strong style="color:var(--warning);">${draws}</strong></div>
-          </div>
-        </div>
-      `;
-
-      // Insert stats after the profile picture section
-      const profileContent = document.querySelector('#profileModal .modal-content');
-      const achievementsSection = profileContent.querySelector('div[style*="margin-top:24px;"]');
-      if (achievementsSection) {
-        achievementsSection.insertAdjacentHTML('beforebegin', statsHTML);
-      }
-
-      // Render achievements
-      const achievementsList = document.getElementById('achievementsList');
+    function openAchievements() {
+      const data = GameCache.user;
       const unlockedAchievements = data.achievements || [];
-      achievementsList.innerHTML = Object.values(ACHIEVEMENTS).map(achievement => {
+      const achievementsContent = document.getElementById('achievementsContent');
+      achievementsContent.innerHTML = Object.values(ACHIEVEMENTS).map(achievement => {
         const isUnlocked = unlockedAchievements.includes(achievement.id);
         return `
-          <div style="padding:12px;background:${isUnlocked ? 'rgba(139,92,246,0.15)' : 'rgba(255,255,255,0.03)'};border:1px solid ${isUnlocked ? 'rgba(139,92,246,0.4)' : 'rgba(255,255,255,0.08)'};border-radius:12px;text-align:center;opacity:${isUnlocked ? 1 : 0.5};">
-            <div style="font-size:28px;margin-bottom:4px;">${isUnlocked ? achievement.icon : '🔒'}</div>
-            <div style="font-size:10px;font-weight:700;">${achievement.name}</div>
+          <div style="padding:16px;background:${isUnlocked ? 'rgba(139,92,246,0.15)' : 'rgba(255,255,255,0.03)'};border:1px solid ${isUnlocked ? 'rgba(139,92,246,0.4)' : 'rgba(255,255,255,0.08)'};border-radius:12px;text-align:center;opacity:${isUnlocked ? 1 : 0.5};">
+            <div style="font-size:32px;margin-bottom:8px;">${isUnlocked ? achievement.icon : '🔒'}</div>
+            <div style="font-size:12px;font-weight:700;margin-bottom:4px;">${achievement.name}</div>
+            <div style="font-size:10px;opacity:0.7;">${achievement.description}</div>
           </div>
         `;
       }).join('');
+      openModal('achievementsModal');
+    }
 
-      openModal("profileModal");
+    function openDraws() {
+      const draws = GameCache.user.draws || 0;
+      const drawsContent = document.getElementById('drawsContent');
+      drawsContent.innerHTML = `
+        <div style="background:rgba(255,255,255,0.05);padding:20px;border-radius:12px;text-align:center;">
+          <div style="font-size:48px;margin-bottom:10px;">🤝</div>
+          <div style="font-size:32px;font-weight:800;color:var(--warning);">${draws}</div>
+          <div style="font-size:14px;opacity:0.7;margin-top:8px;">Total Draws</div>
+          <div style="font-size:12px;opacity:0.5;margin-top:4px;">Excludes AI games</div>
+        </div>
+        <div style="margin-top:20px;">
+          <h3 style="margin-bottom:12px;">Recent Draws</h3>
+          <div style="opacity:0.5;text-align:center;padding:20px;">Draw history will be displayed here</div>
+        </div>
+      `;
+      openModal('drawsModal');
+    }
+
+    function openHowToPlay() {
+      openModal('howToPlayModal');
     }
 
     function openNotifications() {
@@ -1089,12 +1146,61 @@
 
     async function sendFriendRequest(toId) {
       if (toId === currentUserId) return alert('You cannot add yourself.');
-      const { data, error } = await sb.from('friend_requests').insert({ from_user_id: currentUserId, to_user_id: toId, status: 'pending' }).select().single();
-      if (error) { console.error('Friend request failed', error); return alert('Unable to send request.'); }
-      if (data) GameCache.friendRequests.unshift(data);
-      showToast('friend', 'Friend Request Sent', 'Your request has been sent successfully.');
-      // Refresh the search results to update button state
-      searchUsers();
+
+      // Check for existing requests in both directions
+      const { data: existing, error: checkError } = await sb
+        .from('friend_requests')
+        .select('*')
+        .or(
+          `and(from_user_id.eq.${currentUserId},to_user_id.eq.${toId}),and(from_user_id.eq.${toId},to_user_id.eq.${currentUserId})`
+        );
+
+      if (checkError) {
+        console.error('Friend request check failed', checkError);
+        return;
+      }
+
+      if (existing && existing.length > 0) {
+        const request = existing[0];
+
+        if (request.status === 'accepted') {
+          alert('You are already friends.');
+          return;
+        }
+
+        if (
+          request.from_user_id === currentUserId &&
+          request.status === 'pending'
+        ) {
+          alert('Friend request already sent.');
+          return;
+        }
+
+        if (
+          request.to_user_id === currentUserId &&
+          request.status === 'pending'
+        ) {
+          alert('This user has already sent you a friend request.');
+          return;
+        }
+      }
+
+      const { error } = await sb
+        .from('friend_requests')
+        .insert({
+          from_user_id: currentUserId,
+          to_user_id: toId,
+          status: 'pending'
+        });
+
+      if (error) {
+        console.error('Friend request failed', error);
+        alert(error.message);
+      } else {
+        alert('Friend request sent!');
+        // Refresh the search results to update button state
+        searchUsers();
+      }
     }
 
     function renderFriendsList() {
@@ -1417,7 +1523,6 @@
       
       // Update database
       sb.from('profiles').update({
-        coins: GameCache.user.coins,
         xp: GameCache.user.xp,
         daily_streak: GameCache.user.dailyStreak,
         last_daily: today
@@ -1535,10 +1640,16 @@
       const seconds = remainingTime % 60;
       const timeDisplay = `${minutes}:${seconds.toString().padStart(2, '0')}`;
       
+      // Get player MMR
+      const myMMR = GameCache.user.mmr || 0;
+      const oppMMR = GameCache.profiles[opponentId]?.mmr || 0;
+      
       document.getElementById('meName').innerText = GameCache.match.playerNames[currentUserId];
       document.getElementById('oppName').innerText = GameCache.match.playerNames[opponentId];
       document.getElementById('myScore').innerText = meScore;
       document.getElementById('oppScore').innerText = oppScore;
+      document.getElementById('myMMR').innerText = `MMR: ${myMMR}`;
+      document.getElementById('oppMMR').innerText = `MMR: ${oppMMR}`;
       document.getElementById('roundCount').innerText = timeDisplay;
       document.getElementById('scrambleWord').innerText = letters.toUpperCase();
       
@@ -1603,7 +1714,7 @@
       const accuracy = meCorrect + meWrong > 0 ? Math.round((meCorrect / (meCorrect + meWrong)) * 100) : 0;
       
       const isRanked = GameCache.match.mode === 'ranked';
-      const mmrChange = calculateMMRChange(GameCache.user.mmr, GameCache.profiles[oppId]?.mmr || 1000, isRanked);
+      const mmrChange = calculateMMRChange(GameCache.user.mmr, GameCache.profiles[oppId]?.mmr || 0, isRanked);
       const xpGained = calculateXP(result, meScore, meStreak);
       const coinsGained = calculateCoins(result, meScore, meStreak);
       
@@ -1730,17 +1841,51 @@
         const updateData = {
           xp: GameCache.user.xp,
           level: GameCache.user.level,
-          coins: GameCache.user.coins,
           wins: GameCache.user.wins,
           losses: GameCache.user.losses,
-          streak: GameCache.user.streak
+          streak: GameCache.user.streak,
+          draws: GameCache.user.draws
         };
         
         if (isRanked) {
           updateData.mmr = GameCache.user.mmr;
         }
         
-        await sb.from('profiles').update(updateData).eq('id', currentUserId);
+        const { error } = await sb.from('profiles').update(updateData).eq('id', currentUserId);
+        if (error) throw error;
+        
+        // Refresh leaderboard in real-time after match
+        const { data: updatedLeaderboard } = await sb.from('profiles').select('id, display_name, mmr, avatar_url, wins, losses, draws').order('mmr', {ascending: false});
+        if (updatedLeaderboard) {
+          GameCache.leaderboard = updatedLeaderboard;
+          updatedLeaderboard.forEach(p => GameCache.profiles[p.id] = p);
+          renderLeaderboardPreview();
+        }
+        
+        // Update header display
+        document.getElementById("mmr").innerText = GameCache.user.mmr;
+        document.getElementById("wins").innerText = GameCache.user.wins;
+        document.getElementById("losses").innerText = GameCache.user.losses;
+        document.getElementById("draws").innerText = GameCache.user.draws;
+        document.getElementById("levelDisplay").innerText = GameCache.user.level;
+        const coinsDisplay = document.getElementById("coinsDisplay");
+        if (coinsDisplay) coinsDisplay.innerText = GameCache.user.coins || 0;
+        
+        // Update level badge and XP bar
+        const xpProgress = getXPProgress();
+        const xpBar = document.getElementById("xpBar");
+        const xpText = document.getElementById("xpText");
+        if (xpBar) xpBar.style.width = `${xpProgress}%`;
+        if (xpText) {
+          const currentXP = GameCache.user.xp - getLevelXP(GameCache.user.level);
+          const neededXP = getLevelXP(GameCache.user.level + 1) - getLevelXP(GameCache.user.level);
+          xpText.innerText = `${Math.max(0, currentXP)} / ${neededXP}`;
+        }
+        
+        // Update league badge
+        document.getElementById("leagueBadge").innerText = `💎 ${getLeague(GameCache.user.mmr)}`;
+        document.getElementById("headerRank").innerText = `${getLeague(GameCache.user.mmr)} League`;
+        
       } catch (err) {
         console.error('Failed to update profile after match:', err);
       }
@@ -2027,27 +2172,48 @@
       tiles.innerHTML = newPuzzle.scrambled.split('').map(l => `<div class="tile">${l.toUpperCase()}</div>`).join('');
       document.getElementById('scrambleWord').innerText = newPuzzle.scrambled.toUpperCase();
       
-      // Update feedback with winning status
+      // Update feedback with winning status and real-time progress tracking
       const winning = myScore > oppScore;
       const losing = myScore < oppScore;
       const tie = myScore === oppScore;
       
+      // Calculate real-time stats
+      const meCorrectTotal = GameCache.match.playerCorrectCount[currentUserId];
+      const meWrongTotal = GameCache.match.playerWrongCount[currentUserId];
+      const meAccuracy = meCorrectTotal + meWrongTotal > 0 ? Math.round((meCorrectTotal / (meCorrectTotal + meWrongTotal)) * 100) : 0;
+      const meSolveTimes = GameCache.match.playerSolveTimes[currentUserId] || [];
+      const meAvgSolveTime = meSolveTimes.length > 0 ? (meSolveTimes.reduce((a, b) => a + b, 0) / meSolveTimes.length).toFixed(1) : 0;
+      
+      // Calculate estimated MMR change for ranked
+      const isRanked = GameCache.match.mode === 'ranked';
+      let mmrDisplay = '';
+      if (isRanked) {
+        const estimatedMMRChange = calculateMMRChange(GameCache.user.mmr, GameCache.profiles[opponentId]?.mmr || 0, true);
+        const currentMMRDisplay = GameCache.user.mmr;
+        mmrDisplay = `<div style="margin-top:6px;padding:6px;background:rgba(59,130,246,0.1);border-radius:6px;font-size:10px;"><strong style="color:var(--blue);">MMR:</strong> ${currentMMRDisplay} (Est: ${winning ? '+' : ''}${estimatedMMRChange.winnerChange || estimatedMMRChange.loserChange} after match)</div>`;
+      }
+      
       document.getElementById('feedback').innerHTML = `
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-          <div style="text-align:center;">
-            <div style="font-size:11px;opacity:0.7;">Your Stats</div>
-            <div style="font-weight:700;color:var(--blue);">${GameCache.match.playerCorrectCount[currentUserId]} words</div>
-            <div style="font-size:10px;opacity:0.6;">Streak: ${GameCache.match.playerStreaks[currentUserId]}</div>
+        <div style="background:rgba(255,255,255,0.03);padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,0.08);font-size:12px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <div style="text-align:center;flex:1;">
+              <div style="font-size:10px;opacity:0.7;">Your Stats</div>
+              <div style="font-weight:700;color:var(--blue);font-size:13px;">${meCorrectTotal} ✓</div>
+              <div style="font-size:9px;opacity:0.6;">Acc: ${meAccuracy}% | Avg: ${meAvgSolveTime}s</div>
+              <div style="font-size:9px;opacity:0.6;">Streak: ${GameCache.match.playerStreaks[currentUserId]}</div>
+            </div>
+            <div style="text-align:center;flex:1;opacity:0.6;">VS</div>
+            <div style="text-align:center;flex:1;">
+              <div style="font-size:10px;opacity:0.7;">Opponent</div>
+              <div style="font-weight:700;color:var(--purple);font-size:13px;">${GameCache.match.playerCorrectCount[opponentId]} ✓</div>
+              <div style="font-size:9px;opacity:0.6;">Words: ${GameCache.match.playerCorrectCount[opponentId]}</div>
+              <div style="font-size:9px;opacity:0.6;">Streak: ${GameCache.match.playerStreaks[opponentId]}</div>
+            </div>
           </div>
-          <div style="text-align:center;">
-            <div style="font-size:11px;opacity:0.7;">Opponent</div>
-            <div style="font-weight:700;color:var(--purple);">${GameCache.match.playerCorrectCount[opponentId]} words</div>
-            <div style="font-size:10px;opacity:0.6;">Streak: ${GameCache.match.playerStreaks[opponentId]}</div>
+          ${mmrDisplay}
+          <div style="margin-top:6px;font-weight:700;font-size:12px;color:${winning ? 'var(--success)' : losing ? 'var(--danger)' : 'var(--warning)'};">
+            ${winning ? '🏆 You\'re winning!' : losing ? '📉 You\'re behind!' : '🤝 Tied!'} 
           </div>
-        </div>
-        <div style="font-size:13px;opacity:0.85;">
-          ${winning ? '🏆 You\'re winning!' : losing ? '📉 You\'re behind!' : '🤝 It\'s a tie!'} 
-          Form a valid word from these letters
         </div>
       `;
       
