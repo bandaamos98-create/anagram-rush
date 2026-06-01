@@ -166,9 +166,17 @@
       <div class="floating float1"></div><div class="floating float2"></div>
       <div class="logo"><h1>AMOS' ANAGRAM RUSH</h1><p>Premium Multiplayer Word Battles</p></div>
       <div class="login-card glass">
-        <button class="btn google-btn" id="googleLogin" style="display:flex;align-items:center;justify-content:center;gap:12px;">
-          <img src="https://www.google.com/favicon.ico" style="width:20px;height:20px;filter:brightness(0) invert(1);" alt="G">Continue with Google
+        <div style="margin-bottom:24px;text-align:center;">
+          <div style="font-size:64px;margin-bottom:16px;">🎮</div>
+          <h2 style="margin:0 0 8px 0;">Welcome Back!</h2>
+          <p style="margin:0;opacity:0.7;font-size:14px;">Sign in to continue your word battle journey</p>
+        </div>
+        <button class="btn google-btn" id="googleLogin" style="display:flex;align-items:center;justify-content:center;gap:12px;width:100%;padding:16px;font-size:16px;">
+          <img src="https://www.google.com/favicon.ico" style="width:24px;height:24px;filter:brightness(0) invert(1);" alt="G">Continue with Google
         </button>
+        <div style="margin-top:20px;text-align:center;font-size:12px;opacity:0.6;">
+          <p>By signing in, you agree to our Terms of Service</p>
+        </div>
       </div>
     </div>
 
@@ -210,6 +218,9 @@
           </div>
           <div style="margin-top:18px;">
             <button class="leader-secondary" style="width:100%;padding:16px;" onclick="openAchievements()">🏆 Achievements</button>
+          </div>
+          <div style="margin-top:18px;">
+            <button class="leader-secondary" style="width:100%;padding:16px;" onclick="openShop()">🪙 Coin Shop</button>
           </div>
           <div style="margin-top:18px; display:flex; gap:10px;">
             <button class="leader-secondary" style="flex:1;padding:16px;" onclick="openOnlinePlayers()">🟢 Players Online</button>
@@ -350,6 +361,21 @@
         <div class="icon-btn" onclick="closeModal('drawsModal')">✕</div>
       </div>
       <div id="drawsContent"></div>
+    </div>
+  </div>
+
+  <div class="modal" id="shopModal">
+    <div class="modal-content glass">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+        <div class="modal-title">Coin Shop</div>
+        <div class="icon-btn" onclick="closeModal('shopModal')">✕</div>
+      </div>
+      <div style="text-align:center;margin-bottom:20px;">
+        <div style="font-size:48px;margin-bottom:10px;">🪙</div>
+        <div style="font-size:32px;font-weight:800;color:var(--warning);">${GameCache.user.coins || 0}</div>
+        <div style="font-size:14px;opacity:0.7;">Your Coins</div>
+      </div>
+      <div id="shopContent" style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px;"></div>
     </div>
   </div>
 
@@ -663,9 +689,8 @@
           const activeChatId = document.getElementById('socialModal').dataset.activeChatId;
           if (activeChatId === p.new.from_user_id) {
             const chatBody = document.getElementById('chatBody');
-            const chatInput = document.getElementById('chatInput');
-            // Only append if user is not currently typing (to prevent keyboard closing on mobile)
-            if (chatBody && document.activeElement !== chatInput) {
+            // Always append message to prevent missing messages
+            if (chatBody) {
               const p = GameCache.profiles[p.new.from_user_id] || { avatar_url: avatars[0] };
               const msgHtml = `<div style="display:flex;align-items:flex-end;gap:8px;margin-bottom:8px;"><img src="${p.avatar_url || avatars[0]}" style="width:28px;height:28px;border-radius:50%;"><div class="chat-bubble them" style="margin:0;">${p.new.text}</div></div>`;
               chatBody.insertAdjacentHTML('beforeend', msgHtml);
@@ -792,6 +817,27 @@
           }
           updateBadges(); refreshOpenSocialView();
         })
+        // Profiles: UPDATE for name/avatar changes
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles' }, async (p) => {
+          console.log('[Realtime] Profile updated:', p.new);
+          // Update profile cache
+          GameCache.profiles[p.new.id] = p.new;
+          // If it's the current user's profile, update GameCache.user and UI
+          if (p.new.id === currentUserId) {
+            GameCache.user = { ...GameCache.user, ...p.new };
+            // Update UI elements
+            document.getElementById("headerName").innerText = p.new.display_name || "Player";
+            document.getElementById("headerAvatar").src = p.new.avatar_url || avatars[0];
+            document.getElementById("mmr").innerText = p.new.mmr || 0;
+            document.getElementById("wins").innerText = p.new.wins || 0;
+            document.getElementById("losses").innerText = p.new.losses || 0;
+            document.getElementById("draws").innerText = p.new.draws || 0;
+            document.getElementById("leagueBadge").innerText = `💎 ${getLeague(p.new.mmr || 0)}`;
+            document.getElementById("headerRank").innerText = `${getLeague(p.new.mmr || 0)} League`;
+          }
+          // Refresh open social view if it's showing this profile
+          refreshOpenSocialView();
+        })
         .subscribe((status) => {
           console.log('[Realtime] DB channel status:', status);
         });
@@ -908,6 +954,51 @@
 
     function openHowToPlay() {
       openModal('howToPlayModal');
+    }
+
+    function openShop() {
+      const shopContent = document.getElementById('shopContent');
+      const coins = GameCache.user.coins || 0;
+
+      const shopItems = [
+        { id: 'avatar1', name: 'Premium Avatar 1', icon: '👑', price: 100, description: 'Unlock premium avatar' },
+        { id: 'avatar2', name: 'Premium Avatar 2', icon: '🎭', price: 150, description: 'Unlock premium avatar' },
+        { id: 'avatar3', name: 'Premium Avatar 3', icon: '🦊', price: 200, description: 'Unlock premium avatar' },
+        { id: 'xp_boost', name: 'XP Boost', icon: '⚡', price: 50, description: '2x XP for next match' },
+        { id: 'streak_protect', name: 'Streak Protect', icon: '🛡️', price: 75, description: 'Protect your streak' },
+        { id: 'hint', name: 'Hint Power-up', icon: '💡', price: 25, description: 'Get a hint in game' }
+      ];
+
+      shopContent.innerHTML = shopItems.map(item => {
+        const canAfford = coins >= item.price;
+        return `
+          <div style="background:rgba(255,255,255,0.05);padding:16px;border-radius:12px;text-align:center;opacity:${canAfford ? 1 : 0.5};">
+            <div style="font-size:32px;margin-bottom:8px;">${item.icon}</div>
+            <div style="font-weight:700;margin-bottom:4px;">${item.name}</div>
+            <div style="font-size:12px;opacity:0.7;margin-bottom:8px;">${item.description}</div>
+            <div style="font-size:16px;font-weight:800;color:var(--warning);margin-bottom:8px;">🪙 ${item.price}</div>
+            <button class="btn modern" style="width:100%;padding:8px;font-size:12px;" ${canAfford ? '' : 'disabled'} onclick="buyItem('${item.id}', ${item.price})">
+              ${canAfford ? 'Buy' : 'Not enough coins'}
+            </button>
+          </div>
+        `;
+      }).join('');
+
+      openModal('shopModal');
+    }
+
+    function buyItem(itemId, price) {
+      if (GameCache.user.coins < price) {
+        alert('Not enough coins!');
+        return;
+      }
+
+      GameCache.user.coins -= price;
+      const coinsDisplay = document.getElementById('coinsDisplay');
+      if (coinsDisplay) coinsDisplay.innerText = GameCache.user.coins;
+
+      alert('Item purchased! (This is a demo - items are not saved)');
+      openShop(); // Refresh shop
     }
 
     function openNotifications() {
@@ -1534,6 +1625,14 @@
     function createMatchPayload(invite) {
       const duration = 180; // 3 minutes in seconds
       const initialPuzzle = generateLetters(6);
+      // Generate all puzzles upfront to ensure both players have the same puzzles
+      const puzzles = [initialPuzzle];
+      for (let i = 0; i < 20; i++) {
+        puzzles.push(generateLetters(6));
+      }
+
+      const matchStartTimestamp = Date.now() + 3000; // Start 3 seconds from now to allow for sync
+
       return {
         matchId: `match-${invite.id}-${Date.now()}`,
         inviteId: invite.id,
@@ -1556,7 +1655,7 @@
           [invite.from_user_id]: 0,
           [invite.to_user_id]: 0
         },
-        puzzles: [initialPuzzle],
+        puzzles: puzzles, // All puzzles generated upfront
         playerScores: {
           [invite.from_user_id]: 0,
           [invite.to_user_id]: 0
@@ -1577,8 +1676,8 @@
           [invite.from_user_id]: 0,
           [invite.to_user_id]: 0
         },
-        startedAt: Date.now(),
-        endsAt: Date.now() + (duration * 1000),
+        startedAt: matchStartTimestamp, // Synchronized start time
+        endsAt: matchStartTimestamp + (duration * 1000), // Synchronized end time
         status: 'active'
       };
     }
@@ -1590,31 +1689,70 @@
         ...payload,
         timer: null
       };
-      document.getElementById('dashboardPage').classList.add('hidden');
-      document.getElementById('gameScreen').classList.remove('hidden');
-      renderMatchUI();
+
+      // Show countdown before game starts
+      const now = Date.now();
+      const timeUntilStart = Math.max(0, GameCache.match.startedAt - now);
+
+      if (timeUntilStart > 0) {
+        // Show countdown
+        document.getElementById('dashboardPage').classList.add('hidden');
+        document.getElementById('gameScreen').classList.remove('hidden');
+        document.getElementById('gameScreen').innerHTML = `
+          <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;background:linear-gradient(135deg,var(--blue),var(--purple));color:white;">
+            <h1 style="font-size:48px;margin-bottom:20px;">Game Starting In</h1>
+            <div id="countdown" style="font-size:120px;font-weight:800;">${Math.ceil(timeUntilStart / 1000)}</div>
+            <p style="font-size:18px;opacity:0.8;">Get Ready!</p>
+          </div>
+        `;
+
+        const countdownInterval = setInterval(() => {
+          const remaining = Math.max(0, GameCache.match.startedAt - Date.now());
+          const countdownEl = document.getElementById('countdown');
+          if (countdownEl) {
+            countdownEl.innerText = Math.ceil(remaining / 1000);
+          }
+
+          if (remaining <= 0) {
+            clearInterval(countdownInterval);
+            // Game starts now
+            renderMatchUI();
+            startGameTimer();
+          }
+        }, 100);
+      } else {
+        // Game should start immediately
+        document.getElementById('dashboardPage').classList.add('hidden');
+        document.getElementById('gameScreen').classList.remove('hidden');
+        renderMatchUI();
+        startGameTimer();
+      }
 
       // Update presence to indicate player is in a game
       trackPresence('online');
+    }
 
+    function startGameTimer() {
       if (GameCache.match.timer) clearInterval(GameCache.match.timer);
       GameCache.match.timer = setInterval(() => {
         const remaining = Math.max(0, Math.round((GameCache.match.endsAt - Date.now()) / 1000));
         const minutes = Math.floor(remaining / 60);
         const seconds = remaining % 60;
         const timeDisplay = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-        
+
         // Update timer displays without re-rendering entire UI
-        document.getElementById('timer').innerText = remaining;
-        document.getElementById('roundCount').innerText = timeDisplay;
-        
+        const timerEl = document.getElementById('timer');
+        const roundCountEl = document.getElementById('roundCount');
+        if (timerEl) timerEl.innerText = remaining;
+        if (roundCountEl) roundCountEl.innerText = timeDisplay;
+
         // Update opponent score if changed (check if opponent made progress)
         const opponentId = GameCache.match.from_user_id === currentUserId ? GameCache.match.to_user_id : GameCache.match.from_user_id;
         const oppScoreEl = document.getElementById('oppScore');
         if (oppScoreEl && oppScoreEl.innerText != GameCache.match.playerScores[opponentId]) {
           oppScoreEl.innerText = GameCache.match.playerScores[opponentId];
         }
-        
+
         if (remaining <= 0) {
           clearInterval(GameCache.match.timer);
           finishMatch(false);
@@ -1750,6 +1888,20 @@
       const neededXP = getLevelXP(currentLevel + 1);
       if (GameCache.user.xp >= neededXP) {
         GameCache.user.level++;
+        // Update level display in real-time
+        const levelDisplay = document.getElementById('levelDisplay');
+        if (levelDisplay) levelDisplay.innerText = GameCache.user.level;
+      }
+
+      // Update XP progress in real-time
+      const xpProgress = getXPProgress();
+      const xpBar = document.getElementById('xpBar');
+      const xpText = document.getElementById('xpText');
+      if (xpBar) xpBar.style.width = `${xpProgress}%`;
+      if (xpText) {
+        const currentXP = GameCache.user.xp - getLevelXP(GameCache.user.level);
+        const neededXP = getLevelXP(GameCache.user.level + 1) - getLevelXP(GameCache.user.level);
+        xpText.innerText = `${Math.max(0, currentXP)} / ${neededXP}`;
       }
       
       // Calculate MVP
@@ -1845,6 +1997,10 @@
           draws: GameCache.user.draws,
           rank_points: GameCache.user.rank_points || 0
         };
+
+        // Note: XP is not saved to database as it's not in the schema
+        // XP is tracked client-side in GameCache.user.xp
+        console.log('[Profile] XP is client-side only, not saved to database:', GameCache.user.xp);
         
         if (isRanked) {
           updateData.mmr = GameCache.user.mmr;
@@ -1910,10 +2066,10 @@
         startSinglePlayer();
         return;
       }
-      
+
       // For quick/ranked matches, show searching UI
       alert(`Searching for ${mode} match...`);
-      
+
       // In a real implementation, this would use a matchmaking queue
       // For now, we'll simulate by checking for online players
       const onlinePlayers = Object.keys(GameCache.onlineUsers).filter(id => id !== currentUserId);
@@ -1921,19 +2077,38 @@
         alert('No players online. Try again later or play single player.');
         return;
       }
-      
-      // Simulate matchmaking by picking a random online player
-      const randomPlayerId = onlinePlayers[Math.floor(Math.random() * onlinePlayers.length)];
+
+      // For ranked matches, match with players of similar MMR
+      let targetPlayerId;
+      if (mode === 'ranked') {
+        // Find players with similar MMR (within 200 MMR)
+        const myMMR = GameCache.user.mmr || 0;
+        const suitablePlayers = onlinePlayers.filter(id => {
+          const playerMMR = GameCache.profiles[id]?.mmr || 0;
+          return Math.abs(playerMMR - myMMR) <= 200;
+        });
+
+        if (suitablePlayers.length > 0) {
+          targetPlayerId = suitablePlayers[Math.floor(Math.random() * suitablePlayers.length)];
+        } else {
+          // If no suitable players, pick any online player
+          targetPlayerId = onlinePlayers[Math.floor(Math.random() * onlinePlayers.length)];
+        }
+      } else {
+        // Quick match - pick any online player
+        targetPlayerId = onlinePlayers[Math.floor(Math.random() * onlinePlayers.length)];
+      }
+
       const fakeInvite = {
         id: `match-${Date.now()}`,
         from_user_id: currentUserId,
-        to_user_id: randomPlayerId,
+        to_user_id: targetPlayerId,
         mode: mode
       };
-      
+
       const matchPayload = createMatchPayload(fakeInvite);
       startMatchSession(matchPayload);
-      
+
       // Broadcast match start to other player
       try {
         socialChannel.send({ type: 'broadcast', event: 'match_start', payload: matchPayload });
