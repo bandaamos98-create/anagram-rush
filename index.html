@@ -1063,6 +1063,8 @@
     function openFriends(){
       setSocialModalFullscreen(false);
       document.getElementById('socialTitle').innerText = "Friends";
+      // Reset active chat ID when opening friends list
+      document.getElementById('socialModal').dataset.activeChatId = "";
       const cont = document.getElementById('socialContent');
       cont.innerHTML = `<div style="margin-bottom:18px;"><div style="display:flex;gap:10px;"><input id="friendSearch" class="answer-input modern" style="flex:1;" placeholder="Name or email..." /><button class="btn modern" style="width:100px;" onclick="searchFriend()">Search</button></div><div id="searchResult" style="margin-top:12px;"></div></div><div id="friendsList"></div>`;
       renderFriendsList();
@@ -1072,6 +1074,7 @@
     function openMessages(){
       setSocialModalFullscreen(false);
       document.getElementById('socialTitle').innerText = "Messages";
+      // Reset active chat ID when opening messages list
       document.getElementById('socialModal').dataset.activeChatId = "";
       const cont = document.getElementById('socialContent');
       const threads = {};
@@ -1149,7 +1152,11 @@
     };
 
     function openAboutModal(){ openModal("aboutModal"); }
-    function closeSocialModal() { setSocialModalFullscreen(false); closeModal('socialModal'); document.getElementById('socialModal').dataset.activeChatId = ""; }
+    function closeSocialModal() {
+      setSocialModalFullscreen(false);
+      closeModal('socialModal');
+      document.getElementById('socialModal').dataset.activeChatId = "";
+    }
     function getLeague(mmr){ 
       if(mmr >= 3000) return "Master";
       if(mmr >= 2500) return "Diamond";
@@ -1196,10 +1203,8 @@
       const unreadMsgs = GameCache.messages.filter(m => m.to_user_id === currentUserId && (!getLastSeen(m.from_user_id) || new Date(m.created_at) > new Date(getLastSeen(m.from_user_id)))).length;
       const unreadInvs = GameCache.invites.length + GameCache.friendRequests.length;
       const mB = document.getElementById('msgBadge'); if(unreadMsgs > 0) { mB.innerText = unreadMsgs; mB.classList.remove('hidden'); } else mB.classList.add('hidden');
-      // Only show invites badge if invites modal is not currently open
-      const socialModal = document.getElementById('socialModal');
-      const isInvitesOpen = socialModal.classList.contains('active') && document.getElementById('socialTitle').innerText === "Invites";
-      const iB = document.getElementById('invBadge'); if(unreadInvs > 0 && !isInvitesOpen) { iB.innerText = unreadInvs; iB.classList.remove('hidden'); } else iB.classList.add('hidden');
+      // Show invites badge regardless of modal state
+      const iB = document.getElementById('invBadge'); if(unreadInvs > 0) { iB.innerText = unreadInvs; iB.classList.remove('hidden'); } else iB.classList.add('hidden');
       document.getElementById('headerNotifDot').style.display = GameCache.notifications.length > 0 ? 'block' : 'none';
     }
     function renderLeaderboardPreview(){
@@ -1498,6 +1503,8 @@
 
     async function openInvites(){
       document.getElementById('socialTitle').innerText = "Invites";
+      // Reset active chat ID when opening invites
+      document.getElementById('socialModal').dataset.activeChatId = "";
       const cont = document.getElementById('socialContent');
 
       // Load invites from database instead of using cache
