@@ -680,22 +680,24 @@
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `to_user_id=eq.${currentUserId}` }, async (p) => {
           console.log('[Realtime] New message received from database:', p.new);
           if (!GameCache.profiles[p.new.from_user_id]) await fetchProfile(p.new.from_user_id);
+          if (!p.new.created_at) p.new.created_at = new Date().toISOString();
           // Prevent duplicate messages in cache
           if (!GameCache.messages.some(m => m.id === p.new.id)) {
             GameCache.messages.unshift(p.new);
+          }
+          // Ensure message cache and unread count stay accurate
+          const activeChatId = document.getElementById('socialModal').dataset.activeChatId;
+          if (activeChatId === p.new.from_user_id) {
+            await loadMessagesFromDatabase(p.new.from_user_id);
+          } else {
+            await loadMessagesFromDatabase(p.new.from_user_id).catch(() => {});
+            refreshOpenSocialView();
           }
           // Always update badges when receiving a message
           updateBadges();
           // Always show toast notification when receiving a message
           const sender = GameCache.profiles[p.new.from_user_id]?.display_name || 'Someone';
           showToast('message', `New message from ${sender}`, p.new.text, () => viewChat(p.new.from_user_id));
-          // If chat with this user is open, reload the conversation so live updates always appear
-          const activeChatId = document.getElementById('socialModal').dataset.activeChatId;
-          if (activeChatId === p.new.from_user_id) {
-            await loadMessagesFromDatabase(p.new.from_user_id);
-          } else {
-            refreshOpenSocialView();
-          }
         })
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `from_user_id=eq.${currentUserId}` }, async (p) => {
           console.log('[Realtime] Message sent confirmation from database:', p.new);
@@ -720,6 +722,7 @@
           if (!GameCache.invites.some(i => i.id === p.new.id)) {
             GameCache.invites.unshift(p.new);
           }
+          await loadInvitesFromDatabase().catch(() => {});
           updateBadges();
           refreshOpenSocialView();
           // Always show toast notification when receiving an invite
@@ -736,7 +739,7 @@
           updateBadges();
           refreshOpenSocialView();
         })
-        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'game_invites' }, (p) => {
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'game_invites' }, async (p) => {
           console.log('[Realtime] Game invite updated:', p.new);
           if (p.new.from_user_id !== currentUserId && p.new.to_user_id !== currentUserId) return;
           const idx = GameCache.invites.findIndex(i => i.id === p.new.id);
@@ -746,6 +749,7 @@
           } else {
             if (idx !== -1) GameCache.invites.splice(idx, 1);
           }
+          await loadInvitesFromDatabase().catch(() => {});
           updateBadges(); refreshOpenSocialView();
         })
         // Friend Requests: INSERT for received requests
@@ -1202,7 +1206,17 @@
       }catch(e){ console.warn('showApp error', e); }
     }
     function updateBadges(){
-      const unreadMsgs = GameCache.messages.filter(m => m.to_user_id === currentUserId && (!getLastSeen(m.from_user_id) || new Date(m.created_at) > new Date(getLastSeen(m.from_user_id)))).length;
+      const unreadMsgs = GameCache.messages.filter(m => {
+        if (m.to_user_id !== currentUserId) return false;
+        const lastSeen = getLastSeen(m.from_user_id);
+        if (!lastSeen) return true;
+        const messageTime = new Date(m.created_at);
+        const lastSeenTime = new Date(lastSeen);
+        if (isNaN(messageTime.getTime())) {
+          return true;
+        }
+        return messageTime > lastSeenTime;
+      }).length;
       const unreadInvs = GameCache.invites.length + GameCache.friendRequests.length;
       console.log('[Badges] Updating - unreadMsgs:', unreadMsgs, 'unreadInvs:', unreadInvs);
       const mB = document.getElementById('msgBadge');
@@ -1652,6 +1666,9 @@
         return;
       }
 
+      if (!data[0].created_at) {
+        data[0].created_at = new Date().toISOString();
+      }
       console.log('[Message] Message successfully inserted with ID:', data[0].id);
 
       // Add to cache
@@ -1690,16 +1707,24 @@
         return [];
       }
 
+      const ensureCreatedAt = (msg) => {
+        if (!msg.created_at || isNaN(new Date(msg.created_at).getTime())) {
+          msg.created_at = new Date().toISOString();
+        }
+        return msg;
+      };
+      const cleanedData = (data || []).map(ensureCreatedAt);
+
       const conversationKey = (message) => {
         return (message.from_user_id === currentUserId && message.to_user_id === otherId) ||
                (message.to_user_id === currentUserId && message.from_user_id === otherId);
       };
-      const conversationMessages = (data && data.length > 0) ? data : GameCache.messages.filter(conversationKey);
+      const conversationMessages = cleanedData.length > 0 ? cleanedData : GameCache.messages.filter(conversationKey);
 
       // Replace cached messages for this conversation only when DB returns results
-      if (data && data.length > 0) {
+      if (cleanedData.length > 0) {
         GameCache.messages = GameCache.messages.filter(m => !conversationKey(m));
-        GameCache.messages.push(...data);
+        GameCache.messages.push(...cleanedData);
       }
       updateBadges();
 
