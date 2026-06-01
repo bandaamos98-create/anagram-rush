@@ -1427,20 +1427,11 @@
       const currentUser = { username: GameCache.user.display_name || 'Me', id: currentUserId };
       const receiverUsername = GameCache.profiles[toId]?.display_name || 'Friend';
       const receiverId = toId;
-      const supabase = sb;
-
-      // Immediately append message to chat body for sender
-      const chatBody = document.getElementById('chatBody');
-      if (chatBody) {
-        const msgHtml = `<div style="display:flex;align-items:flex-end;gap:8px;margin-bottom:8px;flex-direction:row-reverse;"><img src="${GameCache.user.avatar_url || avatars[0]}" style="width:28px;height:28px;border-radius:50%;"><div class="chat-bubble me" style="margin:0;">${messageText}</div></div>`;
-        chatBody.insertAdjacentHTML('beforeend', msgHtml);
-        chatBody.scrollTop = chatBody.scrollHeight;
-      }
 
       // Clear input first to prevent duplicate sends
       chatInput.value = '';
 
-      const { data, error } = await supabase
+      const { data, error } = await sb
         .from('messages')
         .insert([
           {
@@ -1453,9 +1444,22 @@
         ])
         .select();
 
-      console.log(data);
-      console.log(error);
-      if (error) { console.error('sendMsg error', error); chatInput.value = messageText; return; }
+      console.log('Message sent:', data);
+      console.log('Message error:', error);
+      if (error) {
+        console.error('sendMsg error', error);
+        chatInput.value = messageText;
+        alert('Failed to send message. Please try again.');
+        return;
+      }
+
+      // Immediately append message to chat body for sender
+      const chatBody = document.getElementById('chatBody');
+      if (chatBody) {
+        const msgHtml = `<div style="display:flex;align-items:flex-end;gap:8px;margin-bottom:8px;flex-direction:row-reverse;"><img src="${GameCache.user.avatar_url || avatars[0]}" style="width:28px;height:28px;border-radius:50%;"><div class="chat-bubble me" style="margin:0;">${messageText}</div></div>`;
+        chatBody.insertAdjacentHTML('beforeend', msgHtml);
+        chatBody.scrollTop = chatBody.scrollHeight;
+      }
 
       // Maintain focus after sending
       chatInput.focus();
@@ -2099,20 +2103,26 @@
         targetPlayerId = onlinePlayers[Math.floor(Math.random() * onlinePlayers.length)];
       }
 
-      const fakeInvite = {
-        id: `match-${Date.now()}`,
+      // Send a real game invite to the database
+      const { data, error } = await sb.from('game_invites').insert({
         from_user_id: currentUserId,
         to_user_id: targetPlayerId,
-        mode: mode
-      };
+        mode: mode,
+        status: 'pending'
+      }).select().single();
 
-      const matchPayload = createMatchPayload(fakeInvite);
-      startMatchSession(matchPayload);
+      if (error) {
+        console.error('Failed to send game invite:', error);
+        alert('Failed to send game invite. Please try again.');
+        return;
+      }
 
-      // Broadcast match start to other player
-      try {
-        socialChannel.send({ type: 'broadcast', event: 'match_start', payload: matchPayload });
-      } catch(e) {}
+      if (data) {
+        GameCache.invites.unshift(data);
+        showToast('invite', 'Game Invite Sent', `Your ${mode} match invite has been sent to ${GameCache.profiles[targetPlayerId]?.display_name || 'Player'}.`);
+        updateBadges();
+        openInvites();
+      }
     }
     
     function startSinglePlayer() {
