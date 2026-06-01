@@ -610,6 +610,11 @@
       GameCache.leaderboard = (leaders.data || []).map(p => ({ ...p, mmr: 0 }));
       GameCache.friends = (friends.data || []).map(f => f.friend_id);
       GameCache.leaderboard.forEach(p => GameCache.profiles[p.id] = { ...p, mmr: 0 });
+      console.log('[Messages] Loaded rows:', GameCache.messages);
+      console.log('[Messages] Current user:', currentUserId);
+      const incomingCount = GameCache.messages.filter(m => m.to_user_id === currentUserId).length;
+      const outgoingCount = GameCache.messages.filter(m => m.from_user_id === currentUserId).length;
+      console.log('[Messages] Incoming:', incomingCount, 'Outgoing:', outgoingCount);
       const neededIds = new Set();
       GameCache.messages.forEach(m => { neededIds.add(m.from_user_id); neededIds.add(m.to_user_id); });
       GameCache.friends.forEach(fid => neededIds.add(fid));
@@ -1082,6 +1087,9 @@
       document.getElementById('socialTitle').innerText = "Messages";
       // Reset active chat ID when opening messages list
       document.getElementById('socialModal').dataset.activeChatId = "";
+      console.log('[OpenMessages] currentUserId:', currentUserId);
+      console.log('[OpenMessages] GameCache.messages count:', GameCache.messages.length);
+      console.log('[OpenMessages] GameCache.messages sample:', GameCache.messages.slice(0,5));
       const cont = document.getElementById('socialContent');
       const threads = {};
       GameCache.messages.forEach(m => {
@@ -1208,11 +1216,26 @@
       }catch(e){ console.warn('showApp error', e); }
     }
     function updateBadges(){
-      // Simplified: count all received messages as unread
-      const unreadMsgs = GameCache.messages.filter(m => m.to_user_id === currentUserId).length;
+      // Count unread messages using same logic as openMessages
+      const threads = {};
+      GameCache.messages.forEach(m => {
+        const otherId = m.from_user_id === currentUserId ? m.to_user_id : m.from_user_id;
+        if (!threads[otherId]) threads[otherId] = { unread: 0 };
+        if (m.to_user_id === currentUserId) {
+          const seen = getLastSeen(otherId);
+          if (!seen || new Date(m.created_at) > new Date(seen)) threads[otherId].unread++;
+        }
+      });
+      const unreadMsgs = Object.values(threads).reduce((sum, t) => sum + t.unread, 0);
+      const incomingMessages = GameCache.messages.filter(m => m.to_user_id === currentUserId);
+      const outgoingMessages = GameCache.messages.filter(m => m.from_user_id === currentUserId);
       const pendingInvites = GameCache.invites.filter(i => i && i.status === 'pending');
       const unreadInvs = pendingInvites.length + GameCache.friendRequests.length;
-      console.log('[Badges] Updating - unreadMsgs:', unreadMsgs, 'unreadInvs:', unreadInvs, 'messages:', GameCache.messages.length, 'invites:', pendingInvites.length, 'friendReqs:', GameCache.friendRequests.length);
+      console.log('[Badges] currentUserId:', currentUserId);
+      console.log('[Badges] thread keys:', Object.keys(threads));
+      console.log('[Badges] Updating - unreadMsgs:', unreadMsgs, 'unreadInvs:', unreadInvs, 'messages:', GameCache.messages.length, 'incoming:', incomingMessages.length, 'outgoing:', outgoingMessages.length, 'invites:', pendingInvites.length, 'friendReqs:', GameCache.friendRequests.length);
+      console.log('[Badges] Incoming sample:', incomingMessages.slice(0,5));
+      console.log('[Badges] LastSeen map:', LastSeen);
       const mB = document.getElementById('msgBadge');
       console.log('[Badges] msgBadge element:', mB);
       if(mB) {
@@ -1706,6 +1729,9 @@
         return msg;
       };
       const cleanedData = (data || []).map(ensureCreatedAt);
+      console.log('[Messages] Loaded rows for conversation:', otherId, 'count:', cleanedData.length);
+      console.log('[Messages] renderMessages called');
+      console.log('[Render] Messages passed to UI:', cleanedData);
 
       const conversationKey = (message) => {
         return (message.from_user_id === currentUserId && message.to_user_id === otherId) ||
