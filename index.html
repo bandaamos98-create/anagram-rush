@@ -1517,18 +1517,13 @@
 
       if (error) {
         console.error('[Invite] Failed to load invites:', error);
-        return;
+        return [];
       }
 
-      // Update cache with fresh data from database
-      const existingIds = new Set(GameCache.invites.map(i => i.id));
-      data.forEach(invite => {
-        if (!existingIds.has(invite.id)) {
-          GameCache.invites.push(invite);
-        }
-      });
-
-      return data || [];
+      // Replace cache with fresh invite state from database
+      GameCache.invites = data || [];
+      updateBadges();
+      return GameCache.invites;
     }
 
     async function openInvites(){
@@ -1543,7 +1538,7 @@
       document.getElementById('invBadge').classList.add('hidden');
 
       // Load invites from database after modal is open
-      const invites = await loadInvitesFromDatabase();
+      const invites = (await loadInvitesFromDatabase()) || GameCache.invites || [];
 
       const friendItems = GameCache.friendRequests.map(r => {
         const p = GameCache.profiles[r.from_user_id] || { display_name: 'Player', avatar_url: avatars[0] };
@@ -1692,22 +1687,27 @@
 
       if (error) {
         console.error('[Message] Failed to load messages:', error);
-        return;
+        return [];
       }
 
-      // Update cache with fresh data from database
-      const existingIds = new Set(GameCache.messages.map(m => m.id));
-      data.forEach(msg => {
-        if (!existingIds.has(msg.id)) {
-          GameCache.messages.push(msg);
-        }
-      });
+      const conversationKey = (message) => {
+        return (message.from_user_id === currentUserId && message.to_user_id === otherId) ||
+               (message.to_user_id === currentUserId && message.from_user_id === otherId);
+      };
+      const conversationMessages = (data && data.length > 0) ? data : GameCache.messages.filter(conversationKey);
+
+      // Replace cached messages for this conversation only when DB returns results
+      if (data && data.length > 0) {
+        GameCache.messages = GameCache.messages.filter(m => !conversationKey(m));
+        GameCache.messages.push(...data);
+      }
+      updateBadges();
 
       // Render chat UI
       const chatBody = document.getElementById('chatBody');
       if (chatBody) {
         const p = GameCache.profiles[otherId] || { avatar_url: avatars[0] };
-        chatBody.innerHTML = data.map(m => {
+        chatBody.innerHTML = conversationMessages.map(m => {
           const isMe = m.from_user_id === currentUserId;
           const sender = isMe ? { avatar_url: GameCache.user.avatar_url } : p;
           return `<div style="display:flex;align-items:flex-end;gap:8px;margin-bottom:8px;${isMe ? 'flex-direction:row-reverse;' : ''}"><img src="${sender.avatar_url || avatars[0]}" style="width:28px;height:28px;border-radius:50%;"><div class="chat-bubble ${isMe ? 'me' : 'them'}" style="margin:0;">${m.text}</div></div>`;
