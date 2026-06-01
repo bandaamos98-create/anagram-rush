@@ -785,7 +785,7 @@
 
     async function trackPresence(status) {
       if (!socialChannel) return;
-      await socialChannel.track({ userId: currentUserId, name: GameCache.user.display_name, avatar: GameCache.user.avatar_url, status: status });
+      await socialChannel.track({ userId: currentUserId, name: GameCache.user.display_name, avatar: GameCache.user.avatar_url, status: status, inGame: GameCache.match.active });
     }
 
     /* ========================================== SOCIAL ACTIONS ========================================== */
@@ -986,6 +986,9 @@
       GameCache.match.active = false;
       document.getElementById("gameScreen").classList.add("hidden");
       document.getElementById("dashboardPage").classList.remove("hidden");
+
+      // Update presence to indicate player is no longer in a game
+      trackPresence('online');
     }
     
     function preventQuit() {
@@ -1069,6 +1072,23 @@
 
     async function sendInvite(toId) {
       if (toId === currentUserId) return alert('You cannot invite yourself.');
+
+      // Check if player is online
+      const isOnline = GameCache.onlineUsers[toId] !== undefined;
+      if (!isOnline) {
+        return alert('This player is currently offline. You can only invite online players.');
+      }
+
+      // Check if player is already in a game
+      const isInGame = GameCache.match.active;
+      if (isInGame) {
+        return alert('You are already in a game. Finish your current match before inviting others.');
+      }
+
+      // Check if the invited player is already in a game (via broadcast status)
+      // We'll need to track this via presence or a separate mechanism
+      // For now, we'll send the invite and let the recipient check
+
       const { data, error } = await sb.from('game_invites').insert({ from_user_id: currentUserId, to_user_id: toId, mode: 'quick', status: 'pending' }).select().single();
       if (error) { console.error('Invite failed', error); return alert('Unable to send invite.'); }
       if (data) {
@@ -1116,6 +1136,32 @@
     async function respondGameInvite(id, status) {
       const invite = GameCache.invites.find(i => i.id === id);
       if (!invite) return;
+
+      if (status === 'accepted') {
+        const requesterId = invite.from_user_id;
+
+        // Check if requester is online
+        const isRequesterOnline = GameCache.onlineUsers[requesterId] !== undefined;
+        if (!isRequesterOnline) {
+          alert('The player who invited you is now offline. You cannot accept this invite.');
+          return;
+        }
+
+        // Check if current user is already in a game
+        if (GameCache.match.active) {
+          alert('You are already in a game. Finish your current match before accepting another invite.');
+          return;
+        }
+
+        // Check if requester is already in a game (via presence data)
+        // We'll track this via a broadcast mechanism
+        const requesterPresence = GameCache.onlineUsers[requesterId];
+        if (requesterPresence && requesterPresence[0] && requesterPresence[0].inGame) {
+          alert('The player who invited you is already in a game. You cannot accept this invite.');
+          return;
+        }
+      }
+
       await sb.from('game_invites').update({ status }).eq('id', id);
       GameCache.invites = GameCache.invites.filter(i => i.id !== id);
       updateBadges();
@@ -1387,6 +1433,10 @@
       document.getElementById('dashboardPage').classList.add('hidden');
       document.getElementById('gameScreen').classList.remove('hidden');
       renderMatchUI();
+
+      // Update presence to indicate player is in a game
+      trackPresence('online');
+
       if (GameCache.match.timer) clearInterval(GameCache.match.timer);
       GameCache.match.timer = setInterval(() => {
         const remaining = Math.max(0, Math.round((GameCache.match.endsAt - Date.now()) / 1000));
