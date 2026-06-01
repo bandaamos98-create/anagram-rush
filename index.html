@@ -208,9 +208,8 @@
             <div class="stat-box"><div class="stat-title">Losses</div><div class="stat-value" id="losses">0</div></div>
             <div class="stat-box"><div class="stat-title">Draws</div><div class="stat-value" id="draws">0</div></div>
           </div>
-          <div style="margin-top:18px; display:flex; gap:10px;">
-            <button class="leader-secondary" style="flex:1;padding:16px;" onclick="openDraws()">🤝 View Draws</button>
-            <button class="leader-secondary" style="flex:1;padding:16px;" onclick="openAchievements()">🏆 Achievements</button>
+          <div style="margin-top:18px;">
+            <button class="leader-secondary" style="width:100%;padding:16px;" onclick="openAchievements()">🏆 Achievements</button>
           </div>
           <div style="margin-top:18px; display:flex; gap:10px;">
             <button class="leader-secondary" style="flex:1;padding:16px;" onclick="openOnlinePlayers()">🟢 Players Online</button>
@@ -478,7 +477,7 @@
 
     /* ========================================== DATA ========================================== */
     async function loadProfile(){
-      let { data: profile } = await sb.from('profiles').select('*').eq('id', currentUserId).maybeSingle();
+      let { data: profile } = await sb.from('profiles').select('id, email, display_name, avatar_url, wins, losses, draws, mmr, rank_points, streak, league, created_at, updated_at').eq('id', currentUserId).maybeSingle();
       const { data: { user: authUser } } = await sb.auth.getUser();
       if(!profile) {
         const fallbackName = authUser?.user_metadata?.full_name || authUser?.email?.split('@')[0] || 'Player';
@@ -490,9 +489,9 @@
           wins: 0,
           losses: 0,
           draws: 0,
-          xp: 0,
-          level: 1,
+          rank_points: 0,
           streak: 0,
+          league: 'Bronze',
           email: authUser?.email || ''
         };
         console.log('[Profile] Creating new profile with payload:', insertPayload);
@@ -525,11 +524,14 @@
         GameCache.user = {
           ...profile,
           email: authUser?.email || profile.email || "",
-          xp: profile.xp || 0,
-          level: profile.level || 1,
-          coins: profile.coins || 0,
+          xp: 0,
+          level: 1,
+          coins: 0,
           streak: profile.streak || 0,
-          dailyStreak: profile.daily_streak || 0,
+          dailyStreak: 0,
+          lastDaily: null,
+          rank_points: profile.rank_points || 0,
+          league: profile.league || 'Bronze',
           mmr: 0 // Force MMR to 0
         };
         document.getElementById("headerName").innerText = profile.display_name || "Player";
@@ -572,7 +574,7 @@
         sb.from('game_invites').select('*').or(`to_user_id.eq.${currentUserId},from_user_id.eq.${currentUserId}`).eq('status', 'pending'),
         sb.from('friend_requests').select('*').eq('to_user_id', currentUserId).eq('status', 'pending'),
         sb.from('notifications').select('*').eq('user_id', currentUserId).eq('is_read', false),
-        sb.from('profiles').select('id, display_name, mmr, avatar_url, wins, losses, draws').order('mmr', {ascending: false}),
+        sb.from('profiles').select('id, display_name, mmr, avatar_url, wins, losses, draws, rank_points, streak, league').order('mmr', {ascending: false}),
         sb.from('friends').select('friend_id').eq('user_id', currentUserId)
       ]);
       GameCache.messages = msgs.data || [];
@@ -587,7 +589,7 @@
       GameCache.friends.forEach(fid => neededIds.add(fid));
       const missingIds = Array.from(neededIds).filter(id => !GameCache.profiles[id]);
       if (missingIds.length > 0) {
-        const { data: pData } = await sb.from('profiles').select('id, display_name, avatar_url, mmr').in('id', missingIds);
+        const { data: pData } = await sb.from('profiles').select('id, display_name, avatar_url, mmr, wins, losses, draws, rank_points, streak, league').in('id', missingIds);
         if (pData) pData.forEach(p => GameCache.profiles[p.id] = { ...p, mmr: 0 });
       }
       // Ensure created_at is present and parseable
@@ -848,7 +850,7 @@
     function setLastSeen(otherId, ts){ LastSeen[otherId] = ts; saveLastSeen(); }
 
     async function fetchProfile(id) {
-      const { data } = await sb.from('profiles').select('id, display_name, avatar_url, mmr').eq('id', id).maybeSingle();
+      const { data } = await sb.from('profiles').select('id, display_name, avatar_url, mmr, wins, losses, draws, rank_points, streak, league').eq('id', id).maybeSingle();
       if (data) GameCache.profiles[id] = { ...data, mmr: 0 };
     }
 
@@ -1521,11 +1523,9 @@
       
       alert(`🎁 Daily Reward Claimed!\n\n+${coins} Coins\n+${xp} XP\n🔥 ${GameCache.user.dailyStreak} Day Streak!`);
       
-      // Update database
+      // Update database (only update streak since daily_streak and last_daily don't exist)
       sb.from('profiles').update({
-        xp: GameCache.user.xp,
-        daily_streak: GameCache.user.dailyStreak,
-        last_daily: today
+        streak: GameCache.user.streak
       }).eq('id', currentUserId);
       
       loadProfile();
@@ -1839,12 +1839,11 @@
     async function updateProfileAfterMatch(result, isRanked, mmrChange) {
       try {
         const updateData = {
-          xp: GameCache.user.xp,
-          level: GameCache.user.level,
           wins: GameCache.user.wins,
           losses: GameCache.user.losses,
           streak: GameCache.user.streak,
-          draws: GameCache.user.draws
+          draws: GameCache.user.draws,
+          rank_points: GameCache.user.rank_points || 0
         };
         
         if (isRanked) {
@@ -1855,7 +1854,7 @@
         if (error) throw error;
         
         // Refresh leaderboard in real-time after match
-        const { data: updatedLeaderboard } = await sb.from('profiles').select('id, display_name, mmr, avatar_url, wins, losses, draws').order('mmr', {ascending: false});
+        const { data: updatedLeaderboard } = await sb.from('profiles').select('id, display_name, mmr, avatar_url, wins, losses, draws, rank_points, streak, league').order('mmr', {ascending: false});
         if (updatedLeaderboard) {
           GameCache.leaderboard = updatedLeaderboard;
           updatedLeaderboard.forEach(p => GameCache.profiles[p.id] = p);
