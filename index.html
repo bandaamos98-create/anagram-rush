@@ -576,7 +576,9 @@
           const activeChatId = document.getElementById('socialModal').dataset.activeChatId;
           if (activeChatId === p.new.from_user_id) {
             const chatBody = document.getElementById('chatBody');
-            if (chatBody) {
+            const chatInput = document.getElementById('chatInput');
+            // Only append if user is not currently typing (to prevent keyboard closing on mobile)
+            if (chatBody && document.activeElement !== chatInput) {
               const p = GameCache.profiles[p.new.from_user_id] || { avatar_url: avatars[0] };
               const msgHtml = `<div style="display:flex;align-items:flex-end;gap:8px;margin-bottom:8px;"><img src="${p.avatar_url || avatars[0]}" style="width:28px;height:28px;border-radius:50%;"><div class="chat-bubble them" style="margin:0;">${p.new.text}</div></div>`;
               chatBody.insertAdjacentHTML('beforeend', msgHtml);
@@ -600,7 +602,9 @@
           const activeChatId = document.getElementById('socialModal').dataset.activeChatId;
           if (activeChatId === p.new.to_user_id) {
             const chatBody = document.getElementById('chatBody');
-            if (chatBody) {
+            const chatInput = document.getElementById('chatInput');
+            // Only append if user is not currently typing (to prevent keyboard closing on mobile)
+            if (chatBody && document.activeElement !== chatInput) {
               const msgHtml = `<div style="display:flex;align-items:flex-end;gap:8px;margin-bottom:8px;flex-direction:row-reverse;"><img src="${GameCache.user.avatar_url || avatars[0]}" style="width:28px;height:28px;border-radius:50%;"><div class="chat-bubble me" style="margin:0;">${p.new.text}</div></div>`;
               chatBody.insertAdjacentHTML('beforeend', msgHtml);
               chatBody.scrollTop = chatBody.scrollHeight;
@@ -872,7 +876,7 @@
         const isMe = m.from_user_id === currentUserId;
         const sender = isMe ? { avatar_url: GameCache.user.avatar_url } : p;
         return `<div style="display:flex;align-items:flex-end;gap:8px;margin-bottom:8px;${isMe ? 'flex-direction:row-reverse;' : ''}"><img src="${sender.avatar_url || avatars[0]}" style="width:28px;height:28px;border-radius:50%;"><div class="chat-bubble ${isMe ? 'me' : 'them'}" style="margin:0;">${m.text}</div></div>`;
-      }).join('')}</div><div style="display:flex;gap:10px;margin-top:10px;"><input id="chatInput" class="answer-input modern" style="flex:1;" placeholder="Type your message..." /><button class="btn modern" style="width:90px;" onclick="sendMsg('${otherId}')">Send</button></div></div>`;
+      }).join('')}</div><div style="display:flex;gap:10px;margin-top:10px;"><input id="chatInput" class="answer-input modern" style="flex:1;" placeholder="Type your message..." inputmode="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" /><button class="btn modern" style="width:90px;" onclick="sendMsg('${otherId}')">Send</button></div></div>`;
       const cb = document.getElementById('chatBody'); cb.scrollTop = cb.scrollHeight;
     }
 
