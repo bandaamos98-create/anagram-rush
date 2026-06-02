@@ -61,7 +61,7 @@
     .nav-icon{ font-size:22px; }
     .badge-count{ position:absolute; top:-2px; right:-2px; background:var(--danger); color:white; font-size:10px; font-weight:800; padding:2px 6px; border-radius:10px; border:2px solid var(--card); animation:pop .3s; }
     .notification-dot{ position:absolute; top:8px; right:8px; width:12px; height:12px; background:var(--danger); border-radius:50%; border:2px solid var(--bg); display:none; }
-    .modal{ position:fixed; inset:0; background:rgba(0,0,0,.55); display:flex; align-items:flex-end; justify-content:center; z-index:999; opacity:0; pointer-events:none; transition:.3s; }
+    .modal{ position:fixed; inset:0; background:rgba(0,0,0,.55); display:flex; align-items:center; justify-content:center; z-index:10001; opacity:0; pointer-events:none; transition:.3s; }
     .modal.active{ opacity:1; pointer-events:auto; }
     .modal-content{ width:100%; max-width:520px; border-radius:30px 30px 0 0; padding:24px; max-height:90vh; overflow-y:auto; transform:translateY(100%); transition:.35s; }
     .modal.active .modal-content{ transform:translateY(0); }
@@ -940,6 +940,12 @@
       // Mark conversation as read locally by updating lastSeen timestamp
       const now = new Date().toISOString();
       setLastSeen(otherId, now);
+      // Mark all messages from this user as read
+      GameCache.messages.forEach(m => {
+        if (m.from_user_id === otherId && m.to_user_id === currentUserId) {
+          m.read = true;
+        }
+      });
       // notify other clients that we've read (so their UI can update if they track reads)
       try{ socialChannel.send({ type: 'broadcast', event: 'read_receipt', payload: { fromId: otherId, seen_at: now } }); }catch(e){}
       // Clear message badge since we're viewing the chat
@@ -1036,7 +1042,8 @@
     }
     function updateBadges(){
       // Count only incoming messages (to_user_id === currentUserId AND from_user_id !== currentUserId)
-      const unreadMsgs = GameCache.messages.filter(m => m.to_user_id === currentUserId && m.from_user_id !== currentUserId).length;
+      // Only count messages that haven't been read (we track this by checking if the conversation has been opened)
+      const unreadMsgs = GameCache.messages.filter(m => m.to_user_id === currentUserId && m.from_user_id !== currentUserId && !m.read).length;
       // Count only pending invites and friend requests
       const unreadInvs = GameCache.invites.filter(i => i.status === 'pending').length + GameCache.friendRequests.filter(r => r.status === 'pending').length;
       const mB = document.getElementById('msgBadge'); if(unreadMsgs > 0) { mB.innerText = unreadMsgs; mB.classList.remove('hidden'); } else mB.classList.add('hidden');
