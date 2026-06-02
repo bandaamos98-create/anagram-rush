@@ -493,7 +493,10 @@
     async function setupSession(userObj){
       if (currentUserId === userObj.id) return;
       currentUserId = userObj.id;
-      loadLastSeen();
+      // CRITICAL: Do NOT load LastSeen from localStorage - start fresh each session
+      console.log('[Setup] Starting fresh session with empty LastSeen - all badges will show');
+      LastSeen = {};
+      localStorage.removeItem('lastSeen_' + currentUserId);
       await Promise.all([loadProfile(), preloadData()]);
       setupRealtime();
       showApp();
@@ -597,7 +600,7 @@
       }catch(e){ console.warn('Debug messages fetch failed', e); }
       const [msgs, invs, friendReqs, notifs, leaders, friends] = await Promise.all([
         sb.from('messages').select('*').or(`to_user_id.eq.${currentUserId},from_user_id.eq.${currentUserId}`).order('created_at', {ascending: false}),
-        sb.from('game_invites').select('*').or(`to_user_id.eq.${currentUserId},from_user_id.eq.${currentUserId}`).eq('status', 'pending'),
+        sb.from('game_invites').select('*').eq('to_user_id', currentUserId).eq('status', 'pending'),
         sb.from('friend_requests').select('*').eq('to_user_id', currentUserId).eq('status', 'pending'),
         sb.from('notifications').select('*').eq('user_id', currentUserId).eq('is_read', false),
         sb.from('profiles').select('id, display_name, mmr, avatar_url, wins, losses, draws, rank_points, streak, league').order('mmr', {ascending: false}),
@@ -607,14 +610,19 @@
       GameCache.invites = invs.data || [];
       GameCache.friendRequests = friendReqs.data || [];
       GameCache.notifications = notifs.data || [];
+      console.log('[Preload] Invites loaded:', GameCache.invites.length, GameCache.invites);
+      console.log('[Preload] Friend requests loaded:', GameCache.friendRequests.length, GameCache.friendRequests);
       GameCache.leaderboard = (leaders.data || []).map(p => ({ ...p, mmr: 0 }));
       GameCache.friends = (friends.data || []).map(f => f.friend_id);
       GameCache.leaderboard.forEach(p => GameCache.profiles[p.id] = { ...p, mmr: 0 });
       console.log('[Messages] Loaded rows:', GameCache.messages);
-      console.log('[Messages] Current user:', currentUserId);
-      const incomingCount = GameCache.messages.filter(m => m.to_user_id === currentUserId).length;
-      const outgoingCount = GameCache.messages.filter(m => m.from_user_id === currentUserId).length;
-      console.log('[Messages] Incoming:', incomingCount, 'Outgoing:', outgoingCount);
+      console.log('[Messages] Current user:', currentUserId, 'type:', typeof currentUserId);
+      const incomingCount = GameCache.messages.filter(m => String(m.to_user_id) === String(currentUserId)).length;
+      const outgoingCount = GameCache.messages.filter(m => String(m.from_user_id) === String(currentUserId)).length;
+      console.log('[Messages] Incoming (to current user):', incomingCount, 'Outgoing (from current user):', outgoingCount);
+      GameCache.messages.forEach((m, idx) => {
+        console.log(`[Messages][${idx}]`, { id: m.id, from_id: m.from_user_id, from_type: typeof m.from_user_id, to_id: m.to_user_id, to_type: typeof m.to_user_id, is_incoming: String(m.to_user_id) === String(currentUserId) });
+      });
       const neededIds = new Set();
       GameCache.messages.forEach(m => { neededIds.add(m.from_user_id); neededIds.add(m.to_user_id); });
       GameCache.friends.forEach(fid => neededIds.add(fid));
@@ -913,11 +921,25 @@
     /* ========= lastSeen tracking (client-side fallback for read state) ========= */
     let LastSeen = {};
     function loadLastSeen(){
-      try{ LastSeen = JSON.parse(localStorage.getItem('lastSeen_' + currentUserId) || '{}') || {}; }catch(e){ LastSeen = {}; }
+      // DISABLED: Do not load from localStorage on startup
+      console.log('[LastSeen] loadLastSeen() disabled - using in-memory only');
+      LastSeen = {};
     }
-    function saveLastSeen(){ if(!currentUserId) return; localStorage.setItem('lastSeen_' + currentUserId, JSON.stringify(LastSeen)); }
-    function getLastSeen(otherId){ return LastSeen[otherId] || null; }
-    function setLastSeen(otherId, ts){ LastSeen[otherId] = ts; saveLastSeen(); }
+    function saveLastSeen(){ 
+      console.log('[LastSeen] saveLastSeen() - disabled, not persisting to localStorage');
+      // DISABLED: Do not persist LastSeen to localStorage
+      // Keep in-memory only so badges stay fresh across sessions
+    }
+    function getLastSeen(otherId){ 
+      const result = LastSeen[otherId] || null;
+      console.log('[LastSeen] getLastSeen(' + otherId + ') = ' + result);
+      return result;
+    }
+    function setLastSeen(otherId, ts){ 
+      console.log('[LastSeen] setLastSeen(' + otherId + ') = ' + ts);
+      LastSeen[otherId] = ts; 
+      saveLastSeen(); 
+    }
 
     async function fetchProfile(id) {
       const { data } = await sb.from('profiles').select('id, display_name, avatar_url, mmr, wins, losses, draws, rank_points, streak, league').eq('id', id).maybeSingle();
@@ -1088,26 +1110,60 @@
     function openMessages(){
       setSocialModalFullscreen(false);
       document.getElementById('socialTitle').innerText = "Messages";
-      // Reset active chat ID when opening messages list
       document.getElementById('socialModal').dataset.activeChatId = "";
-      console.log('[OpenMessages] currentUserId:', currentUserId);
-      console.log('[OpenMessages] GameCache.messages count:', GameCache.messages.length);
-      console.log('[OpenMessages] GameCache.messages sample:', GameCache.messages.slice(0,5));
+      console.log('[OpenMessages] currentUserId:', currentUserId, 'type:', typeof currentUserId);
+      
       const cont = document.getElementById('socialContent');
       const threads = {};
-      GameCache.messages.forEach(m => {
+      
+      // Add incoming messages to threads
+      GameCache.messages.forEach((m, idx) => {
         const otherId = m.from_user_id === currentUserId ? m.to_user_id : m.from_user_id;
-        if (!threads[otherId]) threads[otherId] = { last: m, unread: 0 };
-        if (m.to_user_id === currentUserId) {
-          const seen = getLastSeen(otherId);
-          if (!seen || new Date(m.created_at) > new Date(seen)) threads[otherId].unread++;
+        if (!threads[otherId]) threads[otherId] = { last: m, unread: 0, type: 'message' };
+        
+        const isIncoming = m.to_user_id === currentUserId;
+        const seen = getLastSeen(otherId);
+        
+        if (isIncoming) {
+          const messageTime = new Date(m.created_at);
+          const lastSeenTime = seen ? new Date(seen) : null;
+          const isUnread = !seen || messageTime > lastSeenTime;
+          if (isUnread) threads[otherId].unread++;
         }
       });
+      
+      // Add incoming game invites to threads with their own section
+      const incomingInvites = GameCache.invites.filter(i => String(i.to_user_id) === String(currentUserId) && i.status === 'pending');
+      console.log('[OpenMessages] Incoming game invites:', incomingInvites.length);
+      incomingInvites.forEach(inv => {
+        const otherId = inv.from_user_id;
+        if (!threads[otherId]) threads[otherId] = { unread: 0 };
+        threads[otherId].invite = inv;
+      });
+      
+      // Add incoming friend requests to threads
+      const incomingFriendReqs = GameCache.friendRequests.filter(r => String(r.to_user_id) === String(currentUserId) && r.status === 'pending');
+      console.log('[OpenMessages] Incoming friend requests:', incomingFriendReqs.length);
+      incomingFriendReqs.forEach(req => {
+        const otherId = req.from_user_id;
+        if (!threads[otherId]) threads[otherId] = { unread: 0 };
+        threads[otherId].friendRequest = req;
+      });
+      
+      console.log('[OpenMessages] Final threads with invites:', threads);
+      
       cont.innerHTML = Object.keys(threads).map(id => {
         const t = threads[id];
         const p = GameCache.profiles[id] || { display_name: `User_${id.slice(0,4)}`, avatar_url: avatars[0] };
-        return `<div class="social-item ${t.unread > 0 ? 'new' : ''}" onclick="viewChat('${id}')"><div style="display:flex;align-items:center;gap:12px;"><img src="${p.avatar_url || avatars[0]}" style="width:40px;height:40px;border-radius:50%;"><div style="font-weight:700">${p.display_name} ${t.unread > 0 ? `<span class='badge-count' style='position:static;margin-left:5px;'>${t.unread}</span>` : ''}</div></div><button class="leader-secondary">Open</button></div>`;
-      }).join('') || "<p style='text-align:center;padding:20px;opacity:0.5'>No messages</p>";
+        
+        // Build badge HTML for different types
+        let badgeHtml = '';
+        if (t.unread > 0) badgeHtml += `<span class='badge-count' style='position:static;margin-left:5px;color:red;font-weight:bold;'>${t.unread} msgs</span>`;
+        if (t.invite) badgeHtml += `<span class='badge-count' style='position:static;margin-left:5px;color:orange;font-weight:bold;'>INVITE</span>`;
+        if (t.friendRequest) badgeHtml += `<span class='badge-count' style='position:static;margin-left:5px;color:blue;font-weight:bold;'>FRIEND REQ</span>`;
+        
+        return `<div class="social-item ${t.unread > 0 || t.invite || t.friendRequest ? 'new' : ''}" onclick="viewChat('${id}')"><div style="display:flex;align-items:center;gap:12px;"><img src="${p.avatar_url || avatars[0]}" style="width:40px;height:40px;border-radius:50%;"><div style="font-weight:700">${p.display_name}${badgeHtml}</div></div><button class="leader-secondary">Open</button></div>`;
+      }).join('') || "<p style='text-align:center;padding:20px;opacity:0.5'>No messages or invites</p>";
       openModal('socialModal');
     }
 
@@ -1126,16 +1182,17 @@
       document.getElementById('socialTitle').innerText = `Chat with ${p.display_name}`;
       document.getElementById('socialModal').dataset.activeChatId = otherId;
       const cont = document.getElementById('socialContent');
-      // Mark conversation as read locally by updating lastSeen timestamp
+
+      // Load messages from database initially
+      cont.innerHTML = `<div style="display:flex;flex-direction:column;height:100%;"><div id="chatBody" style="flex:1;overflow-y:auto;padding-bottom:10px;"></div><div style="display:flex;gap:10px;margin-top:10px;"><input id="chatInput" class="answer-input modern" style="flex:1;" placeholder="Type your message..." inputmode="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" /><button class="btn modern" style="width:90px;" onclick="sendMsg('${otherId}')">Send</button></div></div>`;
+      await loadMessagesFromDatabase(otherId);
+      
+      // AFTER messages are loaded, mark this conversation as read for future unread calculations
       const now = new Date().toISOString();
       setLastSeen(otherId, now);
       // notify other clients that we've read (so their UI can update if they track reads)
       try{ socialChannel.send({ type: 'broadcast', event: 'read_receipt', payload: { fromId: otherId, seen_at: now } }); }catch(e){}
       updateBadges();
-
-      // Load messages from database initially
-      cont.innerHTML = `<div style="display:flex;flex-direction:column;height:100%;"><div id="chatBody" style="flex:1;overflow-y:auto;padding-bottom:10px;"></div><div style="display:flex;gap:10px;margin-top:10px;"><input id="chatInput" class="answer-input modern" style="flex:1;" placeholder="Type your message..." inputmode="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" /><button class="btn modern" style="width:90px;" onclick="sendMsg('${otherId}')">Send</button></div></div>`;
-      await loadMessagesFromDatabase(otherId);
     }
 
     async function handleAvatarUpload(e){
@@ -1220,18 +1277,64 @@
     }
     function updateBadges(){
       console.log('[Badge] Updating badges');
+      console.log('[Unread Debug] Current User:', currentUserId, 'type:', typeof currentUserId);
+      console.log('[Unread Debug] Messages:', GameCache.messages);
+      
+      // Debug: Print each message with detailed type info
+      GameCache.messages.forEach(m => {
+        console.log('[Unread Debug]', {
+          id: m.id,
+          from_user_id: m.from_user_id,
+          from_user_id_type: typeof m.from_user_id,
+          to_user_id: m.to_user_id,
+          to_user_id_type: typeof m.to_user_id,
+          read: m.read,
+          match_to_current: String(m.to_user_id) === String(currentUserId)
+        });
+      });
+      
+      // Count all incoming messages - use String comparison to avoid type mismatch
       const unreadMsgs = GameCache.messages.filter(m => {
-        if (String(m.to_user_id) !== String(currentUserId)) return false;
-        const lastSeen = getLastSeen(m.from_user_id);
-        if (!lastSeen) return true;
-        const messageTime = new Date(m.created_at);
-        const lastSeenTime = new Date(lastSeen);
-        return isNaN(messageTime.getTime()) ? true : messageTime > lastSeenTime;
+        const matches = String(m.to_user_id) === String(currentUserId);
+        if (matches) console.log('[Unread Debug] MATCH found for message:', m.id, 'to_user_id:', m.to_user_id);
+        return matches;
       }).length;
-      const unreadInvs = GameCache.invites.filter(i => String(i.to_user_id) === String(currentUserId) && i.status === 'pending').length;
-      const unreadFriendReqs = GameCache.friendRequests.filter(r => String(r.to_user_id) === String(currentUserId) && r.status === 'pending').length;
+      console.log('[Unread Debug] Calculated unreadMsgs:', unreadMsgs, 'total messages:', GameCache.messages.length);
+      
+      // Debug invites
+      console.log('[Invite Debug] Current User:', currentUserId, 'type:', typeof currentUserId);
+      console.log('[Invite Debug] Invites:', GameCache.invites);
+      
+      // Debug: Print each invite with detailed type info
+      GameCache.invites.forEach(i => {
+        console.log('[Invite Debug]', {
+          id: i.id,
+          from_user_id: i.from_user_id,
+          from_user_id_type: typeof i.from_user_id,
+          to_user_id: i.to_user_id,
+          to_user_id_type: typeof i.to_user_id,
+          status: i.status,
+          match_to_current: String(i.to_user_id) === String(currentUserId),
+          status_pending: i.status === 'pending'
+        });
+      });
+      
+      // Count all pending invites to current user - use String comparison
+      const unreadInvs = GameCache.invites.filter(i => {
+        const matches = String(i.to_user_id) === String(currentUserId) && i.status === 'pending';
+        if (matches) console.log('[Invite Debug] MATCH found for invite:', i.id, 'to_user_id:', i.to_user_id, 'status:', i.status);
+        return matches;
+      }).length;
+      console.log('[Invite Debug] Calculated unreadInvs:', unreadInvs, 'total invites:', GameCache.invites.length);
+      
+      const unreadFriendReqs = GameCache.friendRequests.filter(r => {
+        const matches = String(r.to_user_id) === String(currentUserId) && r.status === 'pending';
+        if (matches) console.log('[Friend Debug] MATCH found for friend request:', r.id, 'to_user_id:', r.to_user_id, 'status:', r.status);
+        return matches;
+      }).length;
+      console.log('[Friend Debug] Calculated unreadFriendReqs:', unreadFriendReqs, 'total friendRequests:', GameCache.friendRequests.length);
       const totalUnreadInvs = unreadInvs + unreadFriendReqs;
-      console.log('[Badge] unreadMsgs:', unreadMsgs, 'unreadInvs:', totalUnreadInvs, 'messages:', GameCache.messages.length, 'invites:', unreadInvs, 'friendReqs:', unreadFriendReqs);
+      console.log('[Badge] unreadMsgs:', unreadMsgs, 'unreadInvs:', totalUnreadInvs, 'invites:', unreadInvs, 'friendReqs:', unreadFriendReqs);
       const mB = document.getElementById('msgBadge');
       console.log('[Badges] msgBadge element:', mB);
       if(mB) {
@@ -1255,7 +1358,7 @@
           console.log('[Badges] Showing invBadge with count:', totalUnreadInvs);
         } else {
           iB.classList.add('hidden');
-          console.log('[Badges] Hiding invBadge');
+          console.log('[Badges] Hiding invBadge - reason: totalUnreadInvs=', totalUnreadInvs, 'unreadInvs=', unreadInvs, 'unreadFriendReqs=', unreadFriendReqs, 'GameCache.invites.length=', GameCache.invites.length, 'GameCache.friendRequests.length=', GameCache.friendRequests.length);
         }
       } else {
         console.error('[Badges] invBadge element not found');
@@ -1534,11 +1637,11 @@
       const { data, error } = await sb
         .from('game_invites')
         .select('*')
-        .or(`to_user_id.eq.${currentUserId},from_user_id.eq.${currentUserId}`)
+        .eq('to_user_id', currentUserId)
         .eq('status', 'pending')
         .order('created_at', { ascending: false });
 
-      console.log('[Invite] Database invites loaded:', data?.length);
+      console.log('[Invite] Database invites loaded:', data?.length, data);
       console.log('[Invite] Database invites error:', error);
 
       if (error) {
@@ -1548,6 +1651,7 @@
 
       // Replace cache with fresh invite state from database
       GameCache.invites = data || [];
+      console.log('[Invite] Cache updated with invites, total:', GameCache.invites.length);
       updateBadges();
       return GameCache.invites;
     }
