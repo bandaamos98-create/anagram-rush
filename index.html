@@ -650,8 +650,17 @@
           if (!GameCache.messages.some(m => m.id === p.new.id)) {
             GameCache.messages.unshift(p.new);
           }
-          // Don't append message here - it's already appended in sendMsg function
-          // This listener is just for cache update and sync
+          // Append message to chat if open
+          const socialModal = document.getElementById('socialModal');
+          const activeChatId = socialModal.dataset.activeChatId;
+          if (socialModal.classList.contains('active') && activeChatId === p.new.to_user_id) {
+            const chatBody = document.getElementById('chatBody');
+            if (chatBody) {
+              const msgHtml = `<div style="display:flex;align-items:flex-end;gap:8px;margin-bottom:8px;flex-direction:row-reverse;"><img src="${GameCache.user.avatar_url || avatars[0]}" style="width:28px;height:28px;border-radius:50%;"><div class="chat-bubble me" style="margin:0;">${p.new.text}</div></div>`;
+              chatBody.insertAdjacentHTML('beforeend', msgHtml);
+              chatBody.scrollTop = chatBody.scrollHeight;
+            }
+          }
         })
         .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages' }, (p) => {
           const idx = GameCache.messages.findIndex(m => m.id === p.new.id);
@@ -1022,12 +1031,12 @@
     }
     function renderLeaderboardPreview(){
       const cont = document.getElementById('leaderboardPreview');
-      cont.innerHTML = GameCache.leaderboard.slice(0,5).map((l, i) => `<div class="leader-item"><div class="leader-left"><img class="small-avatar" src="${l.avatar_url || avatars[0]}"><div><div style="font-weight:700">${i+1}. ${l.display_name}</div><div style="font-size:11px;opacity:0.6">${getLeague(l.mmr)}</div></div></div><div style="text-align:right"><div style="font-weight:800">${l.mmr}</div><div style="font-size:11px;opacity:0.7">W:${l.wins||0} L:${l.losses||0}</div></div></div>`).join('');
+      cont.innerHTML = GameCache.leaderboard.slice(0,5).map((l, i) => `<div class="leader-item"><div class="leader-left"><img class="small-avatar" src="${l.avatar_url || avatars[0]}"><div><div style="font-weight:700">${i+1}. ${l.display_name}</div><div style="font-size:11px;opacity:0.6">${getLeague(l.mmr)}</div></div></div><div style="text-align:right"><div style="font-weight:800">${l.mmr}</div><div style="font-size:11px;opacity:0.7">W:${l.wins||0} D:${l.draws||0} L:${l.losses||0}</div></div></div>`).join('');
     }
     function openLeaderboard(){
       document.getElementById('socialTitle').innerText = "Global Leaders";
       const cont = document.getElementById('socialContent');
-      cont.innerHTML = GameCache.leaderboard.map((l, i) => `<div class="leader-item"><div class="leader-left"><img class="small-avatar" src="${l.avatar_url || avatars[0]}"><div><div style="font-weight:700">${i+1}. ${l.display_name}</div><div style="font-size:11px;opacity:0.6">${getLeague(l.mmr)}</div></div></div><div style="text-align:right"><div style="font-weight:800">${l.mmr}</div><div style="font-size:11px;opacity:0.7">W:${l.wins||0} L:${l.losses||0}</div></div></div>`).join('');
+      cont.innerHTML = GameCache.leaderboard.map((l, i) => `<div class="leader-item"><div class="leader-left"><img class="small-avatar" src="${l.avatar_url || avatars[0]}"><div><div style="font-weight:700">${i+1}. ${l.display_name}</div><div style="font-size:11px;opacity:0.6">${getLeague(l.mmr)}</div></div></div><div style="text-align:right"><div style="font-weight:800">${l.mmr}</div><div style="font-size:11px;opacity:0.7">W:${l.wins||0} D:${l.draws||0} L:${l.losses||0}</div></div></div>`).join('');
       openModal('socialModal');
     }
     async function logout(){ await trackPresence('offline'); cleanupRealtime(); await sb.auth.signOut(); window.location.reload(); }
