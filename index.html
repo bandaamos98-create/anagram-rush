@@ -631,7 +631,11 @@
           if (!GameCache.messages.some(m => m.id === p.new.id)) {
             GameCache.messages.unshift(p.new);
             updateBadges();
-            refreshOpenSocialView();
+            // Only refresh social view if chat with this user is NOT open (to prevent keyboard closing)
+            const activeChatId = document.getElementById('socialModal').dataset.activeChatId;
+            if (activeChatId !== p.new.from_user_id) {
+              refreshOpenSocialView();
+            }
           }
           // If chat with this user is open, append message immediately
           const activeChatId = document.getElementById('socialModal').dataset.activeChatId;
@@ -938,8 +942,7 @@
       setLastSeen(otherId, now);
       // notify other clients that we've read (so their UI can update if they track reads)
       try{ socialChannel.send({ type: 'broadcast', event: 'read_receipt', payload: { fromId: otherId, seen_at: now } }); }catch(e){}
-      // Clear message badge since we're viewing the chat - mark all messages from this user as read
-      GameCache.messages = GameCache.messages.filter(m => !(m.from_user_id === otherId && m.to_user_id === currentUserId));
+      // Clear message badge since we're viewing the chat
       const mB = document.getElementById('msgBadge');
       if(mB) {
         mB.classList.add('hidden');
@@ -953,11 +956,6 @@
         return `<div style="display:flex;align-items:flex-end;gap:8px;margin-bottom:8px;${isMe ? 'flex-direction:row-reverse;' : ''}"><img src="${sender.avatar_url || avatars[0]}" style="width:28px;height:28px;border-radius:50%;"><div class="chat-bubble ${isMe ? 'me' : 'them'}" style="margin:0;">${m.text}</div></div>`;
       }).join('')}</div><div style="display:flex;gap:10px;margin-top:10px;"><input id="chatInput" class="answer-input modern" style="flex:1;" placeholder="Type your message..." inputmode="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" /><button class="btn modern" style="width:90px;" onclick="sendMsg('${otherId}')">Send</button></div></div>`;
       const cb = document.getElementById('chatBody'); cb.scrollTop = cb.scrollHeight;
-      // Keep focus on chat input to prevent keyboard from closing
-      setTimeout(() => {
-        const chatInput = document.getElementById('chatInput');
-        if(chatInput) chatInput.focus();
-      }, 100);
     }
 
     async function handleAvatarUpload(e){
@@ -1543,7 +1541,7 @@
         
         if (remaining <= 0) {
           clearInterval(GameCache.match.timer);
-          finishMatch(false);
+          finishMatch();
         }
       }, 1000);
     }
