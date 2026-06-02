@@ -939,7 +939,7 @@
 
     function checkAchievements() {
       const data = GameCache.user;
-      const unlockedAchievements = data.achievements || [];
+      const unlockedAchievements = Array.isArray(data.achievements) ? [...data.achievements] : [];
       const newAchievements = [];
       
       Object.values(ACHIEVEMENTS).forEach(achievement => {
@@ -1513,29 +1513,6 @@
       master_league: { id: 'master_league', name: 'Master', description: 'Reach Master league', icon: '👑', condition: (stats) => stats.mmr >= 3000 }
     };
     
-    function checkAchievements(stats) {
-      const newUnlocks = [];
-      const currentAchievements = GameCache.user.achievements || [];
-      
-      for (const [key, achievement] of Object.entries(ACHIEVEMENTS)) {
-        if (!currentAchievements.includes(key) && achievement.condition(stats)) {
-          newUnlocks.push(achievement);
-          currentAchievements.push(key);
-        }
-      }
-      
-      if (newUnlocks.length > 0) {
-        GameCache.user.achievements = currentAchievements;
-        // Save achievements to database
-        sb.from('profiles').update({ achievements: currentAchievements }).eq('id', currentUserId).then(({ error }) => {
-          if (error) console.error('Failed to save achievements:', error);
-        });
-        showAchievementNotification(newUnlocks);
-      }
-      
-      return newUnlocks;
-    }
-    
     function showAchievementNotification(achievements) {
       const notification = achievements.map(a => `
         <div style="display:flex;align-items:center;gap:12px;padding:12px;background:rgba(139,92,246,0.1);border:1px solid rgba(139,92,246,0.3);border-radius:12px;margin-bottom:8px;">
@@ -2068,13 +2045,13 @@
           return;
         }
 
-        // AI is not smart: 40% chance to skip, slower timing (5-15 seconds)
-        if (Math.random() < 0.4) {
+        // AI is not smart: 60% chance to skip, slower timing (8-20 seconds)
+        if (Math.random() < 0.6) {
           // AI skips this puzzle
           return;
         }
 
-        const solveTime = 5000 + Math.random() * 10000;
+        const solveTime = 8000 + Math.random() * 12000;
         setTimeout(() => {
           if (!GameCache.match.active || GameCache.match.mode !== 'single') return;
 
@@ -2086,14 +2063,14 @@
 
           const word = currentPuzzle.solution;
 
-          // AI is not smart: 30% chance to get it wrong
-          if (Math.random() < 0.3) {
+          // AI is not smart: 50% chance to get it wrong
+          if (Math.random() < 0.5) {
             // Wrong answer - don't add score, reset streak
             GameCache.match.playerStreaks['ai'] = 0;
             GameCache.match.playerWrongCount['ai']++;
           } else {
-            // Correct answer but with random slower time (5-15 seconds)
-            const solveTimeSeconds = 5 + Math.random() * 10;
+            // Correct answer but with random slower time (8-20 seconds)
+            const solveTimeSeconds = solveTime / 1000;
             const isFirstSolve = !GameCache.match.wordSolvers || !GameCache.match.wordSolvers[word];
             if (isFirstSolve) {
               if (!GameCache.match.wordSolvers) GameCache.match.wordSolvers = {};
