@@ -931,6 +931,10 @@
         // Global Chat: INSERT for new messages
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'global_chat' }, (p) => {
           console.log('[Realtime] New global chat message:', p.new);
+          // Load profile for sender if not already loaded
+          if (!GameCache.profiles[p.new.user_id]) {
+            fetchProfile(p.new.user_id);
+          }
           GameCache.globalChatMessages.unshift(p.new);
           // Only update badge, no toast
           const badge = document.getElementById('globalChatBadge');
@@ -1332,13 +1336,17 @@
       
       container.innerHTML = recentMessages.map(m => {
         // Use display_name from message if available, otherwise get from profiles cache
-        const sender = GameCache.profiles[m.user_id] || { 
-          display_name: m.display_name || 'Player', 
+        let sender = GameCache.profiles[m.user_id] || { 
+          display_name: 'Anonymous', 
           avatar_url: avatars[0] 
         };
-        // Override with message's display_name if it exists
-        if (m.display_name) {
+        // Override with message's display_name if it exists and is not null
+        if (m.display_name && m.display_name !== 'Anonymous') {
           sender.display_name = m.display_name;
+        }
+        // If profile has a display_name, use that instead of Anonymous
+        if (GameCache.profiles[m.user_id] && GameCache.profiles[m.user_id].display_name) {
+          sender.display_name = GameCache.profiles[m.user_id].display_name;
         }
         const isMe = m.user_id === currentUserId;
         const date = new Date(m.created_at);
@@ -1380,6 +1388,12 @@
         console.error('Failed to send global message:', error);
         alert('Failed to send message');
         return;
+      }
+      
+      // Immediately add to local cache and re-render
+      if (data) {
+        GameCache.globalChatMessages.unshift(data);
+        renderGlobalChat();
       }
       
       input.value = '';
@@ -1942,9 +1956,17 @@
       console.log(error);
       if (error) { console.error('sendMsg error', error); chatInput.value = messageText; return; }
 
+      // Immediately add to local cache and re-render
+      if (data && data.length > 0) {
+        GameCache.messages.unshift(data[0]);
+        // Re-render if this chat is currently open
+        if (document.getElementById('socialModal').dataset.activeChatId === toId) {
+          viewChat(toId);
+        }
+      }
+
       // Maintain focus after sending
       chatInput.focus();
-      // Don't manually add to cache - realtime listener will handle it to prevent duplicates
     }
 
     const validWords = new Set(['able','acid','aged','aims','airs','also','arch','area','arts','baby','back','bags','ball','band','bang','bank','bare','barn','base','bath','bean','bear','beat','beds','been','bell','belt','bend','bent','best','bias','bike','bird','blow','blue','boat','body','bone','book','born','both','bowl','bulk','burn','bush','busy','cafe','cage','cake','call','came','card','care','case','cast','cell','cent','chat','chin','chip','chop','city','clay','club','coal','coat','code','coin','cold','come','cone','cook','cool','copy','corn','cost','crew','crop','crow','cube','curl','cute','damp','dare','dark','dart','data','date','dawn','days','dead','deal','dear','deck','deep','desk','dial','dice','diet','dish','down','draw','drew','drop','drug','dual','duck','dumb','dump','dust','duty','dyed','each','earl','earn','ease','east','easy','edge','edit','else','emit','ends','epic','even','ever','evil','exam','exit','face','fact','fade','fail','fair','fall','farm','fast','fate','fear','feel','feet','fell','felt','file','fill','film','find','fine','fire','firm','fish','fist','five','flat','flee','flew','flip','flow','folk','food','fool','foot','fork','form','fort','foul','four','free','from','fuel','full','fund','funk','gain','game','gang','gate','gave','gaze','gene','gift','girl','give','glad','glen','goal','goat','gold','golf','gone','good','grab','gray','grew','grey','grid','grin','grip','grow','gulf','hack','hair','half','hall','halt','hand','hang','hard','harm','hate','have','head','heal','heap','hear','heat','heel','held','help','herb','herd','here','hero','high','hill','hind','hint','hire','hold','hole','holy','home','hood','hook','hope','horn','host','hour','huge','hull','hung','hunt','hurt','hush','idle','inch','into','iris','iron','isle','item','jail','jazz','jean','jest','join','joke','jump','june','junk','jury','just','keen','keep','kept','kick','kill','kind','king','kiss','knee','knew','knit','knot','know','lace','lack','lady','laid','lake','lamb','lamp','land','lane','last','late','lead','leaf','lean','leap','left','lend','lens','lent','less','liar','lice','lick','lied','lies','life','lift','like','lily','limb','lime','limp','line','lint','lion','list','live','load','loaf','loan','lock','loft','lone','long','look','loop','lord','lose','loss','lost','loud','love','luck','lump','lung','lure','lush','lust','mace','made','maid','mail','main','make','male','mall','many','mark','mars','mart','mask','mass','mate','math','meal','mean','meat','meet','menu','mess','mice','mild','mile','milk','mill','mind','mine','mint','miss','mist','mode','mood','moon','more','most','moth','move','much','mule','mute','myth','nail','name','navy','near','neat','neck','need','nest','news','next','nice','nick','nine','node','none','noon','nose','note','noun','null','numb','oath','obey','odds','odor','okay','once','only','onto','open','oral','orca','oven','over','pace','pack','page','paid','pain','pair','pale','palm','park','part','pass','past','path','peak','pear','peel','pent','pest','pick','pill','pine','ping','pink','pint','pipe','plan','play','plea','plot','plow','plug','plum','poem','poet','pole','pond','pony','pool','poor','pork','port','pose','post','pour','pray','prep','prey','pull','pulp','pump','punk','push','quit','race','rack','rain','rake','rank','rare','rate','read','real','ream','rear','redo','reed','reef','reel','rely','rent','rest','rice','rich','ride','ring','rise','risk','road','roam','roar','robe','rock','role','roll','roof','room','root','rope','rose','rote','rude','rule','rung','runt','rush','rust','sack','safe','sage','said','sail','sake','sale','salt','same','sand','sang','sank','save','seal','seam','seat','seed','seek','seem','seen','self','sell','send','sent','sept','shed','shew','ship','shot','show','shut','sick','side','sigh','sign','silk','sill','sine','sing','sink','site','size','skin','slip','slow','snap','snow','soap','soar','sock','soft','soil','sold','sole','some','song','soon','soot','sore','sort','soul','spot','stab','stag','star','stay','stem','step','stew','stop','stub','stud','such','suit','sulk','sump','sung','sunk','sure','surf','sway','swim','tail','take','tale','talk','tall','tame','tank','tape','task','team','tear','teen','tell','tend','tent','term','test','text','than','that','them','then','they','thin','this','thou','thus','tick','tide','tied','tier','ties','tilt','time','tint','tiny','tire','toad','toes','tofu','toga','told','toll','tomb','tone','took','tool','tops','tore','torn','toss','tour','town','trap','tray','tree','trek','trim','trio','trip','trod','trot','true','tuba','tube','tuck','tuft','tune','turn','twig','twin','type','ugly','unit','upon','urchin','urge','used','user','vain','vane','vary','vast','veal','veil','vein','verb','very','vest','veto','vice','view','vine','vise','void','vote','wade','wage','wait','wake','walk','wall','wand','want','warm','warn','wash','wasp','wave','wavy','weak','wear','weep','well','went','were','west','what','when','whey','whip','wick','wide','wife','wild','will','wilt','wind','wine','wing','wink','wipe','wire','wise','wish','with','wolf','womb','wont','wood','wool','word','wore','work','worm','worn','wrap','wren','writ','yard','yarn','year','yell','yoke','your','yuan','yule','zero','zest','zinc','zone','zoom']);
