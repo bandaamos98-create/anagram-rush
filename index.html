@@ -166,17 +166,9 @@
       <div class="floating float1"></div><div class="floating float2"></div>
       <div class="logo"><h1>AMOS' ANAGRAM RUSH</h1><p>Premium Multiplayer Word Battles</p></div>
       <div class="login-card glass">
-        <div style="margin-bottom:24px;text-align:center;">
-          <div style="font-size:64px;margin-bottom:16px;">🎮</div>
-          <h2 style="margin:0 0 8px 0;">Welcome Back!</h2>
-          <p style="margin:0;opacity:0.7;font-size:14px;">Sign in to continue your word battle journey</p>
-        </div>
-        <button class="btn google-btn" id="googleLogin" style="display:flex;align-items:center;justify-content:center;gap:12px;width:100%;padding:16px;font-size:16px;">
-          <img src="https://www.google.com/favicon.ico" style="width:24px;height:24px;filter:brightness(0) invert(1);" alt="G">Continue with Google
+        <button class="btn google-btn" id="googleLogin" style="display:flex;align-items:center;justify-content:center;gap:12px;">
+          <img src="https://www.google.com/favicon.ico" style="width:20px;height:20px;filter:brightness(0) invert(1);" alt="G">Continue with Google
         </button>
-        <div style="margin-top:20px;text-align:center;font-size:12px;opacity:0.6;">
-          <p>By signing in, you agree to our Terms of Service</p>
-        </div>
       </div>
     </div>
 
@@ -212,15 +204,9 @@
           
           <div class="stats-grid">
             <div class="stat-box"><div class="stat-title">Wins</div><div class="stat-value" id="wins">0</div></div>
-            <div class="stat-box"><div class="stat-title">MMR</div><div class="stat-value" id="mmr">0</div></div>
+            <div class="stat-box"><div class="stat-title">MMR</div><div class="stat-value" id="mmr">1000</div></div>
             <div class="stat-box"><div class="stat-title">Losses</div><div class="stat-value" id="losses">0</div></div>
-            <div class="stat-box"><div class="stat-title">Draws</div><div class="stat-value" id="draws">0</div></div>
-          </div>
-          <div style="margin-top:18px;">
-            <button class="leader-secondary" style="width:100%;padding:16px;" onclick="openAchievements()">🏆 Achievements</button>
-          </div>
-          <div style="margin-top:18px;">
-            <button class="leader-secondary" style="width:100%;padding:16px;" onclick="openShop()">🪙 Coin Shop</button>
+            <div class="stat-box"><div class="stat-title">Win Rate</div><div class="stat-value" id="winrate">0%</div></div>
           </div>
           <div style="margin-top:18px; display:flex; gap:10px;">
             <button class="leader-secondary" style="flex:1;padding:16px;" onclick="openOnlinePlayers()">🟢 Players Online</button>
@@ -231,7 +217,7 @@
         <div class="big-buttons">
           <button class="play-btn quick" onclick="findMatch('quick')"> ⚡ Quick Match </button>
           <button class="play-btn ranked" onclick="findMatch('ranked')"> 🏆 Ranked Match </button>
-          <button class="play-btn single" onclick="startGame('single')"> 🤖 Play with AI </button>
+          <button class="play-btn single" onclick="startGame('single')"> 🎯 Single Player </button>
         </div>
         <div class="spacer" style="height:20px;"></div>
         <div class="card glass">
@@ -252,14 +238,12 @@
               <div id="meName" style="font-weight:700;margin-bottom:4px;font-size:13px;">You</div>
               <div id="meAvatar" style="width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,.08);margin:0 auto 8px;border:2px solid var(--blue);background-size:cover;background-position:center;"></div>
               <div id="myScore" style="font-size:20px;font-weight:800;color:var(--blue);">0</div>
-              <div id="myMMR" style="font-size:11px;opacity:0.7;margin-top:4px;">MMR: 0</div>
             </div>
             <div style="text-align:center;flex:1;opacity:.7;font-size:14px;">VS</div>
             <div style="text-align:center;flex:1;">
               <div id="oppName" style="font-weight:700;margin-bottom:4px;font-size:13px;">Opponent</div>
               <div id="oppAvatar" style="width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,.08);margin:0 auto 8px;border:2px solid var(--purple);background-size:cover;background-position:center;"></div>
               <div id="oppScore" style="font-size:20px;font-weight:800;color:var(--purple);">0</div>
-              <div id="oppMMR" style="font-size:11px;opacity:0.7;margin-top:4px;">MMR: 0</div>
             </div>
           </div>
         </div>
@@ -333,97 +317,28 @@
             <input type="file" id="avatarInput" hidden accept="image/*" onchange="handleAvatarUpload(event)">
         </div>
       </div>
+      <div style="margin-top:24px;">
+        <h3 style="margin-bottom:12px;">Achievements</h3>
+        <div id="achievementsList" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;"></div>
+      </div>
       <div style="display:flex;gap:10px;margin-top:24px;">
         <button class="btn google-btn" style="flex:1;" id="saveProfileBtn">Save Changes</button>
         <button class="btn guest-btn" style="flex:1;" onclick="openAboutModal()">About Us</button>
       </div>
-      <div style="display:flex;gap:10px;margin-top:10px;">
-        <button class="btn modern" style="flex:1;" onclick="openHowToPlay()">📖 How to Play</button>
-      </div>
       <button class="btn decline" style="width:100%;margin-top:10px;" onclick="logout()">Logout</button>
-    </div>
-  </div>
-
-  <div class="modal" id="achievementsModal">
-    <div class="modal-content glass">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
-        <div class="modal-title">Achievements</div>
-        <div class="icon-btn" onclick="closeModal('achievementsModal')">✕</div>
-      </div>
-      <div id="achievementsContent" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;"></div>
-    </div>
-  </div>
-
-  <div class="modal" id="drawsModal">
-    <div class="modal-content glass">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
-        <div class="modal-title">Draws History</div>
-        <div class="icon-btn" onclick="closeModal('drawsModal')">✕</div>
-      </div>
-      <div id="drawsContent"></div>
-    </div>
-  </div>
-
-  <div class="modal" id="shopModal">
-    <div class="modal-content glass">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
-        <div class="modal-title">Coin Shop</div>
-        <div class="icon-btn" onclick="closeModal('shopModal')">✕</div>
-      </div>
-      <div style="text-align:center;margin-bottom:20px;">
-        <div style="font-size:48px;margin-bottom:10px;">🪙</div>
-        <div style="font-size:32px;font-weight:800;color:var(--warning);">${GameCache.user.coins || 0}</div>
-        <div style="font-size:14px;opacity:0.7;">Your Coins</div>
-      </div>
-      <div id="shopContent" style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px;"></div>
     </div>
   </div>
 
   <div class="modal" id="aboutModal">
     <div class="modal-content glass">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
-        <div class="modal-title">About Us</div>
+        <div class="modal-title">About Amos' Anagram Rush</div>
         <div class="icon-btn" onclick="closeModal('aboutModal')">✕</div>
       </div>
       <div style="line-height:1.6; opacity:0.9;">
-        <div style="background:rgba(255,255,255,0.05);padding:16px;border-radius:12px;margin-bottom:16px;">
-          <h3 style="margin-bottom:12px;color:var(--blue);">Developer</h3>
-          <div><strong>Name:</strong> Amos Banda</div>
-          <div><strong>Email:</strong> bandaamos98@gmail.com</div>
-          <div><strong>Location:</strong> Zambia</div>
-        </div>
-        <div style="background:rgba(255,255,255,0.05);padding:16px;border-radius:12px;margin-bottom:16px;">
-          <h3 style="margin-bottom:12px;color:var(--purple);">Our Games</h3>
-          <div>1. Anagram Rush</div>
-          <div>2. Wordfury</div>
-        </div>
+        <p>Premium multiplayer word battle experience built for speed and competition.</p>
         <p style="margin-top:12px;font-weight:700;color:var(--blue);">Version 2.0 - Realtime Social Update</p>
-      </div>
-    </div>
-  </div>
-
-  <div class="modal" id="howToPlayModal">
-    <div class="modal-content glass">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
-        <div class="modal-title">How to Play</div>
-        <div class="icon-btn" onclick="closeModal('howToPlayModal')">✕</div>
-      </div>
-      <div style="line-height:1.6; opacity:0.9;">
-        <div style="background:rgba(255,255,255,0.05);padding:16px;border-radius:12px;margin-bottom:16px;">
-          <h3 style="margin-bottom:12px;color:var(--blue);">Game Rules</h3>
-          <p>1. Form valid English words from the given letters</p>
-          <p>2. Both players receive the same letters for fairness</p>
-          <p>3. Games start simultaneously - no one is left behind</p>
-          <p>4. Solve words faster to earn more points</p>
-          <p>5. Build streaks for bonus points</p>
-        </div>
-        <div style="background:rgba(255,255,255,0.05);padding:16px;border-radius:12px;margin-bottom:16px;">
-          <h3 style="margin-bottom:12px;color:var(--purple);">Scoring</h3>
-          <p>• First to solve: +100 points</p>
-          <p>• Second to solve: +50 points</p>
-          <p>• Speed bonus: +50 (≤3s), +25 (≤5s), +10 (≤10s)</p>
-          <p>• Streak bonus: +25 (3 streak), +50 (5 streak), +100 (10 streak)</p>
-        </div>
+        <p style="margin-top:12px;">Developed by Amos Banda.</p>
       </div>
     </div>
   </div>
@@ -444,7 +359,7 @@
     let dbChannel = null;
 
     const GameCache = {
-      user: { mmr: 0, xp: 0, level: 1, coins: 0, streak: 0, dailyStreak: 0, lastDaily: null, achievements: [] },
+      user: { mmr: 1000, xp: 0, level: 1, coins: 0, streak: 0, dailyStreak: 0, lastDaily: null, achievements: [] },
       friends: [],
       messages: [],
       invites: [],
@@ -493,10 +408,7 @@
     async function setupSession(userObj){
       if (currentUserId === userObj.id) return;
       currentUserId = userObj.id;
-      // CRITICAL: Do NOT load LastSeen from localStorage - start fresh each session
-      console.log('[Setup] Starting fresh session with empty LastSeen - all badges will show');
-      LastSeen = {};
-      localStorage.removeItem('lastSeen_' + currentUserId);
+      loadLastSeen();
       await Promise.all([loadProfile(), preloadData()]);
       setupRealtime();
       showApp();
@@ -506,21 +418,17 @@
 
     /* ========================================== DATA ========================================== */
     async function loadProfile(){
-      let { data: profile } = await sb.from('profiles').select('id, email, display_name, avatar_url, wins, losses, draws, mmr, rank_points, streak, league, created_at, updated_at').eq('id', currentUserId).maybeSingle();
+      let { data: profile } = await sb.from('profiles').select('*').eq('id', currentUserId).maybeSingle();
       const { data: { user: authUser } } = await sb.auth.getUser();
       if(!profile) {
         const fallbackName = authUser?.user_metadata?.full_name || authUser?.email?.split('@')[0] || 'Player';
-        const insertPayload = {
-          id: currentUserId,
-          display_name: fallbackName,
-          avatar_url: avatars[0],
-          mmr: 0,
-          wins: 0,
+        const insertPayload = { 
+          id: currentUserId, 
+          display_name: fallbackName, 
+          avatar_url: avatars[0], 
+          mmr: 1000, 
+          wins: 0, 
           losses: 0,
-          draws: 0,
-          rank_points: 0,
-          streak: 0,
-          league: 'Bronze',
           email: authUser?.email || ''
         };
         console.log('[Profile] Creating new profile with payload:', insertPayload);
@@ -550,48 +458,42 @@
         }
       }
       if(profile) {
-        GameCache.user = {
-          ...profile,
+        GameCache.user = { 
+          ...profile, 
           email: authUser?.email || profile.email || "",
-          xp: 0,
-          level: 1,
-          coins: 0,
+          xp: profile.xp || 0,
+          level: profile.level || 1,
+          coins: profile.coins || 0,
           streak: profile.streak || 0,
-          dailyStreak: 0,
-          lastDaily: null,
-          rank_points: profile.rank_points || 0,
-          league: profile.league || 'Bronze',
-          mmr: 0 // Force MMR to 0
+          dailyStreak: profile.daily_streak || 0
         };
         document.getElementById("headerName").innerText = profile.display_name || "Player";
         document.getElementById("headerAvatar").src = profile.avatar_url || avatars[0];
-        document.getElementById("mmr").innerText = 0;
+        document.getElementById("mmr").innerText = profile.mmr;
         document.getElementById("wins").innerText = profile.wins || 0;
         document.getElementById("losses").innerText = profile.losses || 0;
-        document.getElementById("draws").innerText = profile.draws || 0;
-        document.getElementById("leagueBadge").innerText = `💎 ${getLeague(0)}`;
-        document.getElementById("headerRank").innerText = `${getLeague(0)} League`;
+        document.getElementById("leagueBadge").innerText = `💎 ${getLeague(profile.mmr)}`;
+        document.getElementById("headerRank").innerText = `${getLeague(profile.mmr)} League`;
         
         // Update new progression UI
         document.getElementById("levelDisplay").innerText = GameCache.user.level;
-        const coinsDisplay = document.getElementById("coinsDisplay");
-        if (coinsDisplay) coinsDisplay.innerText = GameCache.user.coins || 0;
-
+        document.getElementById("coinsDisplay").innerText = GameCache.user.coins;
+        
         const xpProgress = getXPProgress();
-        const xpBar = document.getElementById("xpBar");
-        const xpText = document.getElementById("xpText");
-        if (xpBar) xpBar.style.width = `${xpProgress}%`;
-        if (xpText) {
-          const currentXP = GameCache.user.xp - getLevelXP(GameCache.user.level);
-          const neededXP = getLevelXP(GameCache.user.level + 1) - getLevelXP(GameCache.user.level);
-          xpText.innerText = `${Math.max(0, currentXP)} / ${neededXP}`;
-        }
+        document.getElementById("xpBar").style.width = `${xpProgress}%`;
+        const currentXP = GameCache.user.xp - getLevelXP(GameCache.user.level);
+        const neededXP = getLevelXP(GameCache.user.level + 1) - getLevelXP(GameCache.user.level);
+        document.getElementById("xpText").innerText = `${Math.max(0, currentXP)} / ${neededXP}`;
+        
+        // Calculate win rate
+        const totalGames = (profile.wins || 0) + (profile.losses || 0);
+        const winRate = totalGames > 0 ? Math.round((profile.wins / totalGames) * 100) : 0;
+        document.getElementById("winrate").innerText = `${winRate}%`;
       }
     }
 
     async function preloadData(){
       console.log("[Cache] Preloading state...");
-
       // Debug: fetch raw messages to inspect schema and errors
       try{
         const { data: dbgData, error: dbgErr } = await sb.from('messages').select('*');
@@ -600,36 +502,26 @@
       }catch(e){ console.warn('Debug messages fetch failed', e); }
       const [msgs, invs, friendReqs, notifs, leaders, friends] = await Promise.all([
         sb.from('messages').select('*').or(`to_user_id.eq.${currentUserId},from_user_id.eq.${currentUserId}`).order('created_at', {ascending: false}),
-        sb.from('game_invites').select('*').eq('to_user_id', currentUserId).eq('status', 'pending'),
+        sb.from('game_invites').select('*').or(`to_user_id.eq.${currentUserId},from_user_id.eq.${currentUserId}`).eq('status', 'pending'),
         sb.from('friend_requests').select('*').eq('to_user_id', currentUserId).eq('status', 'pending'),
         sb.from('notifications').select('*').eq('user_id', currentUserId).eq('is_read', false),
-        sb.from('profiles').select('id, display_name, mmr, avatar_url, wins, losses, draws, rank_points, streak, league').order('mmr', {ascending: false}),
+        sb.from('profiles').select('id, display_name, mmr, avatar_url').order('mmr', {ascending: false}).limit(100),
         sb.from('friends').select('friend_id').eq('user_id', currentUserId)
       ]);
       GameCache.messages = msgs.data || [];
       GameCache.invites = invs.data || [];
       GameCache.friendRequests = friendReqs.data || [];
       GameCache.notifications = notifs.data || [];
-      console.log('[Preload] Invites loaded:', GameCache.invites.length, GameCache.invites);
-      console.log('[Preload] Friend requests loaded:', GameCache.friendRequests.length, GameCache.friendRequests);
-      GameCache.leaderboard = (leaders.data || []).map(p => ({ ...p, mmr: 0 }));
+      GameCache.leaderboard = leaders.data || [];
       GameCache.friends = (friends.data || []).map(f => f.friend_id);
-      GameCache.leaderboard.forEach(p => GameCache.profiles[p.id] = { ...p, mmr: 0 });
-      console.log('[Messages] Loaded rows:', GameCache.messages);
-      console.log('[Messages] Current user:', currentUserId, 'type:', typeof currentUserId);
-      const incomingCount = GameCache.messages.filter(m => String(m.to_user_id) === String(currentUserId)).length;
-      const outgoingCount = GameCache.messages.filter(m => String(m.from_user_id) === String(currentUserId)).length;
-      console.log('[Messages] Incoming (to current user):', incomingCount, 'Outgoing (from current user):', outgoingCount);
-      GameCache.messages.forEach((m, idx) => {
-        console.log(`[Messages][${idx}]`, { id: m.id, from_id: m.from_user_id, from_type: typeof m.from_user_id, to_id: m.to_user_id, to_type: typeof m.to_user_id, is_incoming: String(m.to_user_id) === String(currentUserId) });
-      });
+      GameCache.leaderboard.forEach(p => GameCache.profiles[p.id] = p);
       const neededIds = new Set();
       GameCache.messages.forEach(m => { neededIds.add(m.from_user_id); neededIds.add(m.to_user_id); });
       GameCache.friends.forEach(fid => neededIds.add(fid));
       const missingIds = Array.from(neededIds).filter(id => !GameCache.profiles[id]);
       if (missingIds.length > 0) {
-        const { data: pData } = await sb.from('profiles').select('id, display_name, avatar_url, mmr, wins, losses, draws, rank_points, streak, league').in('id', missingIds);
-        if (pData) pData.forEach(p => GameCache.profiles[p.id] = { ...p, mmr: 0 });
+        const { data: pData } = await sb.from('profiles').select('id, display_name, avatar_url, mmr').in('id', missingIds);
+        if (pData) pData.forEach(p => GameCache.profiles[p.id] = p);
       }
       // Ensure created_at is present and parseable
       GameCache.messages = GameCache.messages.map(m => ({ ...m, created_at: m.created_at || new Date().toISOString() }));
@@ -691,29 +583,32 @@
       dbChannel
         // Messages: INSERT for both sent and received messages
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `to_user_id=eq.${currentUserId}` }, async (p) => {
-          console.log('[Realtime] New message received from database:', p.new);
+          console.log('[Realtime] New message received:', p.new);
           if (!GameCache.profiles[p.new.from_user_id]) await fetchProfile(p.new.from_user_id);
-          if (!p.new.created_at) p.new.created_at = new Date().toISOString();
           // Prevent duplicate messages in cache
-          console.log('[Badge] Realtime message received');
           if (!GameCache.messages.some(m => m.id === p.new.id)) {
             GameCache.messages.unshift(p.new);
+            updateBadges();
           }
-          // Always update badges immediately when a new message arrives
-          updateBadges();
-          const sender = GameCache.profiles[p.new.from_user_id]?.display_name || 'Someone';
-          showToast('message', `New message from ${sender}`, p.new.text, () => viewChat(p.new.from_user_id));
-          // Then load messages from database
+          // If chat with this user is open, append message immediately
           const activeChatId = document.getElementById('socialModal').dataset.activeChatId;
           if (activeChatId === p.new.from_user_id) {
-            await loadMessagesFromDatabase(p.new.from_user_id);
+            const chatBody = document.getElementById('chatBody');
+            if (chatBody) {
+              const p = GameCache.profiles[p.new.from_user_id] || { avatar_url: avatars[0] };
+              const msgHtml = `<div style="display:flex;align-items:flex-end;gap:8px;margin-bottom:8px;"><img src="${p.avatar_url || avatars[0]}" style="width:28px;height:28px;border-radius:50%;"><div class="chat-bubble them" style="margin:0;">${p.new.text}</div></div>`;
+              chatBody.insertAdjacentHTML('beforeend', msgHtml);
+              chatBody.scrollTop = chatBody.scrollHeight;
+            }
           } else {
-            await loadMessagesFromDatabase(p.new.from_user_id).catch(() => {});
+            // Only show toast and refresh social view if chat is not open
+            const sender = GameCache.profiles[p.new.from_user_id]?.display_name || 'Someone';
+            showToast('message', `New message from ${sender}`, p.new.text, () => viewChat(p.new.from_user_id));
             refreshOpenSocialView();
           }
         })
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `from_user_id=eq.${currentUserId}` }, async (p) => {
-          console.log('[Realtime] Message sent confirmation from database:', p.new);
+          console.log('[Realtime] Message sent confirmation:', p.new);
           if (!GameCache.profiles[p.new.to_user_id]) await fetchProfile(p.new.to_user_id);
           // Prevent duplicate messages in cache
           if (!GameCache.messages.some(m => m.id === p.new.id)) {
@@ -723,38 +618,24 @@
           // This listener is just for cache update and sync
         })
         .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages' }, (p) => {
-          console.log('[Realtime] Message updated in database:', p.new);
           const idx = GameCache.messages.findIndex(m => m.id === p.new.id);
           if (idx !== -1) { GameCache.messages[idx] = p.new; updateBadges(); refreshOpenSocialView(); }
         })
         // Game Invites: INSERT for both sent and received
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'game_invites', filter: `to_user_id=eq.${currentUserId}` }, async (p) => {
-          console.log('[Realtime] New game invite received from database:', p.new);
+          console.log('[Realtime] New game invite received:', p.new);
           if (!GameCache.profiles[p.new.from_user_id]) await fetchProfile(p.new.from_user_id);
-          // Prevent duplicate invites in cache
-          console.log('[Badge] Realtime invite received');
-          if (!GameCache.invites.some(i => i.id === p.new.id)) {
-            GameCache.invites.unshift(p.new);
-          }
-          // Always update badges immediately when a new invite arrives
-          updateBadges();
+          GameCache.invites.unshift(p.new); updateBadges(); refreshOpenSocialView();
+          // Show toast notification
           const sender = GameCache.profiles[p.new.from_user_id]?.display_name || 'Someone';
           showToast('invite', `Game Invite from ${sender}`, 'Click to accept or decline', () => openInvites());
-          // Then load invites from database
-          await loadInvitesFromDatabase().catch(() => {});
-          refreshOpenSocialView();
         })
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'game_invites', filter: `from_user_id=eq.${currentUserId}` }, async (p) => {
-          console.log('[Realtime] Game invite sent confirmation from database:', p.new);
+          console.log('[Realtime] Game invite sent:', p.new);
           if (!GameCache.profiles[p.new.to_user_id]) await fetchProfile(p.new.to_user_id);
-          // Prevent duplicate invites in cache
-          if (!GameCache.invites.some(i => i.id === p.new.id)) {
-            GameCache.invites.unshift(p.new);
-          }
-          updateBadges();
-          refreshOpenSocialView();
+          GameCache.invites.unshift(p.new); refreshOpenSocialView();
         })
-        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'game_invites' }, async (p) => {
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'game_invites' }, (p) => {
           console.log('[Realtime] Game invite updated:', p.new);
           if (p.new.from_user_id !== currentUserId && p.new.to_user_id !== currentUserId) return;
           const idx = GameCache.invites.findIndex(i => i.id === p.new.id);
@@ -764,18 +645,14 @@
           } else {
             if (idx !== -1) GameCache.invites.splice(idx, 1);
           }
-          await loadInvitesFromDatabase().catch(() => {});
           updateBadges(); refreshOpenSocialView();
         })
         // Friend Requests: INSERT for received requests
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'friend_requests', filter: `to_user_id=eq.${currentUserId}` }, async (p) => {
           console.log('[Realtime] New friend request received:', p.new);
           if (!GameCache.profiles[p.new.from_user_id]) await fetchProfile(p.new.from_user_id);
-          console.log('[Badge] Realtime friend request received');
-          GameCache.friendRequests.unshift(p.new);
-          updateBadges();
-          refreshOpenSocialView();
-          // Always show toast notification when receiving a friend request
+          GameCache.friendRequests.unshift(p.new); updateBadges(); refreshOpenSocialView();
+          // Show toast notification
           const sender = GameCache.profiles[p.new.from_user_id]?.display_name || 'Someone';
           showToast('friend', `Friend Request from ${sender}`, 'Click to accept or decline', () => openInvites());
         })
@@ -844,27 +721,6 @@
           }
           updateBadges(); refreshOpenSocialView();
         })
-        // Profiles: UPDATE for name/avatar changes
-        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles' }, async (p) => {
-          console.log('[Realtime] Profile updated:', p.new);
-          // Update profile cache
-          GameCache.profiles[p.new.id] = p.new;
-          // If it's the current user's profile, update GameCache.user and UI
-          if (p.new.id === currentUserId) {
-            GameCache.user = { ...GameCache.user, ...p.new };
-            // Update UI elements
-            document.getElementById("headerName").innerText = p.new.display_name || "Player";
-            document.getElementById("headerAvatar").src = p.new.avatar_url || avatars[0];
-            document.getElementById("mmr").innerText = p.new.mmr || 0;
-            document.getElementById("wins").innerText = p.new.wins || 0;
-            document.getElementById("losses").innerText = p.new.losses || 0;
-            document.getElementById("draws").innerText = p.new.draws || 0;
-            document.getElementById("leagueBadge").innerText = `💎 ${getLeague(p.new.mmr || 0)}`;
-            document.getElementById("headerRank").innerText = `${getLeague(p.new.mmr || 0)} League`;
-          }
-          // Refresh open social view if it's showing this profile
-          refreshOpenSocialView();
-        })
         .subscribe((status) => {
           console.log('[Realtime] DB channel status:', status);
         });
@@ -872,22 +728,17 @@
 
     /* ========= Toast Notifications ========= */
     function showToast(type, title, message, onClick = null) {
-      console.log('[Toast] Showing toast:', type, title, message);
       const container = document.getElementById('toastContainer');
-      if (!container) {
-        console.error('[Toast] Toast container not found');
-        return;
-      }
       const toast = document.createElement('div');
       toast.className = `toast ${type}`;
-
+      
       const icons = {
         message: '💬',
         invite: '🎮',
         friend: '👋',
         notification: '🔔'
       };
-
+      
       toast.innerHTML = `
         <div class="toast-header">
           <span>${icons[type] || '📢'}</span>
@@ -895,7 +746,7 @@
         </div>
         <div class="toast-body">${message}</div>
       `;
-
+      
       if (onClick) {
         toast.onclick = () => {
           onClick();
@@ -904,13 +755,13 @@
       } else {
         toast.onclick = () => removeToast(toast);
       }
-
+      
       container.appendChild(toast);
-      console.log('[Toast] Toast appended to container');
+      
       // Auto-remove after 5 seconds
       setTimeout(() => removeToast(toast), 5000);
     }
-
+    
     function removeToast(toast) {
       toast.style.animation = 'slideOutRight 0.3s ease-out';
       setTimeout(() => {
@@ -921,34 +772,20 @@
     /* ========= lastSeen tracking (client-side fallback for read state) ========= */
     let LastSeen = {};
     function loadLastSeen(){
-      // DISABLED: Do not load from localStorage on startup
-      console.log('[LastSeen] loadLastSeen() disabled - using in-memory only');
-      LastSeen = {};
+      try{ LastSeen = JSON.parse(localStorage.getItem('lastSeen_' + currentUserId) || '{}') || {}; }catch(e){ LastSeen = {}; }
     }
-    function saveLastSeen(){ 
-      console.log('[LastSeen] saveLastSeen() - disabled, not persisting to localStorage');
-      // DISABLED: Do not persist LastSeen to localStorage
-      // Keep in-memory only so badges stay fresh across sessions
-    }
-    function getLastSeen(otherId){ 
-      const result = LastSeen[otherId] || null;
-      console.log('[LastSeen] getLastSeen(' + otherId + ') = ' + result);
-      return result;
-    }
-    function setLastSeen(otherId, ts){ 
-      console.log('[LastSeen] setLastSeen(' + otherId + ') = ' + ts);
-      LastSeen[otherId] = ts; 
-      saveLastSeen(); 
-    }
+    function saveLastSeen(){ if(!currentUserId) return; localStorage.setItem('lastSeen_' + currentUserId, JSON.stringify(LastSeen)); }
+    function getLastSeen(otherId){ return LastSeen[otherId] || null; }
+    function setLastSeen(otherId, ts){ LastSeen[otherId] = ts; saveLastSeen(); }
 
     async function fetchProfile(id) {
-      const { data } = await sb.from('profiles').select('id, display_name, avatar_url, mmr, wins, losses, draws, rank_points, streak, league').eq('id', id).maybeSingle();
-      if (data) GameCache.profiles[id] = { ...data, mmr: 0 };
+      const { data } = await sb.from('profiles').select('id, display_name, avatar_url, mmr').eq('id', id).maybeSingle();
+      if (data) GameCache.profiles[id] = data;
     }
 
     async function trackPresence(status) {
       if (!socialChannel) return;
-      await socialChannel.track({ userId: currentUserId, name: GameCache.user.display_name, avatar: GameCache.user.avatar_url, status: status, inGame: GameCache.match.active });
+      await socialChannel.track({ userId: currentUserId, name: GameCache.user.display_name, avatar: GameCache.user.avatar_url, status: status });
     }
 
     /* ========================================== SOCIAL ACTIONS ========================================== */
@@ -959,127 +796,25 @@
       document.getElementById("profileEmail").innerText = data.email || "Signed in with Google";
       document.getElementById("profileLeagueBadge").innerText = getLeague(data.mmr) + " League";
       document.getElementById("displayNameInput").value = data.display_name || "";
-
+      
+      // Render achievements
+      const achievementsList = document.getElementById('achievementsList');
+      const unlockedAchievements = data.achievements || [];
+      achievementsList.innerHTML = Object.values(ACHIEVEMENTS).map(achievement => {
+        const isUnlocked = unlockedAchievements.includes(achievement.id);
+        return `
+          <div style="padding:12px;background:${isUnlocked ? 'rgba(139,92,246,0.15)' : 'rgba(255,255,255,0.03)'};border:1px solid ${isUnlocked ? 'rgba(139,92,246,0.4)' : 'rgba(255,255,255,0.08)'};border-radius:12px;text-align:center;opacity:${isUnlocked ? 1 : 0.5};">
+            <div style="font-size:28px;margin-bottom:4px;">${isUnlocked ? achievement.icon : '🔒'}</div>
+            <div style="font-size:10px;font-weight:700;">${achievement.name}</div>
+          </div>
+        `;
+      }).join('');
+      
       openModal("profileModal");
     }
 
-    function openAchievements() {
-      const data = GameCache.user;
-      const unlockedAchievements = data.achievements || [];
-      const achievementsContent = document.getElementById('achievementsContent');
-      achievementsContent.innerHTML = Object.values(ACHIEVEMENTS).map(achievement => {
-        const isUnlocked = unlockedAchievements.includes(achievement.id);
-        return `
-          <div style="padding:16px;background:${isUnlocked ? 'rgba(139,92,246,0.15)' : 'rgba(255,255,255,0.03)'};border:1px solid ${isUnlocked ? 'rgba(139,92,246,0.4)' : 'rgba(255,255,255,0.08)'};border-radius:12px;text-align:center;opacity:${isUnlocked ? 1 : 0.5};">
-            <div style="font-size:32px;margin-bottom:8px;">${isUnlocked ? achievement.icon : '🔒'}</div>
-            <div style="font-size:12px;font-weight:700;margin-bottom:4px;">${achievement.name}</div>
-            <div style="font-size:10px;opacity:0.7;">${achievement.description}</div>
-          </div>
-        `;
-      }).join('');
-      openModal('achievementsModal');
-    }
-
-    function openDraws() {
-      const draws = GameCache.user.draws || 0;
-      const drawsContent = document.getElementById('drawsContent');
-      drawsContent.innerHTML = `
-        <div style="background:rgba(255,255,255,0.05);padding:20px;border-radius:12px;text-align:center;">
-          <div style="font-size:48px;margin-bottom:10px;">🤝</div>
-          <div style="font-size:32px;font-weight:800;color:var(--warning);">${draws}</div>
-          <div style="font-size:14px;opacity:0.7;margin-top:8px;">Total Draws</div>
-          <div style="font-size:12px;opacity:0.5;margin-top:4px;">Excludes AI games</div>
-        </div>
-        <div style="margin-top:20px;">
-          <h3 style="margin-bottom:12px;">Recent Draws</h3>
-          <div style="opacity:0.5;text-align:center;padding:20px;">Draw history will be displayed here</div>
-        </div>
-      `;
-      openModal('drawsModal');
-    }
-
-    function openHowToPlay() {
-      openModal('howToPlayModal');
-    }
-
-    function openShop() {
-      const shopContent = document.getElementById('shopContent');
-      const coins = GameCache.user.coins || 0;
-
-      const shopItems = [
-        { id: 'avatar1', name: 'Premium Avatar 1', icon: '👑', price: 100, description: 'Unlock premium avatar' },
-        { id: 'avatar2', name: 'Premium Avatar 2', icon: '🎭', price: 150, description: 'Unlock premium avatar' },
-        { id: 'avatar3', name: 'Premium Avatar 3', icon: '🦊', price: 200, description: 'Unlock premium avatar' },
-        { id: 'xp_boost', name: 'XP Boost', icon: '⚡', price: 50, description: '2x XP for next match' },
-        { id: 'streak_protect', name: 'Streak Protect', icon: '🛡️', price: 75, description: 'Protect your streak' },
-        { id: 'hint', name: 'Hint Power-up', icon: '💡', price: 25, description: 'Get a hint in game' }
-      ];
-
-      shopContent.innerHTML = shopItems.map(item => {
-        const canAfford = coins >= item.price;
-        return `
-          <div style="background:rgba(255,255,255,0.05);padding:16px;border-radius:12px;text-align:center;opacity:${canAfford ? 1 : 0.5};">
-            <div style="font-size:32px;margin-bottom:8px;">${item.icon}</div>
-            <div style="font-weight:700;margin-bottom:4px;">${item.name}</div>
-            <div style="font-size:12px;opacity:0.7;margin-bottom:8px;">${item.description}</div>
-            <div style="font-size:16px;font-weight:800;color:var(--warning);margin-bottom:8px;">🪙 ${item.price}</div>
-            <button class="btn modern" style="width:100%;padding:8px;font-size:12px;" ${canAfford ? '' : 'disabled'} onclick="buyItem('${item.id}', ${item.price})">
-              ${canAfford ? 'Buy' : 'Not enough coins'}
-            </button>
-          </div>
-        `;
-      }).join('');
-
-      openModal('shopModal');
-    }
-
-    function buyItem(itemId, price) {
-      if (GameCache.user.coins < price) {
-        alert('Not enough coins!');
-        return;
-      }
-
-      GameCache.user.coins -= price;
-      const coinsDisplay = document.getElementById('coinsDisplay');
-      if (coinsDisplay) coinsDisplay.innerText = GameCache.user.coins;
-
-      alert('Item purchased! (This is a demo - items are not saved)');
-      openShop(); // Refresh shop
-    }
-
-    async function loadNotificationsFromDatabase() {
-      console.log('[Notification] Loading notifications from database');
-      const { data, error } = await sb
-        .from('notifications')
-        .select('*')
-        .eq('user_id', currentUserId)
-        .eq('is_read', false)
-        .order('created_at', { ascending: false });
-
-      console.log('[Notification] Database notifications loaded:', data?.length);
-      console.log('[Notification] Database notifications error:', error);
-
-      if (error) {
-        console.error('[Notification] Failed to load notifications:', error);
-        return;
-      }
-
-      // Update cache with fresh data from database
-      const existingIds = new Set(GameCache.notifications.map(n => n.id));
-      data.forEach(notification => {
-        if (!existingIds.has(notification.id)) {
-          GameCache.notifications.push(notification);
-        }
-      });
-
-      return data || [];
-    }
-
-    async function openNotifications() {
-      // Load notifications from database instead of using cache
-      const notifications = await loadNotificationsFromDatabase();
-
-      const list = notifications.map(n => {
+    function openNotifications() {
+      const list = GameCache.notifications.map(n => {
         const title = n.title || n.body || n.message || 'Notification';
         const body = n.body || n.message || '';
         return `<div class="social-item"><div><div style="font-weight:700">${title}</div><div style="font-size:12px;opacity:0.7">${body}</div></div></div>`;
@@ -1099,8 +834,6 @@
     function openFriends(){
       setSocialModalFullscreen(false);
       document.getElementById('socialTitle').innerText = "Friends";
-      // Reset active chat ID when opening friends list
-      document.getElementById('socialModal').dataset.activeChatId = "";
       const cont = document.getElementById('socialContent');
       cont.innerHTML = `<div style="margin-bottom:18px;"><div style="display:flex;gap:10px;"><input id="friendSearch" class="answer-input modern" style="flex:1;" placeholder="Name or email..." /><button class="btn modern" style="width:100px;" onclick="searchFriend()">Search</button></div><div id="searchResult" style="margin-top:12px;"></div></div><div id="friendsList"></div>`;
       renderFriendsList();
@@ -1111,88 +844,43 @@
       setSocialModalFullscreen(false);
       document.getElementById('socialTitle').innerText = "Messages";
       document.getElementById('socialModal').dataset.activeChatId = "";
-      console.log('[OpenMessages] currentUserId:', currentUserId, 'type:', typeof currentUserId);
-      
       const cont = document.getElementById('socialContent');
       const threads = {};
-      
-      // Add incoming messages to threads
-      GameCache.messages.forEach((m, idx) => {
+      GameCache.messages.forEach(m => {
         const otherId = m.from_user_id === currentUserId ? m.to_user_id : m.from_user_id;
-        if (!threads[otherId]) threads[otherId] = { last: m, unread: 0, type: 'message' };
-        
-        const isIncoming = m.to_user_id === currentUserId;
-        const seen = getLastSeen(otherId);
-        
-        if (isIncoming) {
-          const messageTime = new Date(m.created_at);
-          const lastSeenTime = seen ? new Date(seen) : null;
-          const isUnread = !seen || messageTime > lastSeenTime;
-          if (isUnread) threads[otherId].unread++;
+        if (!threads[otherId]) threads[otherId] = { last: m, unread: 0 };
+        if (m.to_user_id === currentUserId) {
+          const seen = getLastSeen(otherId);
+          if (!seen || new Date(m.created_at) > new Date(seen)) threads[otherId].unread++;
         }
       });
-      
-      // Add incoming game invites to threads with their own section
-      const incomingInvites = GameCache.invites.filter(i => String(i.to_user_id) === String(currentUserId) && i.status === 'pending');
-      console.log('[OpenMessages] Incoming game invites:', incomingInvites.length);
-      incomingInvites.forEach(inv => {
-        const otherId = inv.from_user_id;
-        if (!threads[otherId]) threads[otherId] = { unread: 0 };
-        threads[otherId].invite = inv;
-      });
-      
-      // Add incoming friend requests to threads
-      const incomingFriendReqs = GameCache.friendRequests.filter(r => String(r.to_user_id) === String(currentUserId) && r.status === 'pending');
-      console.log('[OpenMessages] Incoming friend requests:', incomingFriendReqs.length);
-      incomingFriendReqs.forEach(req => {
-        const otherId = req.from_user_id;
-        if (!threads[otherId]) threads[otherId] = { unread: 0 };
-        threads[otherId].friendRequest = req;
-      });
-      
-      console.log('[OpenMessages] Final threads with invites:', threads);
-      
       cont.innerHTML = Object.keys(threads).map(id => {
         const t = threads[id];
         const p = GameCache.profiles[id] || { display_name: `User_${id.slice(0,4)}`, avatar_url: avatars[0] };
-        
-        // Build badge HTML for different types
-        let badgeHtml = '';
-        if (t.unread > 0) badgeHtml += `<span class='badge-count' style='position:static;margin-left:5px;color:red;font-weight:bold;'>${t.unread} msgs</span>`;
-        if (t.invite) badgeHtml += `<span class='badge-count' style='position:static;margin-left:5px;color:orange;font-weight:bold;'>INVITE</span>`;
-        if (t.friendRequest) badgeHtml += `<span class='badge-count' style='position:static;margin-left:5px;color:blue;font-weight:bold;'>FRIEND REQ</span>`;
-        
-        return `<div class="social-item ${t.unread > 0 || t.invite || t.friendRequest ? 'new' : ''}" onclick="viewChat('${id}')"><div style="display:flex;align-items:center;gap:12px;"><img src="${p.avatar_url || avatars[0]}" style="width:40px;height:40px;border-radius:50%;"><div style="font-weight:700">${p.display_name}${badgeHtml}</div></div><button class="leader-secondary">Open</button></div>`;
-      }).join('') || "<p style='text-align:center;padding:20px;opacity:0.5'>No messages or invites</p>";
+        return `<div class="social-item ${t.unread > 0 ? 'new' : ''}" onclick="viewChat('${id}')"><div style="display:flex;align-items:center;gap:12px;"><img src="${p.avatar_url || avatars[0]}" style="width:40px;height:40px;border-radius:50%;"><div style="font-weight:700">${p.display_name} ${t.unread > 0 ? `<span class='badge-count' style='position:static;margin-left:5px;'>${t.unread}</span>` : ''}</div></div><button class="leader-secondary">Open</button></div>`;
+      }).join('') || "<p style='text-align:center;padding:20px;opacity:0.5'>No messages</p>";
       openModal('socialModal');
     }
 
     async function viewChat(otherId) {
-      const currentActiveChatId = document.getElementById('socialModal').dataset.activeChatId;
-      const currentTitle = document.getElementById('socialTitle').innerText;
-      if (currentActiveChatId === otherId && currentTitle.startsWith('Chat with')) {
-        console.log('[Chat] Refreshing already open chat with:', otherId);
-        await loadMessagesFromDatabase(otherId);
-        updateBadges();
-        return;
-      }
-
       setSocialModalFullscreen(true);
       const p = GameCache.profiles[otherId] || { display_name: "Player", avatar_url: avatars[0] };
       document.getElementById('socialTitle').innerText = `Chat with ${p.display_name}`;
       document.getElementById('socialModal').dataset.activeChatId = otherId;
       const cont = document.getElementById('socialContent');
-
-      // Load messages from database initially
-      cont.innerHTML = `<div style="display:flex;flex-direction:column;height:100%;"><div id="chatBody" style="flex:1;overflow-y:auto;padding-bottom:10px;"></div><div style="display:flex;gap:10px;margin-top:10px;"><input id="chatInput" class="answer-input modern" style="flex:1;" placeholder="Type your message..." inputmode="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" /><button class="btn modern" style="width:90px;" onclick="sendMsg('${otherId}')">Send</button></div></div>`;
-      await loadMessagesFromDatabase(otherId);
-      
-      // AFTER messages are loaded, mark this conversation as read for future unread calculations
+      // Mark conversation as read locally by updating lastSeen timestamp
       const now = new Date().toISOString();
       setLastSeen(otherId, now);
       // notify other clients that we've read (so their UI can update if they track reads)
       try{ socialChannel.send({ type: 'broadcast', event: 'read_receipt', payload: { fromId: otherId, seen_at: now } }); }catch(e){}
       updateBadges();
+      const chatMsgs = GameCache.messages.filter(m => (m.from_user_id === otherId || m.to_user_id === otherId)).sort((a,b) => new Date(a.created_at) - new Date(b.created_at));
+      cont.innerHTML = `<div style="display:flex;flex-direction:column;height:100%;"><div id="chatBody" style="flex:1;overflow-y:auto;padding-bottom:10px;">${chatMsgs.map(m => {
+        const isMe = m.from_user_id === currentUserId;
+        const sender = isMe ? { avatar_url: GameCache.user.avatar_url } : p;
+        return `<div style="display:flex;align-items:flex-end;gap:8px;margin-bottom:8px;${isMe ? 'flex-direction:row-reverse;' : ''}"><img src="${sender.avatar_url || avatars[0]}" style="width:28px;height:28px;border-radius:50%;"><div class="chat-bubble ${isMe ? 'me' : 'them'}" style="margin:0;">${m.text}</div></div>`;
+      }).join('')}</div><div style="display:flex;gap:10px;margin-top:10px;"><input id="chatInput" class="answer-input modern" style="flex:1;" placeholder="Type your message..." inputmode="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" /><button class="btn modern" style="width:90px;" onclick="sendMsg('${otherId}')">Send</button></div></div>`;
+      const cb = document.getElementById('chatBody'); cb.scrollTop = cb.scrollHeight;
     }
 
     async function handleAvatarUpload(e){
@@ -1228,11 +916,7 @@
     };
 
     function openAboutModal(){ openModal("aboutModal"); }
-    function closeSocialModal() {
-      setSocialModalFullscreen(false);
-      closeModal('socialModal');
-      document.getElementById('socialModal').dataset.activeChatId = "";
-    }
+    function closeSocialModal() { setSocialModalFullscreen(false); closeModal('socialModal'); document.getElementById('socialModal').dataset.activeChatId = ""; }
     function getLeague(mmr){ 
       if(mmr >= 3000) return "Master";
       if(mmr >= 2500) return "Diamond";
@@ -1276,114 +960,23 @@
       }catch(e){ console.warn('showApp error', e); }
     }
     function updateBadges(){
-      console.log('[Badge] Updating badges');
-      console.log('[Unread Debug] Current User:', currentUserId, 'type:', typeof currentUserId);
-      console.log('[Unread Debug] Messages:', GameCache.messages);
-      
-      // Debug: Print each message with detailed type info
-      GameCache.messages.forEach(m => {
-        console.log('[Unread Debug]', {
-          id: m.id,
-          from_user_id: m.from_user_id,
-          from_user_id_type: typeof m.from_user_id,
-          to_user_id: m.to_user_id,
-          to_user_id_type: typeof m.to_user_id,
-          read: m.read,
-          match_to_current: String(m.to_user_id) === String(currentUserId)
-        });
-      });
-      
-      // Count all incoming messages - use String comparison to avoid type mismatch
-      const unreadMsgs = GameCache.messages.filter(m => {
-        const matches = String(m.to_user_id) === String(currentUserId);
-        if (matches) console.log('[Unread Debug] MATCH found for message:', m.id, 'to_user_id:', m.to_user_id);
-        return matches;
-      }).length;
-      console.log('[Unread Debug] Calculated unreadMsgs:', unreadMsgs, 'total messages:', GameCache.messages.length);
-      
-      // Debug invites
-      console.log('[Invite Debug] Current User:', currentUserId, 'type:', typeof currentUserId);
-      console.log('[Invite Debug] Invites:', GameCache.invites);
-      
-      // Debug: Print each invite with detailed type info
-      GameCache.invites.forEach(i => {
-        console.log('[Invite Debug]', {
-          id: i.id,
-          from_user_id: i.from_user_id,
-          from_user_id_type: typeof i.from_user_id,
-          to_user_id: i.to_user_id,
-          to_user_id_type: typeof i.to_user_id,
-          status: i.status,
-          match_to_current: String(i.to_user_id) === String(currentUserId),
-          status_pending: i.status === 'pending'
-        });
-      });
-      
-      // Count all pending invites to current user - use String comparison
-      const unreadInvs = GameCache.invites.filter(i => {
-        const matches = String(i.to_user_id) === String(currentUserId) && i.status === 'pending';
-        if (matches) console.log('[Invite Debug] MATCH found for invite:', i.id, 'to_user_id:', i.to_user_id, 'status:', i.status);
-        return matches;
-      }).length;
-      console.log('[Invite Debug] Calculated unreadInvs:', unreadInvs, 'total invites:', GameCache.invites.length);
-      
-      const unreadFriendReqs = GameCache.friendRequests.filter(r => {
-        const matches = String(r.to_user_id) === String(currentUserId) && r.status === 'pending';
-        if (matches) console.log('[Friend Debug] MATCH found for friend request:', r.id, 'to_user_id:', r.to_user_id, 'status:', r.status);
-        return matches;
-      }).length;
-      console.log('[Friend Debug] Calculated unreadFriendReqs:', unreadFriendReqs, 'total friendRequests:', GameCache.friendRequests.length);
-      const totalUnreadInvs = unreadInvs + unreadFriendReqs;
-      console.log('[Badge] unreadMsgs:', unreadMsgs, 'unreadInvs:', totalUnreadInvs, 'invites:', unreadInvs, 'friendReqs:', unreadFriendReqs);
-      const mB = document.getElementById('msgBadge');
-      console.log('[Badges] msgBadge element:', mB);
-      if(mB) {
-        if(unreadMsgs > 0) {
-          mB.innerText = unreadMsgs;
-          mB.classList.remove('hidden');
-          console.log('[Badges] Showing msgBadge with count:', unreadMsgs);
-        } else {
-          mB.classList.add('hidden');
-          console.log('[Badges] Hiding msgBadge');
-        }
-      } else {
-        console.error('[Badges] msgBadge element not found');
-      }
-      const iB = document.getElementById('invBadge');
-      console.log('[Badges] invBadge element:', iB);
-      if(iB) {
-        if(totalUnreadInvs > 0) {
-          iB.innerText = totalUnreadInvs;
-          iB.classList.remove('hidden');
-          console.log('[Badges] Showing invBadge with count:', totalUnreadInvs);
-        } else {
-          iB.classList.add('hidden');
-          console.log('[Badges] Hiding invBadge - reason: totalUnreadInvs=', totalUnreadInvs, 'unreadInvs=', unreadInvs, 'unreadFriendReqs=', unreadFriendReqs, 'GameCache.invites.length=', GameCache.invites.length, 'GameCache.friendRequests.length=', GameCache.friendRequests.length);
-        }
-      } else {
-        console.error('[Badges] invBadge element not found');
-      }
-      const hN = document.getElementById('headerNotifDot');
-      if(hN) hN.style.display = GameCache.notifications.length > 0 ? 'block' : 'none';
+      const unreadMsgs = GameCache.messages.filter(m => m.to_user_id === currentUserId && (!getLastSeen(m.from_user_id) || new Date(m.created_at) > new Date(getLastSeen(m.from_user_id)))).length;
+      const unreadInvs = GameCache.invites.length + GameCache.friendRequests.length;
+      const mB = document.getElementById('msgBadge'); if(unreadMsgs > 0) { mB.innerText = unreadMsgs; mB.classList.remove('hidden'); } else mB.classList.add('hidden');
+      // Only show invites badge if invites modal is not currently open
+      const socialModal = document.getElementById('socialModal');
+      const isInvitesOpen = socialModal.classList.contains('active') && document.getElementById('socialTitle').innerText === "Invites";
+      const iB = document.getElementById('invBadge'); if(unreadInvs > 0 && !isInvitesOpen) { iB.innerText = unreadInvs; iB.classList.remove('hidden'); } else iB.classList.add('hidden');
+      document.getElementById('headerNotifDot').style.display = GameCache.notifications.length > 0 ? 'block' : 'none';
     }
     function renderLeaderboardPreview(){
       const cont = document.getElementById('leaderboardPreview');
-      cont.innerHTML = GameCache.leaderboard.slice(0,5).map((l, i) => {
-        const wins = l.wins || 0;
-        const losses = l.losses || 0;
-        const draws = l.draws || 0;
-        return `<div class="leader-item"><div class="leader-left"><img class="small-avatar" src="${l.avatar_url || avatars[0]}"><div><div style="font-weight:700">${i+1}. ${l.display_name}</div><div style="font-size:11px;opacity:0.6">${getLeague(l.mmr)}</div></div></div><div style="text-align:right;"><div style="font-weight:800">${l.mmr}</div><div style="font-size:10px;opacity:0.6">${wins}W ${losses}L ${draws}D</div></div></div>`;
-      }).join('');
+      cont.innerHTML = GameCache.leaderboard.slice(0,5).map((l, i) => `<div class="leader-item"><div class="leader-left"><img class="small-avatar" src="${l.avatar_url || avatars[0]}"><div><div style="font-weight:700">${i+1}. ${l.display_name}</div><div style="font-size:11px;opacity:0.6">${getLeague(l.mmr)}</div></div></div><div style="font-weight:800">${l.mmr}</div></div>`).join('');
     }
     function openLeaderboard(){
       document.getElementById('socialTitle').innerText = "Global Leaders";
       const cont = document.getElementById('socialContent');
-      cont.innerHTML = GameCache.leaderboard.map((l, i) => {
-        const wins = l.wins || 0;
-        const losses = l.losses || 0;
-        const draws = l.draws || 0;
-        return `<div class="leader-item"><div class="leader-left"><img class="small-avatar" src="${l.avatar_url || avatars[0]}"><div><div style="font-weight:700">${i+1}. ${l.display_name}</div><div style="font-size:11px;opacity:0.6">${getLeague(l.mmr)}</div></div></div><div style="text-align:right;"><div style="font-weight:800">${l.mmr}</div><div style="font-size:10px;opacity:0.6">${wins}W ${losses}L ${draws}D</div></div></div>`;
-      }).join('');
+      cont.innerHTML = GameCache.leaderboard.map((l, i) => `<div class="leader-item"><div class="leader-left"><img class="small-avatar" src="${l.avatar_url || avatars[0]}"><div><div style="font-weight:700">${i+1}. ${l.display_name}</div><div style="font-size:11px;opacity:0.6">${getLeague(l.mmr)}</div></div></div><div style="font-weight:800">${l.mmr}</div></div>`).join('');
       openModal('socialModal');
     }
     async function logout(){ await trackPresence('offline'); cleanupRealtime(); await sb.auth.signOut(); window.location.reload(); }
@@ -1393,9 +986,6 @@
       GameCache.match.active = false;
       document.getElementById("gameScreen").classList.add("hidden");
       document.getElementById("dashboardPage").classList.remove("hidden");
-
-      // Update presence to indicate player is no longer in a game
-      trackPresence('online');
     }
     
     function preventQuit() {
@@ -1448,68 +1038,27 @@
 
     async function sendFriendRequest(toId) {
       if (toId === currentUserId) return alert('You cannot add yourself.');
-
-      // Check for existing requests in both directions
-      const { data: existing, error: checkError } = await sb
-        .from('friend_requests')
-        .select('*')
-        .or(
-          `and(from_user_id.eq.${currentUserId},to_user_id.eq.${toId}),and(from_user_id.eq.${toId},to_user_id.eq.${currentUserId})`
-        );
-
-      if (checkError) {
-        console.error('Friend request check failed', checkError);
-        return;
-      }
-
-      if (existing && existing.length > 0) {
-        const request = existing[0];
-
-        if (request.status === 'accepted') {
-          alert('You are already friends.');
-          return;
-        }
-
-        if (
-          request.from_user_id === currentUserId &&
-          request.status === 'pending'
-        ) {
-          alert('Friend request already sent.');
-          return;
-        }
-
-        if (
-          request.to_user_id === currentUserId &&
-          request.status === 'pending'
-        ) {
-          alert('This user has already sent you a friend request.');
-          return;
-        }
-      }
-
-      const { error } = await sb
-        .from('friend_requests')
-        .insert({
-          from_user_id: currentUserId,
-          to_user_id: toId,
-          status: 'pending'
-        });
-
-      if (error) {
-        console.error('Friend request failed', error);
-        alert(error.message);
-      } else {
-        alert('Friend request sent!');
-        // Refresh the search results to update button state
-        searchUsers();
-      }
+      const { data, error } = await sb.from('friend_requests').insert({ from_user_id: currentUserId, to_user_id: toId, status: 'pending' }).select().single();
+      if (error) { console.error('Friend request failed', error); return alert('Unable to send request.'); }
+      if (data) GameCache.friendRequests.unshift(data);
+      showToast('friend', 'Friend Request Sent', 'Your request has been sent successfully.');
+      // Refresh the search results to update button state
+      searchUsers();
     }
 
     function renderFriendsList() {
       const list = document.getElementById('friendsList');
       list.innerHTML = GameCache.friends.map(fid => {
         const p = GameCache.profiles[fid] || { display_name: 'Player', avatar_url: avatars[0] };
-        return `<div class="social-item"><div style="display:flex;align-items:center;gap:10px;"><img src="${p.avatar_url || avatars[0]}" style="width:32px;height:32px;border-radius:50%;"><div style="font-weight:700">${p.display_name}</div></div><div><button class="leader-secondary" style="background:var(--blue);margin-right:8px;" onclick="findAndStartChat('${fid}')">💬</button><button class="leader-secondary" id="inviteBtn-${fid}" onclick="sendInvite('${fid}')">Invite</button></div></div>`;
+        // Check if invite already sent to this friend
+        const inviteSent = GameCache.invites.some(i => i.from_user_id === currentUserId && i.to_user_id === fid);
+        let inviteButtonText = 'Invite';
+        let inviteButtonDisabled = '';
+        if (inviteSent) {
+          inviteButtonText = 'Sent';
+          inviteButtonDisabled = 'disabled style="opacity:0.5"';
+        }
+        return `<div class="social-item"><div style="display:flex;align-items:center;gap:10px;"><img src="${p.avatar_url || avatars[0]}" style="width:32px;height:32px;border-radius:50%;"><div style="font-weight:700">${p.display_name}</div></div><div><button class="leader-secondary" style="background:var(--blue);margin-right:8px;" onclick="findAndStartChat('${fid}')">💬</button><button class="leader-secondary" ${inviteButtonDisabled} onclick="${inviteButtonDisabled ? '' : `sendInvite('${fid}')`}">${inviteButtonText}</button></div></div>`;
       }).join('') || "<p style='text-align:center;opacity:0.5'>No friends yet</p>";
     }
 
@@ -1520,160 +1069,24 @@
 
     async function sendInvite(toId) {
       if (toId === currentUserId) return alert('You cannot invite yourself.');
-
-      console.log('[Invite] Sending invite to:', toId);
-
-      // Check if player is online
-      const isOnline = GameCache.onlineUsers[toId] !== undefined;
-      if (!isOnline) {
-        return alert('This player is currently offline. You can only invite online players.');
-      }
-
-      // Check if player is already in a game
-      const isInGame = GameCache.match.active;
-      if (isInGame) {
-        return alert('You are already in a game. Finish your current match before inviting others.');
-      }
-
-      // Allow multiple pending invites - it's up to the recipient to accept or decline
-      const { data, error } = await sb.from('game_invites').insert({
-        from_user_id: currentUserId,
-        to_user_id: toId,
-        mode: 'quick',
-        status: 'pending'
-      }).select().single();
-
-      console.log('[Invite] Insert result:', data);
-      console.log('[Invite] Insert error:', error);
-
-      if (error) {
-        console.error('[Invite] Failed to send invite:', error);
-        return alert(`Unable to send invite: ${error.message || 'Unknown error'}`);
-      }
-
-      if (!data) {
-        console.error('[Invite] No data returned from insert');
-        return alert('Failed to send invite: No data returned');
-      }
-
-      console.log('[Invite] Invite successfully inserted with ID:', data.id);
-
-      // Add to cache
-      if (!GameCache.invites.some(i => i.id === data.id)) {
+      const { data, error } = await sb.from('game_invites').insert({ from_user_id: currentUserId, to_user_id: toId, mode: 'quick', status: 'pending' }).select().single();
+      if (error) { console.error('Invite failed', error); return alert('Unable to send invite.'); }
+      if (data) {
         GameCache.invites.unshift(data);
+        showToast('invite', 'Game Invite Sent', 'Your invite has been sent successfully.');
+        // Refresh friends list to update button state
+        renderFriendsList();
       }
-
-      // Show "Sent" on button temporarily
-      const inviteBtn = document.getElementById(`inviteBtn-${toId}`);
-      if (inviteBtn) {
-        inviteBtn.innerText = 'Sent';
-        inviteBtn.disabled = true;
-        inviteBtn.style.opacity = '0.5';
-        // Reset after 3 seconds
-        setTimeout(() => {
-          inviteBtn.innerText = 'Invite';
-          inviteBtn.disabled = false;
-          inviteBtn.style.opacity = '1';
-        }, 3000);
-      }
-
-      showToast('invite', 'Game Invite Sent', 'Your invite has been sent successfully.');
     }
 
-    async function sendRematch(oppId) {
-      if (!oppId) return alert('Cannot send rematch: No opponent found');
-
-      console.log('[Rematch] Sending rematch invite to:', oppId);
-
-      // Check if player is online
-      const isOnline = GameCache.onlineUsers[oppId] !== undefined;
-      if (!isOnline) {
-        return alert('This player is currently offline. You cannot send a rematch.');
-      }
-
-      // Check if current user is already in a game
-      if (GameCache.match.active) {
-        return alert('You are already in a game.');
-      }
-
-      // Use the same mode as the previous match
-      const mode = GameCache.match.mode || 'quick';
-
-      const { data, error } = await sb.from('game_invites').insert({
-        from_user_id: currentUserId,
-        to_user_id: oppId,
-        mode: mode,
-        status: 'pending'
-      }).select().single();
-
-      console.log('[Rematch] Insert result:', data);
-      console.log('[Rematch] Insert error:', error);
-
-      if (error) {
-        console.error('[Rematch] Failed to send rematch invite:', error);
-        return alert(`Failed to send rematch: ${error.message || 'Unknown error'}`);
-      }
-
-      if (!data) {
-        console.error('[Rematch] No data returned from insert');
-        return alert('Failed to send rematch: No data returned');
-      }
-
-      console.log('[Rematch] Rematch invite successfully inserted with ID:', data.id);
-
-      // Add to cache
-      if (!GameCache.invites.some(i => i.id === data.id)) {
-        GameCache.invites.unshift(data);
-      }
-
-      closeModal('resultModal');
-      showToast('invite', 'Rematch Sent', 'Your rematch invite has been sent successfully.');
-      updateBadges();
-      openInvites();
-    }
-
-    async function loadInvitesFromDatabase() {
-      console.log('[Invite] Loading invites from database');
-      const { data, error } = await sb
-        .from('game_invites')
-        .select('*')
-        .eq('to_user_id', currentUserId)
-        .eq('status', 'pending')
-        .order('created_at', { ascending: false });
-
-      console.log('[Invite] Database invites loaded:', data?.length, data);
-      console.log('[Invite] Database invites error:', error);
-
-      if (error) {
-        console.error('[Invite] Failed to load invites:', error);
-        return [];
-      }
-
-      // Replace cache with fresh invite state from database
-      GameCache.invites = data || [];
-      console.log('[Invite] Cache updated with invites, total:', GameCache.invites.length);
-      updateBadges();
-      return GameCache.invites;
-    }
-
-    async function openInvites(){
+    function openInvites(){
       document.getElementById('socialTitle').innerText = "Invites";
-      // Reset active chat ID when opening invites
-      document.getElementById('socialModal').dataset.activeChatId = "";
       const cont = document.getElementById('socialContent');
-
-      // Open modal immediately with loading state
-      cont.innerHTML = `<p style='text-align:center;padding:20px;opacity:0.5'>Loading invites...</p>`;
-      openModal('socialModal');
-
-      // Load invites from database after modal is open
-      const invites = (await loadInvitesFromDatabase()) || GameCache.invites || [];
-
       const friendItems = GameCache.friendRequests.map(r => {
         const p = GameCache.profiles[r.from_user_id] || { display_name: 'Player', avatar_url: avatars[0] };
         return `<div class="social-item"><div style="display:flex;align-items:center;gap:10px;"><img src="${p.avatar_url || avatars[0]}" style="width:32px;height:32px;border-radius:50%;"><div><div style="font-weight:700">Friend request from ${p.display_name}</div><div style="font-size:12px;opacity:0.65">${p.display_name}</div></div></div><div><button class="leader-secondary" onclick="respondFriendRequest('${r.id}', 'accepted')">Accept</button><button class="leader-secondary" style="margin-left:8px;" onclick="respondFriendRequest('${r.id}', 'declined')">Decline</button></div></div>`;
       });
-      const gameItems = invites.map(i => {
+      const gameItems = GameCache.invites.map(i => {
         const p = GameCache.profiles[i.from_user_id] || { display_name: 'Player', avatar_url: avatars[0] };
         const label = i.from_user_id === currentUserId ? `Invite sent to ${GameCache.profiles[i.to_user_id]?.display_name || 'Player'}` : `Game invite from ${p.display_name}`;
         return `<div class="social-item"><div><div style="font-weight:700">${label}</div><div style="font-size:12px;opacity:0.65">Mode: ${i.mode}</div></div><div>${i.to_user_id === currentUserId ? `<button class="leader-secondary" style="background:var(--success);margin-right:12px;" onclick="respondGameInvite('${i.id}', 'accepted')">Accept</button><button class="leader-secondary" style="background:var(--danger);" onclick="respondGameInvite('${i.id}', 'declined')">Decline</button>` : ''}</div></div>`;
@@ -1682,6 +1095,8 @@
       if (friendItems.length) sections.push(`<div style="margin-bottom:14px;font-weight:700;">Friend Requests</div>${friendItems.join('')}`);
       if (gameItems.length) sections.push(`<div style="margin-bottom:14px;font-weight:700;">Game Invites</div>${gameItems.join('')}`);
       cont.innerHTML = sections.join('') || "<p style='text-align:center;padding:20px;opacity:0.5'>No invites yet</p>";
+      openModal('socialModal');
+      document.getElementById('invBadge').classList.add('hidden');
     }
 
     async function respondFriendRequest(id, status) {
@@ -1701,32 +1116,6 @@
     async function respondGameInvite(id, status) {
       const invite = GameCache.invites.find(i => i.id === id);
       if (!invite) return;
-
-      if (status === 'accepted') {
-        const requesterId = invite.from_user_id;
-
-        // Check if requester is online
-        const isRequesterOnline = GameCache.onlineUsers[requesterId] !== undefined;
-        if (!isRequesterOnline) {
-          alert('The player who invited you is now offline. You cannot accept this invite.');
-          return;
-        }
-
-        // Check if current user is already in a game
-        if (GameCache.match.active) {
-          alert('You are already in a game. Finish your current match before accepting another invite.');
-          return;
-        }
-
-        // Check if requester is already in a game (via presence data)
-        // We'll track this via a broadcast mechanism
-        const requesterPresence = GameCache.onlineUsers[requesterId];
-        if (requesterPresence && requesterPresence[0] && requesterPresence[0].inGame) {
-          alert('The player who invited you is already in a game. You cannot accept this invite.');
-          return;
-        }
-      }
-
       await sb.from('game_invites').update({ status }).eq('id', id);
       GameCache.invites = GameCache.invites.filter(i => i.id !== id);
       updateBadges();
@@ -1745,13 +1134,12 @@
       const currentUser = { username: GameCache.user.display_name || 'Me', id: currentUserId };
       const receiverUsername = GameCache.profiles[toId]?.display_name || 'Friend';
       const receiverId = toId;
-
-      console.log('[Message] Sending message to:', receiverId, 'text:', messageText);
+      const supabase = sb;
 
       // Clear input first to prevent duplicate sends
       chatInput.value = '';
 
-      const { data, error } = await sb
+      const { data, error } = await supabase
         .from('messages')
         .insert([
           {
@@ -1764,99 +1152,13 @@
         ])
         .select();
 
-      console.log('[Message] Insert result:', data);
-      console.log('[Message] Insert error:', error);
-
-      if (error) {
-        console.error('[Message] sendMsg error:', error);
-        chatInput.value = messageText;
-        alert(`Failed to send message: ${error.message || 'Unknown error'}`);
-        return;
-      }
-
-      if (!data || data.length === 0) {
-        console.error('[Message] No data returned from insert');
-        chatInput.value = messageText;
-        alert('Failed to send message: No data returned');
-        return;
-      }
-
-      if (!data[0].created_at) {
-        data[0].created_at = new Date().toISOString();
-      }
-      console.log('[Message] Message successfully inserted with ID:', data[0].id);
-
-      // Add to cache
-      if (!GameCache.messages.some(m => m.id === data[0].id)) {
-        GameCache.messages.unshift(data[0]);
-      }
-
-      // Append message to chat UI immediately for better UX
-      const activeChatId = document.getElementById('socialModal').dataset.activeChatId;
-      if (activeChatId === toId) {
-        const chatBody = document.getElementById('chatBody');
-        if (chatBody) {
-          const msgHtml = `<div style="display:flex;align-items:flex-end;gap:8px;margin-bottom:8px;flex-direction:row-reverse;"><img src="${GameCache.user.avatar_url || avatars[0]}" style="width:28px;height:28px;border-radius:50%;"><div class="chat-bubble me" style="margin:0;">${messageText}</div></div>`;
-          chatBody.insertAdjacentHTML('beforeend', msgHtml);
-          chatBody.scrollTop = chatBody.scrollHeight;
-        }
-      }
+      console.log(data);
+      console.log(error);
+      if (error) { console.error('sendMsg error', error); chatInput.value = messageText; return; }
 
       // Maintain focus after sending
       chatInput.focus();
-    }
-
-    async function loadMessagesFromDatabase(otherId) {
-      console.log('[Message] Loading messages from database for user:', otherId);
-      const { data, error } = await sb
-        .from('messages')
-        .select('*')
-        .or(`and(from_user_id.eq.${currentUserId},to_user_id.eq.${otherId}),and(from_user_id.eq.${otherId},to_user_id.eq.${currentUserId})`)
-        .order('created_at', { ascending: true });
-
-      console.log('[Message] Database messages loaded:', data?.length);
-      console.log('[Message] Database messages error:', error);
-
-      if (error) {
-        console.error('[Message] Failed to load messages:', error);
-        return [];
-      }
-
-      const ensureCreatedAt = (msg) => {
-        if (!msg.created_at || isNaN(new Date(msg.created_at).getTime())) {
-          msg.created_at = new Date().toISOString();
-        }
-        return msg;
-      };
-      const cleanedData = (data || []).map(ensureCreatedAt);
-      console.log('[Messages] Loaded rows for conversation:', otherId, 'count:', cleanedData.length);
-      console.log('[Messages] renderMessages called');
-      console.log('[Render] Messages passed to UI:', cleanedData);
-
-      const conversationKey = (message) => {
-        return (message.from_user_id === currentUserId && message.to_user_id === otherId) ||
-               (message.to_user_id === currentUserId && message.from_user_id === otherId);
-      };
-      const conversationMessages = cleanedData.length > 0 ? cleanedData : GameCache.messages.filter(conversationKey);
-
-      // Replace cached messages for this conversation only when DB returns results
-      if (cleanedData.length > 0) {
-        GameCache.messages = GameCache.messages.filter(m => !conversationKey(m));
-        GameCache.messages.push(...cleanedData);
-      }
-      updateBadges();
-
-      // Render chat UI
-      const chatBody = document.getElementById('chatBody');
-      if (chatBody) {
-        const p = GameCache.profiles[otherId] || { avatar_url: avatars[0] };
-        chatBody.innerHTML = conversationMessages.map(m => {
-          const isMe = m.from_user_id === currentUserId;
-          const sender = isMe ? { avatar_url: GameCache.user.avatar_url } : p;
-          return `<div style="display:flex;align-items:flex-end;gap:8px;margin-bottom:8px;${isMe ? 'flex-direction:row-reverse;' : ''}"><img src="${sender.avatar_url || avatars[0]}" style="width:28px;height:28px;border-radius:50%;"><div class="chat-bubble ${isMe ? 'me' : 'them'}" style="margin:0;">${m.text}</div></div>`;
-        }).join('');
-        chatBody.scrollTop = chatBody.scrollHeight;
-      }
+      // Don't manually add to cache - realtime listener will handle it to prevent duplicates
     }
 
     const validWords = new Set(['able','acid','aged','aims','airs','also','arch','area','arts','baby','back','bags','ball','band','bang','bank','bare','barn','base','bath','bean','bear','beat','beds','been','bell','belt','bend','bent','best','bias','bike','bird','blow','blue','boat','body','bone','book','born','both','bowl','bulk','burn','bush','busy','cafe','cage','cake','call','came','card','care','case','cast','cell','cent','chat','chin','chip','chop','city','clay','club','coal','coat','code','coin','cold','come','cone','cook','cool','copy','corn','cost','crew','crop','crow','cube','curl','cute','damp','dare','dark','dart','data','date','dawn','days','dead','deal','dear','deck','deep','desk','dial','dice','diet','dish','down','draw','drew','drop','drug','dual','duck','dumb','dump','dust','duty','dyed','each','earl','earn','ease','east','easy','edge','edit','else','emit','ends','epic','even','ever','evil','exam','exit','face','fact','fade','fail','fair','fall','farm','fast','fate','fear','feel','feet','fell','felt','file','fill','film','find','fine','fire','firm','fish','fist','five','flat','flee','flew','flip','flow','folk','food','fool','foot','fork','form','fort','foul','four','free','from','fuel','full','fund','funk','gain','game','gang','gate','gave','gaze','gene','gift','girl','give','glad','glen','goal','goat','gold','golf','gone','good','grab','gray','grew','grey','grid','grin','grip','grow','gulf','hack','hair','half','hall','halt','hand','hang','hard','harm','hate','have','head','heal','heap','hear','heat','heel','held','help','herb','herd','here','hero','high','hill','hind','hint','hire','hold','hole','holy','home','hood','hook','hope','horn','host','hour','huge','hull','hung','hunt','hurt','hush','idle','inch','into','iris','iron','isle','item','jail','jazz','jean','jest','join','joke','jump','june','junk','jury','just','keen','keep','kept','kick','kill','kind','king','kiss','knee','knew','knit','knot','know','lace','lack','lady','laid','lake','lamb','lamp','land','lane','last','late','lead','leaf','lean','leap','left','lend','lens','lent','less','liar','lice','lick','lied','lies','life','lift','like','lily','limb','lime','limp','line','lint','lion','list','live','load','loaf','loan','lock','loft','lone','long','look','loop','lord','lose','loss','lost','loud','love','luck','lump','lung','lure','lush','lust','mace','made','maid','mail','main','make','male','mall','many','mark','mars','mart','mask','mass','mate','math','meal','mean','meat','meet','menu','mess','mice','mild','mile','milk','mill','mind','mine','mint','miss','mist','mode','mood','moon','more','most','moth','move','much','mule','mute','myth','nail','name','navy','near','neat','neck','need','nest','news','next','nice','nick','nine','node','none','noon','nose','note','noun','null','numb','oath','obey','odds','odor','okay','once','only','onto','open','oral','orca','oven','over','pace','pack','page','paid','pain','pair','pale','palm','park','part','pass','past','path','peak','pear','peel','pent','pest','pick','pill','pine','ping','pink','pint','pipe','plan','play','plea','plot','plow','plug','plum','poem','poet','pole','pond','pony','pool','poor','pork','port','pose','post','pour','pray','prep','prey','pull','pulp','pump','punk','push','quit','race','rack','rain','rake','rank','rare','rate','read','real','ream','rear','redo','reed','reef','reel','rely','rent','rest','rice','rich','ride','ring','rise','risk','road','roam','roar','robe','rock','role','roll','roof','room','root','rope','rose','rote','rude','rule','rung','runt','rush','rust','sack','safe','sage','said','sail','sake','sale','salt','same','sand','sang','sank','save','seal','seam','seat','seed','seek','seem','seen','self','sell','send','sent','sept','shed','shew','ship','shot','show','shut','sick','side','sigh','sign','silk','sill','sine','sing','sink','site','size','skin','slip','slow','snap','snow','soap','soar','sock','soft','soil','sold','sole','some','song','soon','soot','sore','sort','soul','spot','stab','stag','star','stay','stem','step','stew','stop','stub','stud','such','suit','sulk','sump','sung','sunk','sure','surf','sway','swim','tail','take','tale','talk','tall','tame','tank','tape','task','team','tear','teen','tell','tend','tent','term','test','text','than','that','them','then','they','thin','this','thou','thus','tick','tide','tied','tier','ties','tilt','time','tint','tiny','tire','toad','toes','tofu','toga','told','toll','tomb','tone','took','tool','tops','tore','torn','toss','tour','town','trap','tray','tree','trek','trim','trio','trip','trod','trot','true','tuba','tube','tuck','tuft','tune','turn','twig','twin','type','ugly','unit','upon','urchin','urge','used','user','vain','vane','vary','vast','veal','veil','vein','verb','very','vest','veto','vice','view','vine','vise','void','vote','wade','wage','wait','wake','walk','wall','wand','want','warm','warn','wash','wasp','wave','wavy','weak','wear','weep','well','went','were','west','what','when','whey','whip','wick','wide','wife','wild','will','wilt','wind','wine','wing','wink','wipe','wire','wise','wish','with','wolf','womb','wont','wood','wool','word','wore','work','worm','worn','wrap','wren','writ','yard','yarn','year','yell','yoke','your','yuan','yule','zero','zest','zinc','zone','zoom']);
@@ -2012,9 +1314,12 @@
       
       alert(`🎁 Daily Reward Claimed!\n\n+${coins} Coins\n+${xp} XP\n🔥 ${GameCache.user.dailyStreak} Day Streak!`);
       
-      // Update database (only update streak since daily_streak and last_daily don't exist)
+      // Update database
       sb.from('profiles').update({
-        streak: GameCache.user.streak
+        coins: GameCache.user.coins,
+        xp: GameCache.user.xp,
+        daily_streak: GameCache.user.dailyStreak,
+        last_daily: today
       }).eq('id', currentUserId);
       
       loadProfile();
@@ -2023,14 +1328,6 @@
     function createMatchPayload(invite) {
       const duration = 180; // 3 minutes in seconds
       const initialPuzzle = generateLetters(6);
-      // Generate all puzzles upfront to ensure both players have the same puzzles
-      const puzzles = [initialPuzzle];
-      for (let i = 0; i < 20; i++) {
-        puzzles.push(generateLetters(6));
-      }
-
-      const matchStartTimestamp = Date.now() + 3000; // Start 3 seconds from now to allow for sync
-
       return {
         matchId: `match-${invite.id}-${Date.now()}`,
         inviteId: invite.id,
@@ -2053,7 +1350,7 @@
           [invite.from_user_id]: 0,
           [invite.to_user_id]: 0
         },
-        puzzles: puzzles, // All puzzles generated upfront
+        puzzles: [initialPuzzle],
         playerScores: {
           [invite.from_user_id]: 0,
           [invite.to_user_id]: 0
@@ -2074,8 +1371,8 @@
           [invite.from_user_id]: 0,
           [invite.to_user_id]: 0
         },
-        startedAt: matchStartTimestamp, // Synchronized start time
-        endsAt: matchStartTimestamp + (duration * 1000), // Synchronized end time
+        startedAt: Date.now(),
+        endsAt: Date.now() + (duration * 1000),
         status: 'active'
       };
     }
@@ -2087,70 +1384,27 @@
         ...payload,
         timer: null
       };
-
-      // Show countdown before game starts
-      const now = Date.now();
-      const timeUntilStart = Math.max(0, GameCache.match.startedAt - now);
-
-      if (timeUntilStart > 0) {
-        // Show countdown
-        document.getElementById('dashboardPage').classList.add('hidden');
-        document.getElementById('gameScreen').classList.remove('hidden');
-        document.getElementById('gameScreen').innerHTML = `
-          <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;background:linear-gradient(135deg,var(--blue),var(--purple));color:white;">
-            <h1 style="font-size:48px;margin-bottom:20px;">Game Starting In</h1>
-            <div id="countdown" style="font-size:120px;font-weight:800;">${Math.ceil(timeUntilStart / 1000)}</div>
-            <p style="font-size:18px;opacity:0.8;">Get Ready!</p>
-          </div>
-        `;
-
-        const countdownInterval = setInterval(() => {
-          const remaining = Math.max(0, GameCache.match.startedAt - Date.now());
-          const countdownEl = document.getElementById('countdown');
-          if (countdownEl) {
-            countdownEl.innerText = Math.ceil(remaining / 1000);
-          }
-
-          if (remaining <= 0) {
-            clearInterval(countdownInterval);
-            // Game starts now
-            renderMatchUI();
-            startGameTimer();
-          }
-        }, 100);
-      } else {
-        // Game should start immediately
-        document.getElementById('dashboardPage').classList.add('hidden');
-        document.getElementById('gameScreen').classList.remove('hidden');
-        renderMatchUI();
-        startGameTimer();
-      }
-
-      // Update presence to indicate player is in a game
-      trackPresence('online');
-    }
-
-    function startGameTimer() {
+      document.getElementById('dashboardPage').classList.add('hidden');
+      document.getElementById('gameScreen').classList.remove('hidden');
+      renderMatchUI();
       if (GameCache.match.timer) clearInterval(GameCache.match.timer);
       GameCache.match.timer = setInterval(() => {
         const remaining = Math.max(0, Math.round((GameCache.match.endsAt - Date.now()) / 1000));
         const minutes = Math.floor(remaining / 60);
         const seconds = remaining % 60;
         const timeDisplay = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-
+        
         // Update timer displays without re-rendering entire UI
-        const timerEl = document.getElementById('timer');
-        const roundCountEl = document.getElementById('roundCount');
-        if (timerEl) timerEl.innerText = remaining;
-        if (roundCountEl) roundCountEl.innerText = timeDisplay;
-
+        document.getElementById('timer').innerText = remaining;
+        document.getElementById('roundCount').innerText = timeDisplay;
+        
         // Update opponent score if changed (check if opponent made progress)
         const opponentId = GameCache.match.from_user_id === currentUserId ? GameCache.match.to_user_id : GameCache.match.from_user_id;
         const oppScoreEl = document.getElementById('oppScore');
         if (oppScoreEl && oppScoreEl.innerText != GameCache.match.playerScores[opponentId]) {
           oppScoreEl.innerText = GameCache.match.playerScores[opponentId];
         }
-
+        
         if (remaining <= 0) {
           clearInterval(GameCache.match.timer);
           finishMatch(false);
@@ -2176,16 +1430,10 @@
       const seconds = remainingTime % 60;
       const timeDisplay = `${minutes}:${seconds.toString().padStart(2, '0')}`;
       
-      // Get player MMR
-      const myMMR = GameCache.user.mmr || 0;
-      const oppMMR = GameCache.profiles[opponentId]?.mmr || 0;
-      
       document.getElementById('meName').innerText = GameCache.match.playerNames[currentUserId];
       document.getElementById('oppName').innerText = GameCache.match.playerNames[opponentId];
       document.getElementById('myScore').innerText = meScore;
       document.getElementById('oppScore').innerText = oppScore;
-      document.getElementById('myMMR').innerText = `MMR: ${myMMR}`;
-      document.getElementById('oppMMR').innerText = `MMR: ${oppMMR}`;
       document.getElementById('roundCount').innerText = timeDisplay;
       document.getElementById('scrambleWord').innerText = letters.toUpperCase();
       
@@ -2250,27 +1498,19 @@
       const accuracy = meCorrect + meWrong > 0 ? Math.round((meCorrect / (meCorrect + meWrong)) * 100) : 0;
       
       const isRanked = GameCache.match.mode === 'ranked';
-      const mmrChange = calculateMMRChange(GameCache.user.mmr, GameCache.profiles[oppId]?.mmr || 0, isRanked);
+      const mmrChange = calculateMMRChange(GameCache.user.mmr, GameCache.profiles[oppId]?.mmr || 1000, isRanked);
       const xpGained = calculateXP(result, meScore, meStreak);
       const coinsGained = calculateCoins(result, meScore, meStreak);
       
       // Update user stats
       GameCache.user.xp += xpGained;
       GameCache.user.coins += coinsGained;
-
-      // Only record wins/losses/draws for non-AI games
-      const isAIGame = GameCache.match.mode === 'single' || GameCache.match.mode === 'ai';
-      if (!isAIGame) {
-        if (result === 'win') {
-          GameCache.user.wins = (GameCache.user.wins || 0) + 1;
-          GameCache.user.streak = (GameCache.user.streak || 0) + 1;
-        } else if (result === 'loss') {
-          GameCache.user.losses = (GameCache.user.losses || 0) + 1;
-          GameCache.user.streak = 0;
-        } else if (result === 'tie') {
-          GameCache.user.draws = (GameCache.user.draws || 0) + 1;
-          GameCache.user.streak = 0;
-        }
+      if (result === 'win') {
+        GameCache.user.wins = (GameCache.user.wins || 0) + 1;
+        GameCache.user.streak = (GameCache.user.streak || 0) + 1;
+      } else if (result === 'loss') {
+        GameCache.user.losses = (GameCache.user.losses || 0) + 1;
+        GameCache.user.streak = 0;
       }
       
       if (isRanked) {
@@ -2286,20 +1526,6 @@
       const neededXP = getLevelXP(currentLevel + 1);
       if (GameCache.user.xp >= neededXP) {
         GameCache.user.level++;
-        // Update level display in real-time
-        const levelDisplay = document.getElementById('levelDisplay');
-        if (levelDisplay) levelDisplay.innerText = GameCache.user.level;
-      }
-
-      // Update XP progress in real-time
-      const xpProgress = getXPProgress();
-      const xpBar = document.getElementById('xpBar');
-      const xpText = document.getElementById('xpText');
-      if (xpBar) xpBar.style.width = `${xpProgress}%`;
-      if (xpText) {
-        const currentXP = GameCache.user.xp - getLevelXP(GameCache.user.level);
-        const neededXP = getLevelXP(GameCache.user.level + 1) - getLevelXP(GameCache.user.level);
-        xpText.innerText = `${Math.max(0, currentXP)} / ${neededXP}`;
       }
       
       // Calculate MVP
@@ -2354,7 +1580,7 @@
           </div>
           
           ${mvp ? `<div style="background:rgba(139,92,246,0.1);padding:15px;border-radius:12px;margin-bottom:20px;border:1px solid rgba(139,92,246,0.3);text-align:center;"><strong style="color:var(--purple);">${mvp}</strong></div>` : ''}
-
+          
           <div style="background:rgba(255,255,255,0.05);padding:15px;border-radius:12px;margin-bottom:20px;">
             <div style="font-size:12px;opacity:0.7;margin-bottom:8px;">XP Progress</div>
             <div style="background:rgba(255,255,255,0.1);height:8px;border-radius:4px;overflow:hidden;">
@@ -2362,9 +1588,6 @@
             </div>
             <div style="font-size:11px;opacity:0.6;margin-top:4px;">${getXPProgress()}% to Level ${GameCache.user.level + 1}</div>
           </div>
-
-          ${!isAIGame ? `<button class="btn modern" style="width:100%;padding:16px;margin-top:20px;background:linear-gradient(135deg,var(--blue),var(--purple));" onclick="sendRematch('${oppId}')">🔄 Rematch</button>` : ''}
-          <button class="btn modern" style="width:100%;padding:16px;margin-top:12px;" onclick="closeModal('resultModal')">Back to Dashboard</button>
         </div>
       `;
       
@@ -2392,56 +1615,19 @@
     async function updateProfileAfterMatch(result, isRanked, mmrChange) {
       try {
         const updateData = {
+          xp: GameCache.user.xp,
+          level: GameCache.user.level,
+          coins: GameCache.user.coins,
           wins: GameCache.user.wins,
           losses: GameCache.user.losses,
-          streak: GameCache.user.streak,
-          draws: GameCache.user.draws,
-          rank_points: GameCache.user.rank_points || 0
+          streak: GameCache.user.streak
         };
-
-        // Note: XP is not saved to database as it's not in the schema
-        // XP is tracked client-side in GameCache.user.xp
-        console.log('[Profile] XP is client-side only, not saved to database:', GameCache.user.xp);
         
         if (isRanked) {
           updateData.mmr = GameCache.user.mmr;
         }
         
-        const { error } = await sb.from('profiles').update(updateData).eq('id', currentUserId);
-        if (error) throw error;
-        
-        // Refresh leaderboard in real-time after match
-        const { data: updatedLeaderboard } = await sb.from('profiles').select('id, display_name, mmr, avatar_url, wins, losses, draws, rank_points, streak, league').order('mmr', {ascending: false});
-        if (updatedLeaderboard) {
-          GameCache.leaderboard = updatedLeaderboard;
-          updatedLeaderboard.forEach(p => GameCache.profiles[p.id] = p);
-          renderLeaderboardPreview();
-        }
-        
-        // Update header display
-        document.getElementById("mmr").innerText = GameCache.user.mmr;
-        document.getElementById("wins").innerText = GameCache.user.wins;
-        document.getElementById("losses").innerText = GameCache.user.losses;
-        document.getElementById("draws").innerText = GameCache.user.draws;
-        document.getElementById("levelDisplay").innerText = GameCache.user.level;
-        const coinsDisplay = document.getElementById("coinsDisplay");
-        if (coinsDisplay) coinsDisplay.innerText = GameCache.user.coins || 0;
-        
-        // Update level badge and XP bar
-        const xpProgress = getXPProgress();
-        const xpBar = document.getElementById("xpBar");
-        const xpText = document.getElementById("xpText");
-        if (xpBar) xpBar.style.width = `${xpProgress}%`;
-        if (xpText) {
-          const currentXP = GameCache.user.xp - getLevelXP(GameCache.user.level);
-          const neededXP = getLevelXP(GameCache.user.level + 1) - getLevelXP(GameCache.user.level);
-          xpText.innerText = `${Math.max(0, currentXP)} / ${neededXP}`;
-        }
-        
-        // Update league badge
-        document.getElementById("leagueBadge").innerText = `💎 ${getLeague(GameCache.user.mmr)}`;
-        document.getElementById("headerRank").innerText = `${getLeague(GameCache.user.mmr)} League`;
-        
+        await sb.from('profiles').update(updateData).eq('id', currentUserId);
       } catch (err) {
         console.error('Failed to update profile after match:', err);
       }
@@ -2451,21 +1637,14 @@
       const modal = document.getElementById('socialModal');
       if (!modal.classList.contains('active')) return;
       const title = document.getElementById('socialTitle').innerText;
-      if (title === "Messages") {
-        openMessages();
-      } else if (title === "Invites") {
-        openInvites();
-      } else if (title === "Players Online") {
-        openOnlinePlayers();
-      } else if (title === "Friends") {
-        openFriends();
-      } else if (title.startsWith("Chat with")) {
+      if (title === "Messages") openMessages();
+      else if (title === "Invites") openInvites();
+      else if (title === "Players Online") openOnlinePlayers();
+      else if (title === "Friends") openFriends();
+      else if (title.startsWith("Chat with")) {
         const otherId = modal.dataset.activeChatId;
-        if (otherId) {
-          viewChat(otherId);
-        }
+        if (otherId) viewChat(otherId);
       }
-      updateBadges();
     }
 
     /* ========================================== GAME LOGIC ========================================== */
@@ -2474,12 +1653,10 @@
         startSinglePlayer();
         return;
       }
-
-      console.log('[Match] Finding match mode:', mode);
-
+      
       // For quick/ranked matches, show searching UI
       alert(`Searching for ${mode} match...`);
-
+      
       // In a real implementation, this would use a matchmaking queue
       // For now, we'll simulate by checking for online players
       const onlinePlayers = Object.keys(GameCache.onlineUsers).filter(id => id !== currentUserId);
@@ -2487,63 +1664,23 @@
         alert('No players online. Try again later or play single player.');
         return;
       }
-
-      // For ranked matches, match with players of similar MMR
-      let targetPlayerId;
-      if (mode === 'ranked') {
-        // Find players with similar MMR (within 200 MMR)
-        const myMMR = GameCache.user.mmr || 0;
-        const suitablePlayers = onlinePlayers.filter(id => {
-          const playerMMR = GameCache.profiles[id]?.mmr || 0;
-          return Math.abs(playerMMR - myMMR) <= 200;
-        });
-
-        if (suitablePlayers.length > 0) {
-          targetPlayerId = suitablePlayers[Math.floor(Math.random() * suitablePlayers.length)];
-        } else {
-          // If no suitable players, pick any online player
-          targetPlayerId = onlinePlayers[Math.floor(Math.random() * onlinePlayers.length)];
-        }
-      } else {
-        // Quick match - pick any online player
-        targetPlayerId = onlinePlayers[Math.floor(Math.random() * onlinePlayers.length)];
-      }
-
-      console.log('[Match] Target player:', targetPlayerId);
-
-      // Send a real game invite to the database
-      const { data, error } = await sb.from('game_invites').insert({
+      
+      // Simulate matchmaking by picking a random online player
+      const randomPlayerId = onlinePlayers[Math.floor(Math.random() * onlinePlayers.length)];
+      const fakeInvite = {
+        id: `match-${Date.now()}`,
         from_user_id: currentUserId,
-        to_user_id: targetPlayerId,
-        mode: mode,
-        status: 'pending'
-      }).select().single();
-
-      console.log('[Match] Insert result:', data);
-      console.log('[Match] Insert error:', error);
-
-      if (error) {
-        console.error('[Match] Failed to send game invite:', error);
-        alert(`Failed to send game invite: ${error.message || 'Unknown error'}`);
-        return;
-      }
-
-      if (!data) {
-        console.error('[Match] No data returned from insert');
-        alert('Failed to send game invite: No data returned');
-        return;
-      }
-
-      console.log('[Match] Invite successfully inserted with ID:', data.id);
-
-      // Add to cache
-      if (!GameCache.invites.some(i => i.id === data.id)) {
-        GameCache.invites.unshift(data);
-      }
-
-      showToast('invite', 'Game Invite Sent', `Your ${mode} match invite has been sent to ${GameCache.profiles[targetPlayerId]?.display_name || 'Player'}.`);
-      updateBadges();
-      openInvites();
+        to_user_id: randomPlayerId,
+        mode: mode
+      };
+      
+      const matchPayload = createMatchPayload(fakeInvite);
+      startMatchSession(matchPayload);
+      
+      // Broadcast match start to other player
+      try {
+        socialChannel.send({ type: 'broadcast', event: 'match_start', payload: matchPayload });
+      } catch(e) {}
     }
     
     function startSinglePlayer() {
@@ -2611,13 +1748,13 @@
           return;
         }
 
-        // AI is not smart: 60% chance to skip, slower timing (8-20 seconds)
-        if (Math.random() < 0.6) {
+        // AI is not smart: 40% chance to skip, slower timing (5-15 seconds)
+        if (Math.random() < 0.4) {
           // AI skips this puzzle
           return;
         }
 
-        const solveTime = 8000 + Math.random() * 12000;
+        const solveTime = 5000 + Math.random() * 10000;
         setTimeout(() => {
           if (!GameCache.match.active || GameCache.match.mode !== 'single') return;
 
@@ -2629,14 +1766,14 @@
 
           const word = currentPuzzle.solution;
 
-          // AI is not smart: 50% chance to get it wrong
-          if (Math.random() < 0.5) {
+          // AI is not smart: 30% chance to get it wrong
+          if (Math.random() < 0.3) {
             // Wrong answer - don't add score, reset streak
             GameCache.match.playerStreaks['ai'] = 0;
             GameCache.match.playerWrongCount['ai']++;
           } else {
-            // Correct answer but with random slower time (8-20 seconds)
-            const solveTimeSeconds = 8 + Math.random() * 12;
+            // Correct answer but with random slower time (5-15 seconds)
+            const solveTimeSeconds = 5 + Math.random() * 10;
             const isFirstSolve = !GameCache.match.wordSolvers || !GameCache.match.wordSolvers[word];
             if (isFirstSolve) {
               if (!GameCache.match.wordSolvers) GameCache.match.wordSolvers = {};
@@ -2777,48 +1914,27 @@
       tiles.innerHTML = newPuzzle.scrambled.split('').map(l => `<div class="tile">${l.toUpperCase()}</div>`).join('');
       document.getElementById('scrambleWord').innerText = newPuzzle.scrambled.toUpperCase();
       
-      // Update feedback with winning status and real-time progress tracking
+      // Update feedback with winning status
       const winning = myScore > oppScore;
       const losing = myScore < oppScore;
       const tie = myScore === oppScore;
       
-      // Calculate real-time stats
-      const meCorrectTotal = GameCache.match.playerCorrectCount[currentUserId];
-      const meWrongTotal = GameCache.match.playerWrongCount[currentUserId];
-      const meAccuracy = meCorrectTotal + meWrongTotal > 0 ? Math.round((meCorrectTotal / (meCorrectTotal + meWrongTotal)) * 100) : 0;
-      const meSolveTimes = GameCache.match.playerSolveTimes[currentUserId] || [];
-      const meAvgSolveTime = meSolveTimes.length > 0 ? (meSolveTimes.reduce((a, b) => a + b, 0) / meSolveTimes.length).toFixed(1) : 0;
-      
-      // Calculate estimated MMR change for ranked
-      const isRanked = GameCache.match.mode === 'ranked';
-      let mmrDisplay = '';
-      if (isRanked) {
-        const estimatedMMRChange = calculateMMRChange(GameCache.user.mmr, GameCache.profiles[opponentId]?.mmr || 0, true);
-        const currentMMRDisplay = GameCache.user.mmr;
-        mmrDisplay = `<div style="margin-top:6px;padding:6px;background:rgba(59,130,246,0.1);border-radius:6px;font-size:10px;"><strong style="color:var(--blue);">MMR:</strong> ${currentMMRDisplay} (Est: ${winning ? '+' : ''}${estimatedMMRChange.winnerChange || estimatedMMRChange.loserChange} after match)</div>`;
-      }
-      
       document.getElementById('feedback').innerHTML = `
-        <div style="background:rgba(255,255,255,0.03);padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,0.08);font-size:12px;">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-            <div style="text-align:center;flex:1;">
-              <div style="font-size:10px;opacity:0.7;">Your Stats</div>
-              <div style="font-weight:700;color:var(--blue);font-size:13px;">${meCorrectTotal} ✓</div>
-              <div style="font-size:9px;opacity:0.6;">Acc: ${meAccuracy}% | Avg: ${meAvgSolveTime}s</div>
-              <div style="font-size:9px;opacity:0.6;">Streak: ${GameCache.match.playerStreaks[currentUserId]}</div>
-            </div>
-            <div style="text-align:center;flex:1;opacity:0.6;">VS</div>
-            <div style="text-align:center;flex:1;">
-              <div style="font-size:10px;opacity:0.7;">Opponent</div>
-              <div style="font-weight:700;color:var(--purple);font-size:13px;">${GameCache.match.playerCorrectCount[opponentId]} ✓</div>
-              <div style="font-size:9px;opacity:0.6;">Words: ${GameCache.match.playerCorrectCount[opponentId]}</div>
-              <div style="font-size:9px;opacity:0.6;">Streak: ${GameCache.match.playerStreaks[opponentId]}</div>
-            </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <div style="text-align:center;">
+            <div style="font-size:11px;opacity:0.7;">Your Stats</div>
+            <div style="font-weight:700;color:var(--blue);">${GameCache.match.playerCorrectCount[currentUserId]} words</div>
+            <div style="font-size:10px;opacity:0.6;">Streak: ${GameCache.match.playerStreaks[currentUserId]}</div>
           </div>
-          ${mmrDisplay}
-          <div style="margin-top:6px;font-weight:700;font-size:12px;color:${winning ? 'var(--success)' : losing ? 'var(--danger)' : 'var(--warning)'};">
-            ${winning ? '🏆 You\'re winning!' : losing ? '📉 You\'re behind!' : '🤝 Tied!'} 
+          <div style="text-align:center;">
+            <div style="font-size:11px;opacity:0.7;">Opponent</div>
+            <div style="font-weight:700;color:var(--purple);">${GameCache.match.playerCorrectCount[opponentId]} words</div>
+            <div style="font-size:10px;opacity:0.6;">Streak: ${GameCache.match.playerStreaks[opponentId]}</div>
           </div>
+        </div>
+        <div style="font-size:13px;opacity:0.85;">
+          ${winning ? '🏆 You\'re winning!' : losing ? '📉 You\'re behind!' : '🤝 It\'s a tie!'} 
+          Form a valid word from these letters
         </div>
       `;
       
