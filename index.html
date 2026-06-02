@@ -834,7 +834,11 @@
           console.log('[Realtime] New game invite received:', p.new);
           if (!GameCache.profiles[p.new.from_user_id]) await fetchProfile(p.new.from_user_id);
           GameCache.invites.unshift(p.new); updateBadges(); refreshOpenSocialView();
-          // Show full popup modal for incoming game invites
+          // Show toast notification for incoming game invites
+          const sender = GameCache.profiles[p.new.from_user_id]?.display_name || 'Someone';
+          const modeText = p.new.mode === 'ffa' ? 'Free for All' : p.new.mode === 'team' ? 'Team Up' : p.new.mode;
+          showToast('invite', `Game Invite from ${sender}`, `${modeText} match - Click to accept`, () => openInvites());
+          // Also show popup modal for game invites
           showGameInvitePopup(p.new);
         })
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'game_invites', filter: `from_user_id=eq.${currentUserId}` }, async (p) => {
@@ -936,11 +940,16 @@
             fetchProfile(p.new.user_id);
           }
           GameCache.globalChatMessages.unshift(p.new);
-          // Only update badge, no toast
+          // Update badge and show toast for incoming messages (not from self)
           const badge = document.getElementById('globalChatBadge');
           if (badge) {
             badge.classList.remove('hidden');
             badge.innerText = GameCache.globalChatMessages.length;
+          }
+          // Show toast for messages from other users
+          if (p.new.user_id !== currentUserId) {
+            const sender = p.new.display_name || GameCache.profiles[p.new.user_id]?.display_name || 'Someone';
+            showToast('message', `Global chat from ${sender}`, p.new.message, () => openGlobalChat());
           }
           // Re-render if modal is open
           if (document.getElementById('globalChatModal').classList.contains('active')) {
@@ -1330,9 +1339,12 @@
     
     function renderGlobalChat() {
       const container = document.getElementById('globalChatMessages');
+      console.log('Rendering global chat, messages count:', GameCache.globalChatMessages.length);
+      
       // Filter out messages older than 24 hours
       const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
       const recentMessages = GameCache.globalChatMessages.filter(m => m.created_at >= twentyFourHoursAgo);
+      console.log('Recent messages after filtering:', recentMessages.length);
       
       container.innerHTML = recentMessages.map(m => {
         // Use display_name from message if available, otherwise get from profiles cache
@@ -1353,6 +1365,8 @@
         const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         const dateStr = date.toLocaleDateString([], { month: 'short', day: 'numeric' });
         
+        console.log('Rendering message:', { sender: sender.display_name, isMe, message: m.message });
+        
         return `<div style="display:flex;align-items:flex-end;gap:8px;margin-bottom:12px;${isMe ? 'flex-direction:row-reverse;' : ''}">
           <img src="${sender.avatar_url || avatars[0]}" style="width:32px;height:32px;border-radius:50%;">
           <div style="max-width:70%;">
@@ -1363,6 +1377,7 @@
       }).join('');
       
       container.scrollTop = container.scrollHeight;
+      console.log('Global chat rendered');
     }
     
     async function sendGlobalMessage() {
@@ -1384,6 +1399,8 @@
         display_name: GameCache.user.display_name
       }).select();
       
+      console.log('Global chat send result:', { data, error });
+      
       if (error) {
         console.error('Failed to send global message:', error);
         alert('Failed to send message');
@@ -1392,8 +1409,23 @@
       
       // Immediately add to local cache and re-render
       if (data) {
-        GameCache.globalChatMessages.unshift(data);
-        renderGlobalChat();
+        // Handle both array and single object responses
+        const messageData = Array.isArray(data) ? data[0] : data;
+        console.log('Adding message to cache:', messageData);
+        GameCache.globalChatMessages.unshift(messageData);
+        
+        // Force re-render with a small delay to ensure DOM is ready
+        setTimeout(() => {
+          const container = document.getElementById('globalChatMessages');
+          if (container) {
+            console.log('Container found, rendering...');
+            renderGlobalChat();
+          } else {
+            console.log('Container not found');
+          }
+        }, 100);
+      } else {
+        console.log('No data returned from insert');
       }
       
       input.value = '';
