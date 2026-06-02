@@ -204,7 +204,7 @@
           
           <div class="stats-grid">
             <div class="stat-box"><div class="stat-title">Wins</div><div class="stat-value" id="wins">0</div></div>
-            <div class="stat-box"><div class="stat-title">MMR</div><div class="stat-value" id="mmr">1000</div></div>
+            <div class="stat-box"><div class="stat-title">MMR</div><div class="stat-value" id="mmr">0</div></div>
             <div class="stat-box"><div class="stat-title">Losses</div><div class="stat-value" id="losses">0</div></div>
             <div class="stat-box"><div class="stat-title">Win Rate</div><div class="stat-value" id="winrate">0%</div></div>
           </div>
@@ -359,7 +359,7 @@
     let dbChannel = null;
 
     const GameCache = {
-      user: { mmr: 1000, xp: 0, level: 1, coins: 0, streak: 0, dailyStreak: 0, lastDaily: null, achievements: [] },
+      user: { id: '', email: '', display_name: '', avatar_url: '', mmr: 0, xp: 0, level: 1, coins: 0, wins: 0, losses: 0, draws: 0, rank_points: 0, streak: 0, dailyStreak: 0, lastDaily: null, achievements: [] },
       friends: [],
       messages: [],
       invites: [],
@@ -426,9 +426,16 @@
           id: currentUserId, 
           display_name: fallbackName, 
           avatar_url: avatars[0], 
-          mmr: 1000, 
-          wins: 0, 
+          mmr: 0,
+          wins: 0,
           losses: 0,
+          streak: 0,
+          xp: 0,
+          level: 1,
+          coins: 0,
+          daily_streak: 0,
+          last_daily: null,
+          achievements: [],
           email: authUser?.email || ''
         };
         console.log('[Profile] Creating new profile with payload:', insertPayload);
@@ -459,15 +466,25 @@
       }
       if(profile) {
         GameCache.user = { 
-          ...profile, 
+          id: profile.id,
           email: authUser?.email || profile.email || "",
+          display_name: profile.display_name || authUser?.user_metadata?.full_name || authUser?.email?.split('@')[0] || "Player",
+          avatar_url: profile.avatar_url || avatars[0],
+          mmr: profile.mmr || 0,
+          wins: profile.wins || 0,
+          losses: profile.losses || 0,
+          draws: profile.draws || 0,
+          rank_points: profile.rank_points || 0,
+          streak: profile.streak || 0,
+          league: profile.league || getLeague(profile.mmr || 0),
           xp: profile.xp || 0,
           level: profile.level || 1,
           coins: profile.coins || 0,
-          streak: profile.streak || 0,
-          dailyStreak: profile.daily_streak || 0
+          dailyStreak: profile.daily_streak || 0,
+          lastDaily: profile.last_daily || null,
+          achievements: profile.achievements || []
         };
-        document.getElementById("headerName").innerText = profile.display_name || "Player";
+        document.getElementById("headerName").innerText = GameCache.user.display_name;
         document.getElementById("headerAvatar").src = profile.avatar_url || avatars[0];
         document.getElementById("mmr").innerText = profile.mmr;
         document.getElementById("wins").innerText = profile.wins || 0;
@@ -1498,7 +1515,7 @@
       const accuracy = meCorrect + meWrong > 0 ? Math.round((meCorrect / (meCorrect + meWrong)) * 100) : 0;
       
       const isRanked = GameCache.match.mode === 'ranked';
-      const mmrChange = calculateMMRChange(GameCache.user.mmr, GameCache.profiles[oppId]?.mmr || 1000, isRanked);
+      const mmrChange = calculateMMRChange(GameCache.user.mmr, GameCache.profiles[oppId]?.mmr || 0, isRanked);
       const xpGained = calculateXP(result, meScore, meStreak);
       const coinsGained = calculateCoins(result, meScore, meStreak);
       
