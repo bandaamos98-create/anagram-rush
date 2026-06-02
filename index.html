@@ -649,6 +649,7 @@
           // Prevent duplicate messages in cache
           if (!GameCache.messages.some(m => m.id === p.new.id)) {
             GameCache.messages.unshift(p.new);
+            updateBadges();
           }
           // Append message to chat if open
           const socialModal = document.getElementById('socialModal');
@@ -1020,8 +1021,10 @@
       }catch(e){ console.warn('showApp error', e); }
     }
     function updateBadges(){
-      const unreadMsgs = GameCache.messages.filter(m => m.to_user_id === currentUserId && (!getLastSeen(m.from_user_id) || new Date(m.created_at) > new Date(getLastSeen(m.from_user_id)))).length;
-      const unreadInvs = GameCache.invites.length + GameCache.friendRequests.length;
+      // Count all incoming messages as unread
+      const unreadMsgs = GameCache.messages.filter(m => m.to_user_id === currentUserId).length;
+      // Count only pending invites and friend requests
+      const unreadInvs = GameCache.invites.filter(i => i.status === 'pending').length + GameCache.friendRequests.filter(r => r.status === 'pending').length;
       const mB = document.getElementById('msgBadge'); if(unreadMsgs > 0) { mB.innerText = unreadMsgs; mB.classList.remove('hidden'); } else mB.classList.add('hidden');
       // Only show invites badge if invites modal is not currently open
       const socialModal = document.getElementById('socialModal');
