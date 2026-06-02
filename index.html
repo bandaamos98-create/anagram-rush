@@ -333,6 +333,7 @@
       </div>
       <div style="display:flex;gap:10px;margin-top:24px;">
         <button class="btn google-btn" style="flex:1;" id="saveProfileBtn">Save Changes</button>
+        <button class="btn guest-btn" style="flex:1;" onclick="openHowToPlayModal()">How to Play</button>
         <button class="btn guest-btn" style="flex:1;" onclick="openAboutModal()">About Us</button>
       </div>
       <button class="btn decline" style="width:100%;margin-top:10px;" onclick="logout()">Logout</button>
@@ -348,7 +349,50 @@
       <div style="line-height:1.6; opacity:0.9;">
         <p>Premium multiplayer word battle experience built for speed and competition.</p>
         <p style="margin-top:12px;font-weight:700;color:var(--blue);">Version 2.0 - Realtime Social Update</p>
-        <p style="margin-top:12px;">Developed by Amos Banda.</p>
+        <div style="margin-top:16px;padding:16px;background:rgba(255,255,255,0.05);border-radius:12px;">
+          <p style="font-weight:700;margin-bottom:8px;">Developer</p>
+          <p><strong>Name:</strong> Amos Banda</p>
+          <p><strong>Location:</strong> Zambia</p>
+          <p><strong>Email:</strong> bandaamos98@gmail.com</p>
+          <p style="font-weight:700;margin-top:12px;margin-bottom:8px;">Our Games</p>
+          <p>1. Anagram Rush</p>
+          <p>2. Wordfury</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="howToPlayModal">
+    <div class="modal-content glass">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+        <div class="modal-title">How to Play</div>
+        <div class="icon-btn" onclick="closeModal('howToPlayModal')">✕</div>
+      </div>
+      <div style="line-height:1.6; opacity:0.9;">
+        <p style="font-weight:700;margin-bottom:12px;">🎯 Objective</p>
+        <p>Unscramble the given letters to form valid words as fast as possible. The player with the most points wins!</p>
+        
+        <p style="font-weight:700;margin-top:16px;margin-bottom:12px;">🎮 Game Modes</p>
+        <p><strong>Play Against AI:</strong> 4-letter words, 2-minute timer</p>
+        <p><strong>Quick Match:</strong> 5-letter words, 3-minute timer</p>
+        <p><strong>Ranked Match:</strong> 4-7 letter words (based on rank), 5-minute timer</p>
+        <p><strong>Friend Invite:</strong> 5-letter words, 3-minute timer</p>
+        
+        <p style="font-weight:700;margin-top:16px;margin-bottom:12px;">⭐ Scoring</p>
+        <p><strong>First to solve:</strong> 100 points</p>
+        <p><strong>Second to solve:</strong> 50 points</p>
+        <p><strong>Speed bonus:</strong> +50 (≤3s), +25 (≤5s), +10 (≤10s)</p>
+        <p><strong>Streak bonus:</strong> +100 (10+ streak), +50 (5+ streak), +25 (3+ streak)</p>
+        
+        <p style="font-weight:700;margin-top:16px;margin-bottom:12px;">💡 Tips</p>
+        <p>• Type your answer and press Enter or click Submit</p>
+        <p>• Use hints (costs coins) if you're stuck</p>
+        <p>• Build streaks for bonus points</p>
+        <p>• Solve quickly for speed bonuses</p>
+        <p>• Earn XP and coins from all game modes</p>
+        
+        <p style="font-weight:700;margin-top:16px;margin-bottom:12px;">🏆 Ranking System</p>
+        <p>MMR increases with wins and decreases with losses in ranked matches. Higher MMR unlocks longer words and better leagues!</p>
       </div>
     </div>
   </div>
@@ -547,7 +591,7 @@
         sb.from('game_invites').select('*').or(`to_user_id.eq.${currentUserId},from_user_id.eq.${currentUserId}`).eq('status', 'pending'),
         sb.from('friend_requests').select('*').eq('to_user_id', currentUserId).eq('status', 'pending'),
         sb.from('notifications').select('*').eq('user_id', currentUserId).eq('is_read', false),
-        sb.from('profiles').select('id, display_name, mmr, avatar_url, wins, losses').order('mmr', {ascending: false}).limit(100),
+        sb.from('profiles').select('id, display_name, mmr, avatar_url, wins, losses, draws').order('mmr', {ascending: false}).limit(1000),
         sb.from('friends').select('friend_id').eq('user_id', currentUserId)
       ]);
       GameCache.messages = msgs.data || [];
@@ -1143,6 +1187,7 @@
     };
 
     function openAboutModal(){ openModal("aboutModal"); }
+    function openHowToPlayModal(){ openModal("howToPlayModal"); }
     function closeSocialModal() { setSocialModalFullscreen(false); closeModal('socialModal'); document.getElementById('socialModal').dataset.activeChatId = ""; }
     function getLeague(mmr){ 
       if(mmr >= 3000) return "Master";
@@ -1961,6 +2006,7 @@
         
         if (isRanked) {
           updateData.mmr = GameCache.user.mmr;
+          updateData.rank_points = GameCache.user.mmr; // Also save to rank_points column
         }
         
         await sb.from('profiles').update(updateData).eq('id', currentUserId);
