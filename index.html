@@ -938,7 +938,8 @@
       setLastSeen(otherId, now);
       // notify other clients that we've read (so their UI can update if they track reads)
       try{ socialChannel.send({ type: 'broadcast', event: 'read_receipt', payload: { fromId: otherId, seen_at: now } }); }catch(e){}
-      // Clear message badge since we're viewing the chat
+      // Clear message badge since we're viewing the chat - mark all messages from this user as read
+      GameCache.messages = GameCache.messages.filter(m => !(m.from_user_id === otherId && m.to_user_id === currentUserId));
       const mB = document.getElementById('msgBadge');
       if(mB) {
         mB.classList.add('hidden');
@@ -1773,6 +1774,7 @@
           coins: GameCache.user.coins,
           wins: GameCache.user.wins,
           losses: GameCache.user.losses,
+          draws: GameCache.user.draws || 0,
           streak: GameCache.user.streak
         };
         
