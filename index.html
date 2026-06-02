@@ -264,7 +264,10 @@
           </div>
           <div class="tiles" id="tiles"></div>
           <input id="answerInput" class="answer-input modern" placeholder="Type your word..." autofocus />
-          <button class="btn modern" onclick="submitAnswer()" style="width:100%;margin-top:12px;">Submit</button>
+          <div style="display:flex;gap:10px;margin-top:12px;">
+            <button class="btn modern" onclick="submitAnswer()" style="flex:1;">Submit</button>
+            <button class="btn modern" onclick="useHint()" style="flex:1;background:linear-gradient(135deg,var(--warning),#f59e0b);">💡 Hint (10 coins)</button>
+          </div>
           <div class="feedback" id="feedback" style="margin-top:12px;font-size:14px;opacity:.85;"></div>
         </div>
         <button class="btn guest-btn" onclick="endMatch()" style="margin-top:4px;"> Exit Match </button>
@@ -364,6 +367,18 @@
     <div class="modal-content glass" style="text-align:center;">
       <div id="resultSummary"></div>
       <button class="btn google-btn" style="margin-top:18px;" onclick="closeModal('resultModal'); endMatch();">Continue</button>
+    </div>
+  </div>
+
+  <div class="modal" id="gameInviteModal">
+    <div class="modal-content glass" style="text-align:center;">
+      <div style="font-size:48px;margin-bottom:16px;">🎮</div>
+      <div class="modal-title">Game Invite</div>
+      <div id="gameInviteContent" style="margin:20px 0;"></div>
+      <div style="display:flex;gap:12px;justify-content:center;">
+        <button class="btn modern" style="background:var(--success);flex:1;" id="acceptInviteBtn">Accept</button>
+        <button class="btn modern" style="background:var(--danger);flex:1;" id="declineInviteBtn">Decline</button>
+      </div>
     </div>
   </div>
 
@@ -662,9 +677,8 @@
           console.log('[Realtime] New game invite received:', p.new);
           if (!GameCache.profiles[p.new.from_user_id]) await fetchProfile(p.new.from_user_id);
           GameCache.invites.unshift(p.new); updateBadges(); refreshOpenSocialView();
-          // Show toast notification
-          const sender = GameCache.profiles[p.new.from_user_id]?.display_name || 'Someone';
-          showToast('invite', `Game Invite from ${sender}`, 'Click to accept or decline', () => openInvites());
+          // Show full popup modal for incoming game invites
+          showGameInvitePopup(p.new);
         })
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'game_invites', filter: `from_user_id=eq.${currentUserId}` }, async (p) => {
           console.log('[Realtime] Game invite sent:', p.new);
@@ -924,6 +938,12 @@
       setLastSeen(otherId, now);
       // notify other clients that we've read (so their UI can update if they track reads)
       try{ socialChannel.send({ type: 'broadcast', event: 'read_receipt', payload: { fromId: otherId, seen_at: now } }); }catch(e){}
+      // Clear message badge since we're viewing the chat
+      const mB = document.getElementById('msgBadge');
+      if(mB) {
+        mB.classList.add('hidden');
+        mB.innerText = '0';
+      }
       updateBadges();
       const chatMsgs = GameCache.messages.filter(m => (m.from_user_id === otherId || m.to_user_id === otherId)).sort((a,b) => new Date(a.created_at) - new Date(b.created_at));
       cont.innerHTML = `<div style="display:flex;flex-direction:column;height:100%;"><div id="chatBody" style="flex:1;overflow-y:auto;padding-bottom:10px;">${chatMsgs.map(m => {
@@ -932,6 +952,11 @@
         return `<div style="display:flex;align-items:flex-end;gap:8px;margin-bottom:8px;${isMe ? 'flex-direction:row-reverse;' : ''}"><img src="${sender.avatar_url || avatars[0]}" style="width:28px;height:28px;border-radius:50%;"><div class="chat-bubble ${isMe ? 'me' : 'them'}" style="margin:0;">${m.text}</div></div>`;
       }).join('')}</div><div style="display:flex;gap:10px;margin-top:10px;"><input id="chatInput" class="answer-input modern" style="flex:1;" placeholder="Type your message..." inputmode="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" /><button class="btn modern" style="width:90px;" onclick="sendMsg('${otherId}')">Send</button></div></div>`;
       const cb = document.getElementById('chatBody'); cb.scrollTop = cb.scrollHeight;
+      // Keep focus on chat input to prevent keyboard from closing
+      setTimeout(() => {
+        const chatInput = document.getElementById('chatInput');
+        if(chatInput) chatInput.focus();
+      }, 100);
     }
 
     async function handleAvatarUpload(e){
@@ -1118,19 +1143,41 @@
       searchUsers();
     }
 
+    function showGameInvitePopup(invite) {
+      const sender = GameCache.profiles[invite.from_user_id] || { display_name: 'Player', avatar_url: avatars[0] };
+      const content = document.getElementById('gameInviteContent');
+      content.innerHTML = `
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+          <img src="${sender.avatar_url || avatars[0]}" style="width:48px;height:48px;border-radius:50%;">
+          <div style="text-align:left;">
+            <div style="font-weight:700;font-size:16px;">${sender.display_name}</div>
+            <div style="font-size:13px;opacity:0.7;">wants to play ${invite.mode} match</div>
+          </div>
+        </div>
+      `;
+      
+      const acceptBtn = document.getElementById('acceptInviteBtn');
+      const declineBtn = document.getElementById('declineInviteBtn');
+      
+      acceptBtn.onclick = () => {
+        respondGameInvite(invite.id, 'accepted');
+        closeModal('gameInviteModal');
+      };
+      
+      declineBtn.onclick = () => {
+        respondGameInvite(invite.id, 'declined');
+        closeModal('gameInviteModal');
+      };
+      
+      openModal('gameInviteModal');
+    }
+
     function renderFriendsList() {
       const list = document.getElementById('friendsList');
       list.innerHTML = GameCache.friends.map(fid => {
         const p = GameCache.profiles[fid] || { display_name: 'Player', avatar_url: avatars[0] };
-        // Check if invite already sent to this friend
-        const inviteSent = GameCache.invites.some(i => i.from_user_id === currentUserId && i.to_user_id === fid);
-        let inviteButtonText = 'Invite';
-        let inviteButtonDisabled = '';
-        if (inviteSent) {
-          inviteButtonText = 'Sent';
-          inviteButtonDisabled = 'disabled style="opacity:0.5"';
-        }
-        return `<div class="social-item"><div style="display:flex;align-items:center;gap:10px;"><img src="${p.avatar_url || avatars[0]}" style="width:32px;height:32px;border-radius:50%;"><div style="font-weight:700">${p.display_name}</div></div><div><button class="leader-secondary" style="background:var(--blue);margin-right:8px;" onclick="findAndStartChat('${fid}')">💬</button><button class="leader-secondary" ${inviteButtonDisabled} onclick="${inviteButtonDisabled ? '' : `sendInvite('${fid}')`}">${inviteButtonText}</button></div></div>`;
+        // Remove invite limit - allow unlimited invites
+        return `<div class="social-item"><div style="display:flex;align-items:center;gap:10px;"><img src="${p.avatar_url || avatars[0]}" style="width:32px;height:32px;border-radius:50%;"><div style="font-weight:700">${p.display_name}</div></div><div><button class="leader-secondary" style="background:var(--blue);margin-right:8px;" onclick="findAndStartChat('${fid}')">💬</button><button class="leader-secondary" onclick="sendInvite('${fid}')">Invite</button></div></div>`;
       }).join('') || "<p style='text-align:center;opacity:0.5'>No friends yet</p>";
     }
 
@@ -1139,9 +1186,9 @@
       viewChat(friendId);
     }
 
-    async function sendInvite(toId) {
+    async function sendInvite(toId, mode = 'quick') {
       if (toId === currentUserId) return alert('You cannot invite yourself.');
-      const { data, error } = await sb.from('game_invites').insert({ from_user_id: currentUserId, to_user_id: toId, mode: 'quick', status: 'pending' }).select().single();
+      const { data, error } = await sb.from('game_invites').insert({ from_user_id: currentUserId, to_user_id: toId, mode: mode, status: 'pending' }).select().single();
       if (error) { console.error('Invite failed', error); return alert('Unable to send invite.'); }
       if (data) {
         GameCache.invites.unshift(data);
@@ -1192,6 +1239,13 @@
       GameCache.invites = GameCache.invites.filter(i => i.id !== id);
       updateBadges();
       if (status === 'accepted') {
+        // First-accept-wins logic: decline all other pending invites from the same sender
+        const otherInvites = GameCache.invites.filter(i => i.from_user_id === invite.from_user_id && i.status === 'pending');
+        for (const otherInvite of otherInvites) {
+          await sb.from('game_invites').update({ status: 'declined' }).eq('id', otherInvite.id);
+        }
+        GameCache.invites = GameCache.invites.filter(i => i.from_user_id !== invite.from_user_id || i.status !== 'pending');
+        
         const matchPayload = createMatchPayload(invite);
         startMatchSession(matchPayload);
         try { socialChannel.send({ type: 'broadcast', event: 'match_start', payload: matchPayload }); } catch(e) {}
@@ -1753,33 +1807,19 @@
         return;
       }
       
-      // For quick/ranked matches, show searching UI
-      alert(`Searching for ${mode} match...`);
-      
-      // In a real implementation, this would use a matchmaking queue
-      // For now, we'll simulate by checking for online players
+      // For quick/ranked matches, send invites to all online players
       const onlinePlayers = Object.keys(GameCache.onlineUsers).filter(id => id !== currentUserId);
       if (onlinePlayers.length === 0) {
         alert('No players online. Try again later or play single player.');
         return;
       }
       
-      // Simulate matchmaking by picking a random online player
-      const randomPlayerId = onlinePlayers[Math.floor(Math.random() * onlinePlayers.length)];
-      const fakeInvite = {
-        id: `match-${Date.now()}`,
-        from_user_id: currentUserId,
-        to_user_id: randomPlayerId,
-        mode: mode
-      };
+      // Send invites to all online players
+      for (const playerId of onlinePlayers) {
+        await sendInvite(playerId, mode);
+      }
       
-      const matchPayload = createMatchPayload(fakeInvite);
-      startMatchSession(matchPayload);
-      
-      // Broadcast match start to other player
-      try {
-        socialChannel.send({ type: 'broadcast', event: 'match_start', payload: matchPayload });
-      } catch(e) {}
+      alert(`${mode} match invites sent to ${onlinePlayers.length} online player(s). First to accept will play with you!`);
     }
     
     function startSinglePlayer() {
@@ -1915,6 +1955,31 @@
         findMatch(mode);
       }
     }
+
+    function useHint() {
+      if (GameCache.user.coins < 10) {
+        alert('You need 10 coins to use a hint. You currently have ' + GameCache.user.coins + ' coins.');
+        return;
+      }
+      
+      const currentPuzzle = GameCache.match.currentPuzzle;
+      if (!currentPuzzle || !currentPuzzle.word) {
+        alert('No active puzzle to solve.');
+        return;
+      }
+      
+      // Deduct 10 coins
+      GameCache.user.coins -= 10;
+      updateStatsUI();
+      
+      // Save to database
+      sb.from('profiles').update({ coins: GameCache.user.coins }).eq('id', currentUserId).catch(e => console.error('Failed to save coins:', e));
+      
+      // Reveal the correct word
+      document.getElementById('answerInput').value = currentPuzzle.word;
+      document.getElementById('feedback').innerHTML = `<div style="color:var(--success);">💡 Hint used! The word is: ${currentPuzzle.word}</div>`;
+    }
+
     function submitAnswer(){
       if (!GameCache.match.active) return;
       const guess = document.getElementById('answerInput').value.trim().toLowerCase();
