@@ -1077,12 +1077,37 @@
       }
       updateBadges();
       const chatMsgs = GameCache.messages.filter(m => (m.from_user_id === otherId || m.to_user_id === otherId)).sort((a,b) => new Date(a.created_at) - new Date(b.created_at));
-      cont.innerHTML = `<div style="display:flex;flex-direction:column;height:100%;"><div id="chatBody" style="flex:1;overflow-y:auto;padding-bottom:10px;">${chatMsgs.map(m => {
+      
+      // Check if chat content already exists to avoid re-rendering input
+      const existingChatBody = document.getElementById('chatBody');
+      const existingChatInput = document.getElementById('chatInput');
+      
+      if (!existingChatBody) {
+        // First render - create full structure
+        cont.innerHTML = `<div style="display:flex;flex-direction:column;height:100%;"><div id="chatBody" style="flex:1;overflow-y:auto;padding-bottom:10px;"></div><div style="display:flex;gap:10px;margin-top:10px;"><input id="chatInput" class="answer-input modern" style="flex:1;" placeholder="Type your message..." inputmode="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" /><button class="btn modern" style="width:90px;" onclick="sendMsg('${otherId}')">Send</button></div></div>`;
+      }
+      
+      // Only update messages, not the input
+      const chatBody = document.getElementById('chatBody');
+      const currentInputValue = existingChatInput ? existingChatInput.value : '';
+      const isInputFocused = existingChatInput ? document.activeElement === existingChatInput : false;
+      
+      chatBody.innerHTML = chatMsgs.map(m => {
         const isMe = m.from_user_id === currentUserId;
         const sender = isMe ? { avatar_url: GameCache.user.avatar_url } : p;
         return `<div style="display:flex;align-items:flex-end;gap:8px;margin-bottom:8px;${isMe ? 'flex-direction:row-reverse;' : ''}"><img src="${sender.avatar_url || avatars[0]}" style="width:28px;height:28px;border-radius:50%;"><div class="chat-bubble ${isMe ? 'me' : 'them'}" style="margin:0;">${m.text}</div></div>`;
-      }).join('')}</div><div style="display:flex;gap:10px;margin-top:10px;"><input id="chatInput" class="answer-input modern" style="flex:1;" placeholder="Type your message..." inputmode="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" /><button class="btn modern" style="width:90px;" onclick="sendMsg('${otherId}')">Send</button></div></div>`;
-      const cb = document.getElementById('chatBody'); cb.scrollTop = cb.scrollHeight;
+      }).join('');
+      
+      chatBody.scrollTop = chatBody.scrollHeight;
+      
+      // Restore input value and focus if it was focused
+      const chatInput = document.getElementById('chatInput');
+      if (chatInput && currentInputValue !== '') {
+        chatInput.value = currentInputValue;
+      }
+      if (chatInput && isInputFocused) {
+        chatInput.focus();
+      }
     }
 
     async function handleAvatarUpload(e){
