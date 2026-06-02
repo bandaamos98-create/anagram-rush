@@ -631,6 +631,7 @@
           if (!GameCache.messages.some(m => m.id === p.new.id)) {
             GameCache.messages.unshift(p.new);
             updateBadges();
+            refreshOpenSocialView();
           }
           // If chat with this user is open, append message immediately
           const activeChatId = document.getElementById('socialModal').dataset.activeChatId;
@@ -642,12 +643,10 @@
               chatBody.insertAdjacentHTML('beforeend', msgHtml);
               chatBody.scrollTop = chatBody.scrollHeight;
             }
-          } else {
-            // Only show toast and refresh social view if chat is not open
-            const sender = GameCache.profiles[p.new.from_user_id]?.display_name || 'Someone';
-            showToast('message', `New message from ${sender}`, p.new.text, () => viewChat(p.new.from_user_id));
-            refreshOpenSocialView();
           }
+          // Always show toast notification for incoming messages (like invites)
+          const sender = GameCache.profiles[p.new.from_user_id]?.display_name || 'Someone';
+          showToast('message', `New message from ${sender}`, p.new.text, () => viewChat(p.new.from_user_id));
         })
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `from_user_id=eq.${currentUserId}` }, async (p) => {
           console.log('[Realtime] Message sent confirmation:', p.new);
