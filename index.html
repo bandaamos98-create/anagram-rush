@@ -206,11 +206,12 @@
             <div class="stat-box"><div class="stat-title">Wins</div><div class="stat-value" id="wins">0</div></div>
             <div class="stat-box"><div class="stat-title">MMR</div><div class="stat-value" id="mmr">0</div></div>
             <div class="stat-box"><div class="stat-title">Losses</div><div class="stat-value" id="losses">0</div></div>
-            <div class="stat-box"><div class="stat-title">Win Rate</div><div class="stat-value" id="winrate">0%</div></div>
+            <div class="stat-box"><div class="stat-title">Draws</div><div class="stat-value" id="draws">0</div></div>
           </div>
-          <div style="margin-top:18px; display:grid; grid-template-columns:repeat(2,1fr); gap:10px;">
+          <div style="margin-top:18px; display:grid; grid-template-columns:repeat(3,1fr); gap:10px;">
             <button class="leader-secondary" style="padding:16px;" onclick="openOnlinePlayers()">🟢 Players Online</button>
             <button class="leader-secondary" style="padding:16px;" onclick="openFriends()">🔍 Find Friends</button>
+            <button class="leader-secondary" style="padding:16px;" onclick="openAchievements()">🏆 Achievements</button>
           </div>
           <button class="btn modern" style="margin-top:14px;background:linear-gradient(135deg,var(--warning),#f59e0b);" onclick="claimDailyReward()">🎁 Claim Daily Reward</button>
         </div>
@@ -340,6 +341,16 @@
         <p style="margin-top:12px;font-weight:700;color:var(--blue);">Version 2.0 - Realtime Social Update</p>
         <p style="margin-top:12px;">Developed by Amos Banda.</p>
       </div>
+    </div>
+  </div>
+
+  <div class="modal" id="achievementsModal">
+    <div class="modal-content glass">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+        <div class="modal-title">Achievements</div>
+        <div class="icon-btn" onclick="closeModal('achievementsModal')">✕</div>
+      </div>
+      <div id="achievementsContent" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;"></div>
     </div>
   </div>
 
@@ -500,9 +511,7 @@
         document.getElementById("mmr").innerText = GameCache.user.mmr;
         document.getElementById("wins").innerText = GameCache.user.wins;
         document.getElementById("losses").innerText = GameCache.user.losses;
-        const totalGames = (GameCache.user.wins || 0) + (GameCache.user.losses || 0);
-        const winRate = totalGames > 0 ? Math.round((GameCache.user.wins / totalGames) * 100) : 0;
-        document.getElementById("winrate").innerText = `${winRate}%`;
+        document.getElementById("draws").innerText = GameCache.user.draws || 0;
         document.getElementById("leagueBadge").innerText = `💎 ${getLeague(GameCache.user.mmr)}`;
         document.getElementById("headerRank").innerText = `${getLeague(GameCache.user.mmr)} League`;
         
@@ -836,6 +845,34 @@
       document.getElementById('notificationContent').innerHTML = list;
       document.getElementById('headerNotifDot').style.display = 'none';
       openModal('notificationModal');
+    }
+
+    function openAchievements() {
+      const data = GameCache.user;
+      const unlockedAchievements = data.achievements || [];
+      const achievementsContent = document.getElementById('achievementsContent');
+      achievementsContent.innerHTML = Object.values(ACHIEVEMENTS).map(achievement => {
+        let isUnlocked = false;
+        
+        if (achievement.type === 'xp') {
+          isUnlocked = data.xp >= achievement.xpRequired;
+        } else if (achievement.type === 'win') {
+          isUnlocked = unlockedAchievements.includes(achievement.id);
+        } else if (achievement.type === 'streak') {
+          isUnlocked = data.streak >= achievement.streakRequired;
+        } else if (achievement.condition) {
+          isUnlocked = achievement.condition({ wins: data.wins || 0, streak: data.streak || 0, level: data.level || 1, mmr: data.mmr || 0 });
+        }
+        
+        return `
+          <div style="padding:16px;background:${isUnlocked ? 'rgba(139,92,246,0.15)' : 'rgba(255,255,255,0.03)'};border:1px solid ${isUnlocked ? 'rgba(139,92,246,0.4)' : 'rgba(255,255,255,0.08)'};border-radius:12px;text-align:center;opacity:${isUnlocked ? 1 : 0.5};">
+            <div style="font-size:32px;margin-bottom:8px;">${isUnlocked ? achievement.icon : '🔒'}</div>
+            <div style="font-size:12px;font-weight:700;margin-bottom:4px;">${achievement.name}</div>
+            <div style="font-size:10px;opacity:0.7;">${achievement.description}</div>
+          </div>
+        `;
+      }).join('');
+      openModal('achievementsModal');
     }
 
     function setSocialModalFullscreen(state) {
@@ -1252,11 +1289,18 @@
     }
     
     const ACHIEVEMENTS = {
-      first_win: { id: 'first_win', name: 'First Victory', description: 'Win your first match', icon: '🏆', condition: (stats) => stats.wins >= 1 },
+      first_win: { id: 'first_win', name: 'First Victory', description: 'Win your first match (excluding AI)', icon: '🏆', condition: (stats) => stats.wins >= 1, type: 'win' },
+      xp_100: { id: 'xp_100', name: 'Rising Star', description: 'Reach 100 XP', icon: '⭐', xpRequired: 100, type: 'xp' },
+      xp_500: { id: 'xp_500', name: 'Veteran', description: 'Reach 500 XP', icon: '🌟', xpRequired: 500, type: 'xp' },
+      xp_1000: { id: 'xp_1000', name: 'Champion', description: 'Reach 1000 XP', icon: '👑', xpRequired: 1000, type: 'xp' },
+      xp_2500: { id: 'xp_2500', name: 'Legend', description: 'Reach 2500 XP', icon: '💎', xpRequired: 2500, type: 'xp' },
+      xp_5000: { id: 'xp_5000', name: 'Grandmaster', description: 'Reach 5000 XP', icon: '🔥', xpRequired: 5000, type: 'xp' },
       ten_wins: { id: 'ten_wins', name: 'Champion', description: 'Win 10 matches', icon: '🥇', condition: (stats) => stats.wins >= 10 },
       fifty_wins: { id: 'fifty_wins', name: 'Legend', description: 'Win 50 matches', icon: '👑', condition: (stats) => stats.wins >= 50 },
       hundred_wins: { id: 'hundred_wins', name: 'Immortal', description: 'Win 100 matches', icon: '⚡', condition: (stats) => stats.wins >= 100 },
-      streak_10: { id: 'streak_10', name: 'On Fire', description: 'Achieve a 10-win streak', icon: '🔥', condition: (stats) => stats.streak >= 10 },
+      streak_3: { id: 'streak_3', name: 'Hot Streak', description: 'Win 3 games in a row', icon: '🔥', streakRequired: 3, type: 'streak' },
+      streak_5: { id: 'streak_5', name: 'On Fire', description: 'Win 5 games in a row', icon: '⚡', streakRequired: 5, type: 'streak' },
+      streak_10: { id: 'streak_10', name: 'Unstoppable', description: 'Achieve a 10-win streak', icon: '💪', condition: (stats) => stats.streak >= 10 },
       speed_demon: { id: 'speed_demon', name: 'Speed Demon', description: 'Solve a puzzle in under 3 seconds', icon: '⚡', condition: (stats) => stats.fastestSolve <= 3 },
       comeback_king: { id: 'comeback_king', name: 'Comeback King', description: 'Win after trailing by 25%+', icon: '💪', condition: (stats) => stats.comebacks >= 1 },
       puzzle_master: { id: 'puzzle_master', name: 'Puzzle Master', description: 'Solve 100 puzzles correctly', icon: '🧩', condition: (stats) => stats.totalCorrect >= 100 },
@@ -1524,6 +1568,19 @@
       if (result === 'win') {
         GameCache.user.wins = (GameCache.user.wins || 0) + 1;
         GameCache.user.streak = (GameCache.user.streak || 0) + 1;
+        
+        // Unlock first victory achievement for non-AI wins
+        const isAIGame = GameCache.match.mode === 'single' || GameCache.match.mode === 'ai';
+        if (!isAIGame && GameCache.user.wins === 1) {
+          const currentAchievements = GameCache.user.achievements || [];
+          if (!currentAchievements.includes('first_win')) {
+            currentAchievements.push('first_win');
+            GameCache.user.achievements = currentAchievements;
+            // Save to database
+            sb.from('profiles').update({ achievements: currentAchievements }).eq('id', currentUserId).catch(e => console.error('Failed to save achievement:', e));
+            showAchievementNotification(['first_win']);
+          }
+        }
       } else if (result === 'loss') {
         GameCache.user.losses = (GameCache.user.losses || 0) + 1;
         GameCache.user.streak = 0;
