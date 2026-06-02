@@ -266,7 +266,7 @@
           <input id="answerInput" class="answer-input modern" placeholder="Type your word..." autofocus />
           <div style="display:flex;gap:10px;margin-top:12px;">
             <button class="btn modern" onclick="submitAnswer()" style="flex:1;">Submit</button>
-            <button class="btn modern" onclick="useHint()" style="flex:1;background:linear-gradient(135deg,var(--warning),#f59e0b);">💡 Hint (10 coins)</button>
+            <button class="btn modern" onclick="useHint()" style="flex:1;background:linear-gradient(135deg,var(--warning),#f59e0b);" id="hintBtn">💡 Hint</button>
           </div>
           <div class="feedback" id="feedback" style="margin-top:12px;font-size:14px;opacity:.85;"></div>
         </div>
@@ -1467,16 +1467,34 @@
     }
 
     function createMatchPayload(invite) {
-      const duration = 180; // 3 minutes in seconds
-      const initialPuzzle = generateLetters(6);
+      const mode = invite.mode || 'quick';
+      let duration = 180; // default 3 minutes
+      let wordLength = 5; // default 5 letter words
+      
+      if (mode === 'ranked') {
+        duration = 300; // 5 minutes for ranked
+        // Word length based on rank: start at 4, increase with rank, max 7
+        const mmr = GameCache.user.mmr || 0;
+        if (mmr < 1000) wordLength = 4;
+        else if (mmr < 1500) wordLength = 5;
+        else if (mmr < 2000) wordLength = 6;
+        else wordLength = 7;
+      } else {
+        // Quick match and friend invites: 3 minutes, 5 letter words
+        duration = 180;
+        wordLength = 5;
+      }
+      
+      const initialPuzzle = generateLetters(wordLength);
       return {
         matchId: `match-${invite.id}-${Date.now()}`,
         inviteId: invite.id,
         from_user_id: invite.from_user_id,
         to_user_id: invite.to_user_id,
-        mode: invite.mode || 'quick',
-        gameType: 'timed', // New: time-based mode
+        mode: mode,
+        gameType: 'timed',
         duration: duration,
+        wordLength: wordLength,
         playerNames: {
           [invite.from_user_id]: GameCache.profiles[invite.from_user_id]?.display_name || 'Player',
           [invite.to_user_id]: GameCache.profiles[invite.to_user_id]?.display_name || 'Player'
@@ -1578,6 +1596,20 @@
       document.getElementById('roundCount').innerText = timeDisplay;
       document.getElementById('scrambleWord').innerText = letters.toUpperCase();
       
+      // Update hint button text based on match mode
+      const hintBtn = document.getElementById('hintBtn');
+      if (hintBtn) {
+        let hintCost = 10;
+        if (GameCache.match.mode === 'single' || GameCache.match.mode === 'ai') {
+          hintCost = 10;
+        } else if (GameCache.match.mode === 'ranked') {
+          hintCost = 30;
+        } else {
+          hintCost = 20;
+        }
+        hintBtn.innerText = `💡 Hint (${hintCost} coins)`;
+      }
+      
       if (!GameCache.match.roundStartTime) {
         GameCache.match.roundStartTime = Date.now();
       }
@@ -1624,7 +1656,7 @@
       if (!GameCache.match.active) return;
       GameCache.match.active = false;
       if (aiInterval) clearInterval(aiInterval);
-      clearInterval(GameCache.match.timer);
+      if (GameCache.match.timer) clearInterval(GameCache.match.timer);
       
       const meScore = GameCache.match.playerScores[currentUserId] || 0;
       const oppId = GameCache.match.from_user_id === currentUserId ? GameCache.match.to_user_id : GameCache.match.from_user_id;
@@ -1643,30 +1675,32 @@
       const xpGained = calculateXP(result, meScore, meStreak);
       const coinsGained = calculateCoins(result, meScore, meStreak);
       
-      // Update user stats
-      GameCache.user.xp += xpGained;
-      GameCache.user.coins += coinsGained;
-      if (result === 'win') {
-        GameCache.user.wins = (GameCache.user.wins || 0) + 1;
-        GameCache.user.streak = (GameCache.user.streak || 0) + 1;
-        
-        // Unlock first victory achievement for non-AI wins
-        const isAIGame = GameCache.match.mode === 'single' || GameCache.match.mode === 'ai';
-        if (!isAIGame && GameCache.user.wins === 1) {
-          const currentAchievements = GameCache.user.achievements || [];
-          if (!currentAchievements.includes('first_win')) {
-            currentAchievements.push('first_win');
-            GameCache.user.achievements = currentAchievements;
-            // Save to database
-            sb.from('profiles').update({ achievements: currentAchievements }).eq('id', currentUserId).catch(e => console.error('Failed to save achievement:', e));
-            showAchievementNotification(['first_win']);
+      // Update user stats - only for ranked matches
+      if (isRanked) {
+        GameCache.user.xp += xpGained;
+        GameCache.user.coins += coinsGained;
+        if (result === 'win') {
+          GameCache.user.wins = (GameCache.user.wins || 0) + 1;
+          GameCache.user.streak = (GameCache.user.streak || 0) + 1;
+          
+          // Unlock first victory achievement for non-AI wins
+          const isAIGame = GameCache.match.mode === 'single' || GameCache.match.mode === 'ai';
+          if (!isAIGame && GameCache.user.wins === 1) {
+            const currentAchievements = GameCache.user.achievements || [];
+            if (!currentAchievements.includes('first_win')) {
+              currentAchievements.push('first_win');
+              GameCache.user.achievements = currentAchievements;
+              // Save to database
+              sb.from('profiles').update({ achievements: currentAchievements }).eq('id', currentUserId).catch(e => console.error('Failed to save achievement:', e));
+              showAchievementNotification(['first_win']);
+            }
           }
+        } else if (result === 'loss') {
+          GameCache.user.losses = (GameCache.user.losses || 0) + 1;
+          GameCache.user.streak = 0;
+        } else if (result === 'tie') {
+          GameCache.user.draws = (GameCache.user.draws || 0) + 1;
         }
-      } else if (result === 'loss') {
-        GameCache.user.losses = (GameCache.user.losses || 0) + 1;
-        GameCache.user.streak = 0;
-      } else if (result === 'tie') {
-        GameCache.user.draws = (GameCache.user.draws || 0) + 1;
       }
       
       // Update stats UI in real-time
@@ -1680,11 +1714,13 @@
         }
       }
       
-      // Check for level up
-      const currentLevel = GameCache.user.level;
-      const neededXP = getLevelXP(currentLevel + 1);
-      if (GameCache.user.xp >= neededXP) {
-        GameCache.user.level++;
+      // Check for level up (only for ranked)
+      if (isRanked) {
+        const currentLevel = GameCache.user.level;
+        const neededXP = getLevelXP(currentLevel + 1);
+        if (GameCache.user.xp >= neededXP) {
+          GameCache.user.level++;
+        }
       }
       
       // Calculate MVP
@@ -1728,18 +1764,21 @@
             </div>
           </div>
           
+          ${isRanked ? `
           <div style="background:rgba(59,130,246,0.1);padding:20px;border-radius:16px;margin-bottom:20px;border:1px solid rgba(59,130,246,0.3);">
             <h3 style="margin-bottom:15px;color:var(--blue);">Rewards</h3>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:14px;">
               <div>XP Gained: <strong style="color:var(--success);">+${xpGained}</strong></div>
               <div>Coins: <strong style="color:var(--warning);">+${coinsGained}</strong></div>
-              ${isRanked ? `<div>MMR Change: <strong style="color:${result === 'win' ? 'var(--success)' : 'var(--danger)'};">${result === 'win' ? '+' : ''}${mmrChange.winnerChange || mmrChange.loserChange}</strong></div>` : ''}
+              <div>MMR Change: <strong style="color:${result === 'win' ? 'var(--success)' : 'var(--danger)'};">${result === 'win' ? '+' : ''}${mmrChange.winnerChange || mmrChange.loserChange}</strong></div>
               <div>Level: <strong>${GameCache.user.level}</strong></div>
             </div>
           </div>
+          ` : '<div style="background:rgba(255,255,255,0.05);padding:20px;border-radius:16px;margin-bottom:20px;text-align:center;"><div style="font-size:14px;opacity:0.7;">Play ranked matches to earn XP and rank up!</div></div>'}
           
           ${mvp ? `<div style="background:rgba(139,92,246,0.1);padding:15px;border-radius:12px;margin-bottom:20px;border:1px solid rgba(139,92,246,0.3);text-align:center;"><strong style="color:var(--purple);">${mvp}</strong></div>` : ''}
           
+          ${isRanked ? `
           <div style="background:rgba(255,255,255,0.05);padding:15px;border-radius:12px;margin-bottom:20px;">
             <div style="font-size:12px;opacity:0.7;margin-bottom:8px;">XP Progress</div>
             <div style="background:rgba(255,255,255,0.1);height:8px;border-radius:4px;overflow:hidden;">
@@ -1747,6 +1786,7 @@
             </div>
             <div style="font-size:11px;opacity:0.6;margin-top:4px;">${getXPProgress()}% to Level ${GameCache.user.level + 1}</div>
           </div>
+          ` : ''}
         </div>
       `;
       
@@ -1760,8 +1800,8 @@
         result,
         score: meScore,
         oppScore,
-        xpGained,
-        coinsGained,
+        xpGained: isRanked ? xpGained : 0,
+        coinsGained: isRanked ? coinsGained : 0,
         timestamp: new Date().toISOString()
       });
       
@@ -1830,8 +1870,8 @@
     }
     
     function startSinglePlayer() {
-      const duration = 180; // 3 minutes in seconds
-      const initialPuzzle = generateLetters(6);
+      const duration = 120; // 2 minutes in seconds for AI games
+      const initialPuzzle = generateLetters(4); // 4 letter words for AI games
 
       const payload = {
         matchId: `single-${Date.now()}`,
@@ -1964,8 +2004,19 @@
     }
 
     function useHint() {
-      if (GameCache.user.coins < 10) {
-        alert('You need 10 coins to use a hint. You currently have ' + GameCache.user.coins + ' coins.');
+      let hintCost = 10; // default cost
+      
+      // Determine hint cost based on match mode
+      if (GameCache.match.mode === 'single' || GameCache.match.mode === 'ai') {
+        hintCost = 10; // AI games: 10 coins
+      } else if (GameCache.match.mode === 'ranked') {
+        hintCost = 30; // Ranked matches: 30 coins
+      } else {
+        hintCost = 20; // Quick match and friend games: 20 coins
+      }
+      
+      if (GameCache.user.coins < hintCost) {
+        alert(`You need ${hintCost} coins to use a hint. You currently have ${GameCache.user.coins} coins.`);
         return;
       }
       
@@ -1975,8 +2026,8 @@
         return;
       }
       
-      // Deduct 10 coins
-      GameCache.user.coins -= 10;
+      // Deduct coins
+      GameCache.user.coins -= hintCost;
       updateStatsUI();
       
       // Save to database
