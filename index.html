@@ -126,7 +126,7 @@
       position: fixed;
       top: 20px;
       right: 20px;
-      z-index: 10000;
+      z-index: 20000;
       display: flex;
       flex-direction: column;
       gap: 10px;
@@ -735,12 +735,14 @@
 
     function setupRealtime(){
       cleanupRealtime();
+      console.log('[Realtime] Setting up for user:', currentUserId);
+
       socialChannel = sb.channel('social-sync', { config: { presence: { key: currentUserId } } });
       socialChannel.on('presence', { event: 'sync' }, () => {
         GameCache.onlineUsers = socialChannel.presenceState();
         refreshOpenSocialView();
       }).on('broadcast', { event: 'read_receipt' }, ({ payload }) => {
-        GameCache.messages.forEach(m => { if (m.from_user_id === payload.fromId && m.to_user_id === currentUserId) m._read = true; });
+        GameCache.messages.forEach(m => { if (m.from_user_id === payload.fromId && m.to_user_id === currentUserId) m.read = true; });
         updateBadges(); refreshOpenSocialView();
       }).on('broadcast', { event: 'match_start' }, ({ payload }) => {
         if (!payload || !payload.matchId) return;
@@ -753,24 +755,16 @@
           GameCache.match.playerStreaks[opponentId] = payload.streak || 0;
           GameCache.match.playerCorrectCount[opponentId] = payload.correctCount || 0;
           GameCache.match.playerPuzzleIndex[opponentId] = payload.puzzleIndex || 0;
-
-          // Sync puzzles array if opponent has more puzzles
           if (payload.puzzles && payload.puzzles.length > GameCache.match.puzzles.length) {
             GameCache.match.puzzles = payload.puzzles;
           }
-
-          // Update only the opponent score without re-rendering entire UI
           const oppScoreEl = document.getElementById('oppScore');
           if (oppScoreEl) oppScoreEl.innerText = payload.score;
-
-          // Update current puzzle to the one the player should be on
           const myPuzzleIndex = GameCache.match.playerPuzzleIndex[currentUserId] || 0;
           GameCache.match.currentPuzzle = GameCache.match.puzzles[myPuzzleIndex];
-
-          // Update puzzle tiles if needed
           const newPuzzle = GameCache.match.currentPuzzle;
           const tiles = document.getElementById('tiles');
-          if (tiles) {
+          if (tiles && newPuzzle) {
             tiles.innerHTML = newPuzzle.scrambled.split('').map(l => `<div class="tile">${l.toUpperCase()}</div>`).join('');
           }
         }
@@ -782,185 +776,117 @@
       
       dbChannel = sb.channel('db-sync');
       dbChannel
-        // Messages: INSERT for both sent and received messages
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `to_user_id=eq.${currentUserId}` }, async (p) => {
-          console.log('[Realtime] New message received:', p.new);
-          if (!GameCache.profiles[p.new.from_user_id]) await fetchProfile(p.new.from_user_id);
-          // Prevent duplicate messages in cache
-          if (!GameCache.messages.some(m => m.id === p.new.id)) {
-            GameCache.messages.unshift(p.new);
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `to_user_id=eq.${currentUserId}` }, async (payload) => {
+          console.log('[Realtime] New message received:', payload.new);
+          const msg = payload.new;
+          if (!GameCache.profiles[msg.from_user_id]) await fetchProfile(msg.from_user_id);
+          if (!GameCache.messages.some(m => m.id === msg.id)) {
+            GameCache.messages.unshift(msg);
             updateBadges();
-            // Only refresh social view if chat with this user is NOT open (to prevent keyboard closing)
             const activeChatId = document.getElementById('socialModal').dataset.activeChatId;
-            if (activeChatId !== p.new.from_user_id) {
+            if (activeChatId === msg.from_user_id) {
+              const chatBody = document.getElementById('chatBody');
+              if (chatBody) {
+                const profile = GameCache.profiles[msg.from_user_id] || { avatar_url: avatars[0] };
+                const msgHtml = `<div style="display:flex;align-items:flex-end;gap:8px;margin-bottom:8px;"><img src="${profile.avatar_url || avatars[0]}" style="width:28px;height:28px;border-radius:50%;"><div class="chat-bubble them" style="margin:0;">${msg.text}</div></div>`;
+                chatBody.insertAdjacentHTML('beforeend', msgHtml);
+                chatBody.scrollTop = chatBody.scrollHeight;
+              }
+            } else {
               refreshOpenSocialView();
             }
           }
-          // If chat with this user is open, append message immediately
-          const activeChatId = document.getElementById('socialModal').dataset.activeChatId;
-          if (activeChatId === p.new.from_user_id) {
-            const chatBody = document.getElementById('chatBody');
-            if (chatBody) {
-              const p = GameCache.profiles[p.new.from_user_id] || { avatar_url: avatars[0] };
-              const msgHtml = `<div style="display:flex;align-items:flex-end;gap:8px;margin-bottom:8px;"><img src="${p.avatar_url || avatars[0]}" style="width:28px;height:28px;border-radius:50%;"><div class="chat-bubble them" style="margin:0;">${p.new.text}</div></div>`;
-              chatBody.insertAdjacentHTML('beforeend', msgHtml);
-              chatBody.scrollTop = chatBody.scrollHeight;
-            }
-          }
-          // Always show toast notification for incoming messages (like invites)
-          const sender = GameCache.profiles[p.new.from_user_id]?.display_name || 'Someone';
-          showToast('message', `New message from ${sender}`, p.new.text, () => viewChat(p.new.from_user_id));
+          const senderProfile = GameCache.profiles[msg.from_user_id];
+          const senderName = senderProfile?.display_name || 'Someone';
+          showToast('message', `New message from ${senderName}`, msg.text, () => viewChat(msg.from_user_id));
         })
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `from_user_id=eq.${currentUserId}` }, async (p) => {
-          console.log('[Realtime] Message sent confirmation:', p.new);
-          if (!GameCache.profiles[p.new.to_user_id]) await fetchProfile(p.new.to_user_id);
-          // Prevent duplicate messages in cache
-          if (!GameCache.messages.some(m => m.id === p.new.id)) {
-            GameCache.messages.unshift(p.new);
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `from_user_id=eq.${currentUserId}` }, async (payload) => {
+          console.log('[Realtime] Message sent confirmation:', payload.new);
+          const msg = payload.new;
+          if (!GameCache.profiles[msg.to_user_id]) await fetchProfile(msg.to_user_id);
+          if (!GameCache.messages.some(m => m.id === msg.id)) {
+            GameCache.messages.unshift(msg);
             updateBadges();
           }
-          // Append message to chat if open
-          const socialModal = document.getElementById('socialModal');
-          const activeChatId = socialModal.dataset.activeChatId;
-          if (socialModal.classList.contains('active') && activeChatId === p.new.to_user_id) {
+          const activeChatId = document.getElementById('socialModal').dataset.activeChatId;
+          if (document.getElementById('socialModal').classList.contains('active') && activeChatId === msg.to_user_id) {
             const chatBody = document.getElementById('chatBody');
             if (chatBody) {
-              const msgHtml = `<div style="display:flex;align-items:flex-end;gap:8px;margin-bottom:8px;flex-direction:row-reverse;"><img src="${GameCache.user.avatar_url || avatars[0]}" style="width:28px;height:28px;border-radius:50%;"><div class="chat-bubble me" style="margin:0;">${p.new.text}</div></div>`;
+              const msgHtml = `<div style="display:flex;align-items:flex-end;gap:8px;margin-bottom:8px;flex-direction:row-reverse;"><img src="${GameCache.user.avatar_url || avatars[0]}" style="width:28px;height:28px;border-radius:50%;"><div class="chat-bubble me" style="margin:0;">${msg.text}</div></div>`;
               chatBody.insertAdjacentHTML('beforeend', msgHtml);
               chatBody.scrollTop = chatBody.scrollHeight;
             }
           }
         })
-        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages' }, (p) => {
-          const idx = GameCache.messages.findIndex(m => m.id === p.new.id);
-          if (idx !== -1) { GameCache.messages[idx] = p.new; updateBadges(); refreshOpenSocialView(); }
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages' }, (payload) => {
+          const idx = GameCache.messages.findIndex(m => m.id === payload.new.id);
+          if (idx !== -1) { GameCache.messages[idx] = payload.new; updateBadges(); refreshOpenSocialView(); }
         })
-        // Game Invites: INSERT for both sent and received
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'game_invites', filter: `to_user_id=eq.${currentUserId}` }, async (p) => {
-          console.log('[Realtime] New game invite received:', p.new);
-          if (!GameCache.profiles[p.new.from_user_id]) await fetchProfile(p.new.from_user_id);
-          GameCache.invites.unshift(p.new); updateBadges(); refreshOpenSocialView();
-          // Show toast notification for incoming game invites
-          const sender = GameCache.profiles[p.new.from_user_id]?.display_name || 'Someone';
-          const modeText = p.new.mode === 'ffa' ? 'Free for All' : p.new.mode === 'team' ? 'Team Up' : p.new.mode;
-          showToast('invite', `Game Invite from ${sender}`, `${modeText} match - Click to accept`, () => openInvites());
-          // Also show popup modal for game invites
-          showGameInvitePopup(p.new);
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'game_invites', filter: `to_user_id=eq.${currentUserId}` }, async (payload) => {
+          console.log('[Realtime] New game invite received:', payload.new);
+          const invite = payload.new;
+          if (!GameCache.profiles[invite.from_user_id]) await fetchProfile(invite.from_user_id);
+          GameCache.invites.unshift(invite); updateBadges(); refreshOpenSocialView();
+          const senderProfile = GameCache.profiles[invite.from_user_id];
+          const senderName = senderProfile?.display_name || 'Someone';
+          const modeText = invite.mode === 'ffa' ? 'Free for All' : invite.mode === 'team' ? 'Team Up' : invite.mode;
+          showToast('invite', `Game Invite from ${senderName}`, `${modeText} match - Click to accept`, () => openInvites());
+          showGameInvitePopup(invite);
         })
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'game_invites', filter: `from_user_id=eq.${currentUserId}` }, async (p) => {
-          console.log('[Realtime] Game invite sent:', p.new);
-          if (!GameCache.profiles[p.new.to_user_id]) await fetchProfile(p.new.to_user_id);
-          GameCache.invites.unshift(p.new); refreshOpenSocialView();
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'game_invites', filter: `from_user_id=eq.${currentUserId}` }, async (payload) => {
+          console.log('[Realtime] Game invite sent:', payload.new);
+          if (!GameCache.profiles[payload.new.to_user_id]) await fetchProfile(payload.new.to_user_id);
+          GameCache.invites.unshift(payload.new); refreshOpenSocialView();
         })
-        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'game_invites' }, (p) => {
-          console.log('[Realtime] Game invite updated:', p.new);
-          if (p.new.from_user_id !== currentUserId && p.new.to_user_id !== currentUserId) return;
-          const idx = GameCache.invites.findIndex(i => i.id === p.new.id);
-          if (p.new.status === 'pending') {
-            if (idx === -1) GameCache.invites.unshift(p.new);
-            else GameCache.invites[idx] = p.new;
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'game_invites' }, (payload) => {
+          const invite = payload.new;
+          if (invite.from_user_id !== currentUserId && invite.to_user_id !== currentUserId) return;
+          const idx = GameCache.invites.findIndex(i => i.id === invite.id);
+          if (invite.status === 'pending') {
+            if (idx === -1) GameCache.invites.unshift(invite);
+            else GameCache.invites[idx] = invite;
           } else {
             if (idx !== -1) GameCache.invites.splice(idx, 1);
           }
           updateBadges(); refreshOpenSocialView();
         })
-        // Friend Requests: INSERT for received requests
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'friend_requests', filter: `to_user_id=eq.${currentUserId}` }, async (p) => {
-          console.log('[Realtime] New friend request received:', p.new);
-          if (!GameCache.profiles[p.new.from_user_id]) await fetchProfile(p.new.from_user_id);
-          GameCache.friendRequests.unshift(p.new); updateBadges(); refreshOpenSocialView();
-          // Show toast notification
-          const sender = GameCache.profiles[p.new.from_user_id]?.display_name || 'Someone';
-          showToast('friend', `Friend Request from ${sender}`, 'Click to accept or decline', () => openInvites());
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'friend_requests', filter: `to_user_id=eq.${currentUserId}` }, async (payload) => {
+          console.log('[Realtime] New friend request received:', payload.new);
+          const req = payload.new;
+          if (!GameCache.profiles[req.from_user_id]) await fetchProfile(req.from_user_id);
+          GameCache.friendRequests.unshift(req); updateBadges(); refreshOpenSocialView();
+          const senderProfile = GameCache.profiles[req.from_user_id];
+          const senderName = senderProfile?.display_name || 'Someone';
+          showToast('friend', `Friend Request from ${senderName}`, 'Click to accept or decline', () => openInvites());
         })
-        // Friend Requests: UPDATE for accept/decline
-        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'friend_requests' }, (p) => {
-          console.log('[Realtime] Friend request updated:', p.new);
-          if (p.new.from_user_id !== currentUserId && p.new.to_user_id !== currentUserId) return;
-          const idx = GameCache.friendRequests.findIndex(r => r.id === p.new.id);
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'friend_requests' }, (payload) => {
+          const req = payload.new;
+          if (req.from_user_id !== currentUserId && req.to_user_id !== currentUserId) return;
+          const idx = GameCache.friendRequests.findIndex(r => r.id === req.id);
           if (idx !== -1) {
-            if (p.new.status !== 'pending') {
-              GameCache.friendRequests.splice(idx, 1);
-            } else {
-              GameCache.friendRequests[idx] = p.new;
-            }
+            if (req.status !== 'pending') GameCache.friendRequests.splice(idx, 1);
+            else GameCache.friendRequests[idx] = req;
           }
           updateBadges(); refreshOpenSocialView();
         })
-        // Friends: INSERT for new friendships
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'friends', filter: `user_id=eq.${currentUserId}` }, async (p) => {
-          console.log('[Realtime] New friendship added:', p.new);
-          if (!GameCache.friends.includes(p.new.friend_id)) {
-            GameCache.friends.push(p.new.friend_id);
-            if (!GameCache.profiles[p.new.friend_id]) await fetchProfile(p.new.friend_id);
-          }
-          refreshOpenSocialView();
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${currentUserId}` }, (payload) => {
+          console.log('[Realtime] New notification received:', payload.new);
+          GameCache.notifications.unshift(payload.new); updateBadges(); refreshOpenSocialView();
+          const notif = payload.new;
+          showToast('notification', notif.title || 'Notification', notif.body || notif.message || '', () => openNotifications());
         })
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'friends', filter: `friend_id=eq.${currentUserId}` }, async (p) => {
-          console.log('[Realtime] Friendship added (as friend):', p.new);
-          if (!GameCache.friends.includes(p.new.user_id)) {
-            GameCache.friends.push(p.new.user_id);
-            if (!GameCache.profiles[p.new.user_id]) await fetchProfile(p.new.user_id);
-          }
-          refreshOpenSocialView();
-        })
-        // Friends: DELETE for removed friendships
-        .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'friends', filter: `user_id=eq.${currentUserId}` }, (p) => {
-          console.log('[Realtime] Friendship removed:', p.old);
-          const idx = GameCache.friends.indexOf(p.old.friend_id);
-          if (idx !== -1) GameCache.friends.splice(idx, 1);
-          refreshOpenSocialView();
-        })
-        .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'friends', filter: `friend_id=eq.${currentUserId}` }, (p) => {
-          console.log('[Realtime] Friendship removed (as friend):', p.old);
-          const idx = GameCache.friends.indexOf(p.old.user_id);
-          if (idx !== -1) GameCache.friends.splice(idx, 1);
-          refreshOpenSocialView();
-        })
-        // Notifications: INSERT for new notifications
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${currentUserId}` }, (p) => {
-          console.log('[Realtime] New notification received:', p.new);
-          GameCache.notifications.unshift(p.new); updateBadges(); refreshOpenSocialView();
-          // Show toast notification
-          const title = p.new.title || 'Notification';
-          const body = p.new.body || p.new.message || '';
-          showToast('notification', title, body, () => openNotifications());
-        })
-        // Notifications: UPDATE for read status
-        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'notifications', filter: `user_id=eq.${currentUserId}` }, (p) => {
-          console.log('[Realtime] Notification updated:', p.new);
-          const idx = GameCache.notifications.findIndex(n => n.id === p.new.id);
-          if (idx !== -1) {
-            GameCache.notifications[idx] = p.new;
-            if (p.new.is_read) {
-              GameCache.notifications.splice(idx, 1);
-            }
-          }
-          updateBadges(); refreshOpenSocialView();
-        })
-        // Global Chat: INSERT for new messages
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'global_chat' }, (p) => {
-          console.log('[Realtime] New global chat message:', p.new);
-          // Load profile for sender if not already loaded
-          if (!GameCache.profiles[p.new.user_id]) {
-            fetchProfile(p.new.user_id);
-          }
-          GameCache.globalChatMessages.unshift(p.new);
-          // Update badge and show toast for incoming messages (not from self)
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'global_chat' }, (payload) => {
+          console.log('[Realtime] New global chat message:', payload.new);
+          const msg = payload.new;
+          if (!GameCache.profiles[msg.user_id]) fetchProfile(msg.user_id);
+          GameCache.globalChatMessages.unshift(msg);
           const badge = document.getElementById('globalChatBadge');
-          if (badge) {
-            badge.classList.remove('hidden');
-            badge.innerText = GameCache.globalChatMessages.length;
+          if (badge) { badge.classList.remove('hidden'); badge.innerText = GameCache.globalChatMessages.length; }
+          if (msg.user_id !== currentUserId) {
+            const senderName = msg.display_name || GameCache.profiles[msg.user_id]?.display_name || 'Someone';
+            showToast('message', `Global chat from ${senderName}`, msg.message, () => openGlobalChat());
           }
-          // Show toast for messages from other users
-          if (p.new.user_id !== currentUserId) {
-            const sender = p.new.display_name || GameCache.profiles[p.new.user_id]?.display_name || 'Someone';
-            showToast('message', `Global chat from ${sender}`, p.new.message, () => openGlobalChat());
-          }
-          // Re-render if modal is open
-          if (document.getElementById('globalChatModal').classList.contains('active')) {
-            renderGlobalChat();
-          }
+          if (document.getElementById('globalChatModal').classList.contains('active')) renderGlobalChat();
         })
         .subscribe((status) => {
           console.log('[Realtime] DB channel status:', status);
