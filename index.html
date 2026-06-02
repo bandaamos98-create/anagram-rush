@@ -185,13 +185,16 @@
           <img id="headerAvatar" class="profile-pic" src="" />
           <div><div class="player-name" id="headerName"></div><div class="player-rank" id="headerRank">Bronze League</div></div>
         </div>
-        <div class="icon-btn" onclick="openNotifications()"> 🔔 <div class="notification-dot" id="headerNotifDot"></div> </div>
+        <div style="display:flex;gap:12px;">
+          <div class="icon-btn" onclick="openGlobalChat()" style="position:relative;"> 💬 <div class="badge-count hidden" id="globalChatBadge">0</div> </div>
+          <div class="icon-btn" onclick="openNotifications()"> 🔔 <div class="notification-dot" id="headerNotifDot"></div> </div>
+        </div>
       </div>
 
       <div class="page" id="dashboardPage">
         <div class="card glass">
           <div style="display:flex;justify-content:space-between;align-items:center;">
-            <div><h2>Player Stats</h2><div class="badge" id="leagueBadge" style="margin-top:6px;">💎 Bronze League</div></div>
+            <div><h2>Player Stats</h2><div class="badge" id="leagueBadge" style="margin-top:6px;cursor:pointer;" onclick="openLevelProgress()">💎 Bronze League</div></div>
             <div style="text-align:right;">
               <div style="font-size:14px;opacity:0.7;">Level <span id="levelDisplay" style="font-weight:800;color:var(--blue);">1</span></div>
               <div style="font-size:12px;opacity:0.6;margin-top:2px;">🪙 <span id="coinsDisplay">0</span></div>
@@ -219,7 +222,10 @@
             <button class="leader-secondary" style="padding:16px;" onclick="openFriends()">🔍 Find Friends</button>
             <button class="leader-secondary" style="padding:16px;" onclick="openAchievements()">🏆 Achievements</button>
           </div>
-          <button class="btn modern" style="margin-top:14px;background:linear-gradient(135deg,var(--warning),#f59e0b);" onclick="claimDailyReward()">🎁 Claim Daily Reward</button>
+          <div style="display:flex;gap:10px;margin-top:14px;">
+            <button class="btn modern" style="flex:1;background:linear-gradient(135deg,var(--warning),#f59e0b);" onclick="claimDailyReward()">🎁 Claim Daily Reward</button>
+            <button class="btn modern" style="flex:1;background:linear-gradient(135deg,var(--purple),#8b5cf6);" onclick="openMultiplayerModal()">🎮 Multiplayer</button>
+          </div>
         </div>
         <div class="big-buttons">
           <button class="play-btn quick" onclick="findMatch('quick')"> ⚡ Quick Match </button>
@@ -294,6 +300,34 @@
     </div>
   </div>
 
+  <div class="modal" id="globalChatModal">
+    <div class="modal-content glass" style="max-height:90vh;display:flex;flex-direction:column;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+        <h2 class="modal-title">🌍 Global Chat</h2>
+        <div class="icon-btn" onclick="closeModal('globalChatModal')">✕</div>
+      </div>
+      <div id="globalChatMessages" style="flex:1;overflow-y:auto;padding:16px;background:rgba(0,0,0,0.2);border-radius:12px;margin-bottom:16px;max-height:400px;">
+        <!-- Global chat messages will be rendered here -->
+      </div>
+      <div style="display:flex;gap:10px;">
+        <input id="globalChatInput" class="answer-input modern" style="flex:1;" placeholder="Type a message..." maxlength="200" />
+        <button class="btn modern" style="width:80px;" onclick="sendGlobalMessage()">Send</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="levelProgressModal">
+    <div class="modal-content glass">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+        <h2 class="modal-title">Level Progress</h2>
+        <div class="icon-btn" onclick="closeModal('levelProgressModal')">✕</div>
+      </div>
+      <div id="levelProgressContent">
+        <!-- Level progression will be rendered here -->
+      </div>
+    </div>
+  </div>
+
   <div class="modal" id="notificationModal">
     <div class="modal-content glass">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
@@ -337,6 +371,78 @@
         <button class="btn guest-btn" style="flex:1;" onclick="openAboutModal()">About Us</button>
       </div>
       <button class="btn decline" style="width:100%;margin-top:10px;" onclick="logout()">Logout</button>
+    </div>
+  </div>
+
+  <div class="modal" id="multiplayerModal">
+    <div class="modal-content glass">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+        <div class="modal-title">Multiplayer Mode</div>
+        <div class="icon-btn" onclick="closeModal('multiplayerModal')">✕</div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+        <div style="background:rgba(255,255,255,0.05);padding:24px;border-radius:16px;text-align:center;cursor:pointer;border:2px solid transparent;transition:all 0.3s;" onclick="openFreeForAllLobby()" onmouseover="this.style.borderColor='var(--blue)'" onmouseout="this.style.borderColor='transparent'">
+          <div style="font-size:48px;margin-bottom:12px;">⚔️</div>
+          <h3 style="margin-bottom:8px;">Free for All</h3>
+          <p style="font-size:13px;opacity:0.7;">4 players, each for themselves</p>
+          <p style="font-size:12px;opacity:0.5;margin-top:8px;">7 minutes</p>
+        </div>
+        <div style="background:rgba(255,255,255,0.05);padding:24px;border-radius:16px;text-align:center;cursor:pointer;border:2px solid transparent;transition:all 0.3s;" onclick="openTeamUpLobby()" onmouseover="this.style.borderColor='var(--purple)'" onmouseout="this.style.borderColor='transparent'">
+          <div style="font-size:48px;margin-bottom:12px;">🤝</div>
+          <h3 style="margin-bottom:8px;">Team Up</h3>
+          <p style="font-size:13px;opacity:0.7;">4 vs 4 team battle</p>
+          <p style="font-size:12px;opacity:0.5;margin-top:8px;">7 minutes</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="freeForAllLobbyModal">
+    <div class="modal-content glass">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+        <div class="modal-title">Free for All Lobby</div>
+        <div class="icon-btn" onclick="closeModal('freeForAllLobbyModal')">✕</div>
+      </div>
+      <div id="freeForAllSlots" style="display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-bottom:20px;">
+        <!-- Slots will be generated here -->
+      </div>
+      <button class="btn modern" style="width:100%;" onclick="startFreeForAllMatch()">Start Match</button>
+    </div>
+  </div>
+
+  <div class="modal" id="teamUpLobbyModal">
+    <div class="modal-content glass">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+        <div class="modal-title">Team Up Lobby</div>
+        <div class="icon-btn" onclick="closeModal('teamUpLobbyModal')">✕</div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:20px;">
+        <div>
+          <h4 style="margin-bottom:12px;color:var(--blue);">Scramble Kings (4)</h4>
+          <div id="teamASlots" style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px;">
+            <!-- Team A slots will be generated here -->
+          </div>
+        </div>
+        <div>
+          <h4 style="margin-bottom:12px;color:var(--purple);">Vocab Vikings (4)</h4>
+          <div id="teamBSlots" style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px;">
+            <!-- Team B slots will be generated here -->
+          </div>
+        </div>
+      </div>
+      <button class="btn modern" style="width:100%;" onclick="startTeamUpMatch()">Start Match</button>
+    </div>
+  </div>
+
+  <div class="modal" id="friendSelectModal">
+    <div class="modal-content glass">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+        <div class="modal-title">Select Friend</div>
+        <div class="icon-btn" onclick="closeModal('friendSelectModal')">✕</div>
+      </div>
+      <div id="friendSelectContent" style="max-height:300px;overflow-y:auto;">
+        <!-- Friend list will be generated here -->
+      </div>
     </div>
   </div>
 
@@ -441,6 +547,7 @@
       invites: [],
       friendRequests: [],
       notifications: [],
+      globalChatMessages: [],
       onlineUsers: {},
       leaderboard: [],
       profiles: {},
@@ -586,11 +693,12 @@
         console.log('MESSAGES DATA:', dbgData);
         console.log('MESSAGES ERROR:', dbgErr);
       }catch(e){ console.warn('Debug messages fetch failed', e); }
-      const [msgs, invs, friendReqs, notifs, leaders, friends] = await Promise.all([
+      const [msgs, invs, friendReqs, notifs, globalMsgs, leaders, friends] = await Promise.all([
         sb.from('messages').select('*').or(`to_user_id.eq.${currentUserId},from_user_id.eq.${currentUserId}`).order('created_at', {ascending: false}),
         sb.from('game_invites').select('*').or(`to_user_id.eq.${currentUserId},from_user_id.eq.${currentUserId}`).eq('status', 'pending'),
         sb.from('friend_requests').select('*').eq('to_user_id', currentUserId).eq('status', 'pending'),
         sb.from('notifications').select('*').eq('user_id', currentUserId).eq('is_read', false),
+        sb.from('global_chat').select('*').order('created_at', {ascending: false}).limit(100),
         sb.from('profiles').select('id, display_name, mmr, avatar_url, wins, losses, draws').order('mmr', {ascending: false}).limit(1000),
         sb.from('friends').select('friend_id').eq('user_id', currentUserId)
       ]);
@@ -598,6 +706,7 @@
       GameCache.invites = invs.data || [];
       GameCache.friendRequests = friendReqs.data || [];
       GameCache.notifications = notifs.data || [];
+      GameCache.globalChatMessages = globalMsgs.data || [];
       GameCache.leaderboard = leaders.data || [];
       GameCache.friends = (friends.data || []).map(f => f.friend_id);
       GameCache.leaderboard.forEach(p => GameCache.profiles[p.id] = p);
@@ -818,6 +927,21 @@
             }
           }
           updateBadges(); refreshOpenSocialView();
+        })
+        // Global Chat: INSERT for new messages
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'global_chat' }, (p) => {
+          console.log('[Realtime] New global chat message:', p.new);
+          GameCache.globalChatMessages.unshift(p.new);
+          // Only update badge, no toast
+          const badge = document.getElementById('globalChatBadge');
+          if (badge) {
+            badge.classList.remove('hidden');
+            badge.innerText = GameCache.globalChatMessages.length;
+          }
+          // Re-render if modal is open
+          if (document.getElementById('globalChatModal').classList.contains('active')) {
+            renderGlobalChat();
+          }
         })
         .subscribe((status) => {
           console.log('[Realtime] DB channel status:', status);
@@ -1188,6 +1312,329 @@
 
     function openAboutModal(){ openModal("aboutModal"); }
     function openHowToPlayModal(){ openModal("howToPlayModal"); }
+    function openMultiplayerModal(){ openModal("multiplayerModal"); }
+    function openGlobalChat() {
+      renderGlobalChat();
+      openModal('globalChatModal');
+      // Mark messages as read
+      const badge = document.getElementById('globalChatBadge');
+      if (badge) {
+        badge.classList.add('hidden');
+        badge.innerText = '0';
+      }
+    }
+    
+    function renderGlobalChat() {
+      const container = document.getElementById('globalChatMessages');
+      // Filter out messages older than 24 hours
+      const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const recentMessages = GameCache.globalChatMessages.filter(m => m.created_at >= twentyFourHoursAgo);
+      
+      container.innerHTML = recentMessages.map(m => {
+        // Use display_name from message if available, otherwise get from profiles cache
+        const sender = GameCache.profiles[m.user_id] || { 
+          display_name: m.display_name || 'Player', 
+          avatar_url: avatars[0] 
+        };
+        // Override with message's display_name if it exists
+        if (m.display_name) {
+          sender.display_name = m.display_name;
+        }
+        const isMe = m.user_id === currentUserId;
+        const date = new Date(m.created_at);
+        const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const dateStr = date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+        
+        return `<div style="display:flex;align-items:flex-end;gap:8px;margin-bottom:12px;${isMe ? 'flex-direction:row-reverse;' : ''}">
+          <img src="${sender.avatar_url || avatars[0]}" style="width:32px;height:32px;border-radius:50%;">
+          <div style="max-width:70%;">
+            <div style="font-size:11px;opacity:0.6;margin-bottom:2px;">${sender.display_name} • ${dateStr} ${timeStr}</div>
+            <div class="chat-bubble ${isMe ? 'me' : 'them'}" style="margin:0;">${m.message}</div>
+          </div>
+        </div>`;
+      }).join('');
+      
+      container.scrollTop = container.scrollHeight;
+    }
+    
+    async function sendGlobalMessage() {
+      const input = document.getElementById('globalChatInput');
+      const message = input.value.trim();
+      if (!message) return;
+      
+      // Ensure sender profile is loaded
+      if (!GameCache.profiles[currentUserId]) {
+        GameCache.profiles[currentUserId] = {
+          display_name: GameCache.user.display_name,
+          avatar_url: GameCache.user.avatar_url
+        };
+      }
+      
+      const { data, error } = await sb.from('global_chat').insert({
+        user_id: currentUserId,
+        message: message,
+        display_name: GameCache.user.display_name
+      }).select();
+      
+      if (error) {
+        console.error('Failed to send global message:', error);
+        alert('Failed to send message');
+        return;
+      }
+      
+      input.value = '';
+    }
+    
+    function openLevelProgress() {
+      const currentLevel = GameCache.user.level;
+      const currentXP = GameCache.user.xp;
+      const content = document.getElementById('levelProgressContent');
+      
+      let levelsHTML = '';
+      for (let i = Math.max(1, currentLevel - 2); i <= currentLevel + 5; i++) {
+        const xpNeeded = getLevelXP(i);
+        const isCurrent = i === currentLevel;
+        const isUnlocked = currentXP >= xpNeeded;
+        const progress = isCurrent ? getXPProgress() : (isUnlocked ? 100 : 0);
+        
+        levelsHTML += `
+          <div style="display:flex;align-items:center;gap:12px;padding:12px;background:${isCurrent ? 'rgba(59,130,246,0.1)' : 'rgba(255,255,255,0.03)'};border-radius:12px;margin-bottom:8px;border:${isCurrent ? '1px solid var(--blue)' : 'none'};">
+            <div style="font-weight:700;font-size:16px;width:30px;">${i}</div>
+            <div style="flex:1;">
+              <div style="font-weight:700;font-size:14px;">Level ${i}</div>
+              <div style="font-size:12px;opacity:0.6;">${xpNeeded} XP required</div>
+              <div style="background:rgba(255,255,255,0.1);height:6px;border-radius:3px;overflow:hidden;margin-top:6px;">
+                <div style="background:${isCurrent ? 'var(--blue)' : isUnlocked ? 'var(--success)' : 'rgba(255,255,255,0.3)'};height:100%;width:${progress}%;"></div>
+              </div>
+            </div>
+            ${isUnlocked ? '<span style="font-size:16px;">✓</span>' : '<span style="font-size:16px;opacity:0.3;">🔒</span>'}
+          </div>
+        `;
+      }
+      
+      content.innerHTML = `
+        <div style="background:rgba(59,130,246,0.1);padding:16px;border-radius:12px;margin-bottom:16px;border:1px solid rgba(59,130,246,0.3);">
+          <div style="font-size:14px;opacity:0.7;">Current Level</div>
+          <div style="font-size:28px;font-weight:800;color:var(--blue);">${currentLevel}</div>
+          <div style="font-size:12px;opacity:0.6;margin-top:4px;">${currentXP} XP</div>
+          <div style="background:rgba(255,255,255,0.1);height:8px;border-radius:4px;overflow:hidden;margin-top:8px;">
+            <div style="background:linear-gradient(90deg,var(--blue),var(--purple));height:100%;width:${getXPProgress()}%;"></div>
+          </div>
+          <div style="font-size:12px;opacity:0.6;margin-top:4px;">${getXPProgress()}% to Level ${currentLevel + 1}</div>
+        </div>
+        <h3 style="margin-bottom:12px;">Level Progression</h3>
+        ${levelsHTML}
+      `;
+      
+      openModal('levelProgressModal');
+    }
+    
+    let currentSlotIndex = null;
+    let currentTeam = null;
+    let freeForAllPlayers = [null, null, null, null]; // 4 slots for FFA
+    let teamAPlayers = [null, null, null, null];
+    let teamBPlayers = [null, null, null, null];
+    let freeForAllStatus = [null, null, null, null]; // Track status: playerId or 'pending'
+    let teamAStatus = [null, null, null, null];
+    let teamBStatus = [null, null, null, null];
+    
+    function openFreeForAllLobby() {
+      closeModal('multiplayerModal');
+      // Reset and fill first slot with host
+      freeForAllPlayers = [currentUserId, null, null, null];
+      freeForAllStatus = [currentUserId, null, null, null];
+      renderFreeForAllSlots();
+      openModal('freeForAllLobbyModal');
+    }
+    
+    function openTeamUpLobby() {
+      closeModal('multiplayerModal');
+      // Reset and fill first slot with host
+      teamAPlayers = [currentUserId, null, null, null];
+      teamAStatus = [currentUserId, null, null, null];
+      teamBPlayers = [null, null, null, null];
+      teamBStatus = [null, null, null, null];
+      renderTeamSlots();
+      openModal('teamUpLobbyModal');
+    }
+    
+    function renderFreeForAllSlots() {
+      const container = document.getElementById('freeForAllSlots');
+      container.innerHTML = freeForAllPlayers.map((playerId, index) => {
+        if (playerId === currentUserId) {
+          return `<div style="background:rgba(59,130,246,0.2);padding:16px;border-radius:12px;text-align:center;border:2px solid var(--blue);">
+            <img src="${GameCache.user.avatar_url || avatars[0]}" style="width:48px;height:48px;border-radius:50%;margin-bottom:8px;">
+            <div style="font-weight:700;">${GameCache.user.display_name || 'You'}</div>
+            <div style="font-size:11px;opacity:0.6;">Host</div>
+          </div>`;
+        } else if (freeForAllStatus[index] === 'pending') {
+          return `<div style="background:rgba(255,193,7,0.1);padding:16px;border-radius:12px;text-align:center;border:2px dashed var(--warning);">
+            <div style="font-size:32px;margin-bottom:8px;">⏳</div>
+            <div style="font-weight:700;">Waiting...</div>
+            <div style="font-size:11px;opacity:0.6;">Pending approval</div>
+            <button class="leader-secondary" style="margin-top:8px;font-size:11px;padding:4px 8px;" onclick="removePlayerFromFFA(${index})">Remove</button>
+          </div>`;
+        } else if (playerId) {
+          const p = GameCache.profiles[playerId] || { display_name: 'Player', avatar_url: avatars[0] };
+          return `<div style="background:rgba(255,255,255,0.05);padding:16px;border-radius:12px;text-align:center;">
+            <img src="${p.avatar_url || avatars[0]}" style="width:48px;height:48px;border-radius:50%;margin-bottom:8px;">
+            <div style="font-weight:700;">${p.display_name}</div>
+            <div style="font-size:11px;opacity:0.6;">Ready</div>
+            <button class="leader-secondary" style="margin-top:8px;font-size:11px;padding:4px 8px;background:var(--danger);" onclick="removePlayerFromFFA(${index})">Remove</button>
+          </div>`;
+        } else {
+          return `<div style="background:rgba(255,255,255,0.05);padding:16px;border-radius:12px;text-align:center;cursor:pointer;border:2px dashed rgba(255,255,255,0.3);" onclick="openFriendSelect(${index}, 'ffa')">
+            <div style="font-size:32px;margin-bottom:8px;">+</div>
+            <div style="font-size:13px;opacity:0.6;">Add Player</div>
+          </div>`;
+        }
+      }).join('');
+    }
+    
+    function renderTeamSlots() {
+      const teamAContainer = document.getElementById('teamASlots');
+      const teamBContainer = document.getElementById('teamBSlots');
+      
+      teamAContainer.innerHTML = teamAPlayers.map((playerId, index) => {
+        if (playerId === currentUserId) {
+          return `<div style="background:rgba(59,130,246,0.2);padding:12px;border-radius:12px;text-align:center;border:2px solid var(--blue);">
+            <img src="${GameCache.user.avatar_url || avatars[0]}" style="width:40px;height:40px;border-radius:50%;margin-bottom:4px;">
+            <div style="font-weight:700;font-size:13px;">${GameCache.user.display_name || 'You'}</div>
+          </div>`;
+        } else if (teamAStatus[index] === 'pending') {
+          return `<div style="background:rgba(255,193,7,0.1);padding:12px;border-radius:12px;text-align:center;border:2px dashed var(--warning);">
+            <div style="font-size:24px;margin-bottom:4px;">⏳</div>
+            <div style="font-weight:700;font-size:12px;">Waiting...</div>
+            <button class="leader-secondary" style="margin-top:4px;font-size:10px;padding:2px 6px;" onclick="removePlayerFromTeamA(${index})">Remove</button>
+          </div>`;
+        } else if (playerId) {
+          const p = GameCache.profiles[playerId] || { display_name: 'Player', avatar_url: avatars[0] };
+          return `<div style="background:rgba(255,255,255,0.05);padding:12px;border-radius:12px;text-align:center;">
+            <img src="${p.avatar_url || avatars[0]}" style="width:40px;height:40px;border-radius:50%;margin-bottom:4px;">
+            <div style="font-weight:700;font-size:13px;">${p.display_name}</div>
+            <button class="leader-secondary" style="margin-top:4px;font-size:10px;padding:2px 6px;background:var(--danger);" onclick="removePlayerFromTeamA(${index})">Remove</button>
+          </div>`;
+        } else {
+          return `<div style="background:rgba(255,255,255,0.05);padding:12px;border-radius:12px;text-align:center;cursor:pointer;border:2px dashed rgba(255,255,255,0.3);" onclick="openFriendSelect(${index}, 'teama')">
+            <div style="font-size:24px;">+</div>
+          </div>`;
+        }
+      }).join('');
+      
+      teamBContainer.innerHTML = teamBPlayers.map((playerId, index) => {
+        if (teamBStatus[index] === 'pending') {
+          return `<div style="background:rgba(255,193,7,0.1);padding:12px;border-radius:12px;text-align:center;border:2px dashed var(--warning);">
+            <div style="font-size:24px;margin-bottom:4px;">⏳</div>
+            <div style="font-weight:700;font-size:12px;">Waiting...</div>
+            <button class="leader-secondary" style="margin-top:4px;font-size:10px;padding:2px 6px;" onclick="removePlayerFromTeamB(${index})">Remove</button>
+          </div>`;
+        } else if (playerId) {
+          const p = GameCache.profiles[playerId] || { display_name: 'Player', avatar_url: avatars[0] };
+          return `<div style="background:rgba(255,255,255,0.05);padding:12px;border-radius:12px;text-align:center;">
+            <img src="${p.avatar_url || avatars[0]}" style="width:40px;height:40px;border-radius:50%;margin-bottom:4px;">
+            <div style="font-weight:700;font-size:13px;">${p.display_name}</div>
+            <button class="leader-secondary" style="margin-top:4px;font-size:10px;padding:2px 6px;background:var(--danger);" onclick="removePlayerFromTeamB(${index})">Remove</button>
+          </div>`;
+        } else {
+          return `<div style="background:rgba(255,255,255,0.05);padding:12px;border-radius:12px;text-align:center;cursor:pointer;border:2px dashed rgba(255,255,255,0.3);" onclick="openFriendSelect(${index}, 'teamb')">
+            <div style="font-size:24px;">+</div>
+          </div>`;
+        }
+      }).join('');
+    }
+    
+    function openFriendSelect(index, team) {
+      currentSlotIndex = index;
+      currentTeam = team;
+      
+      const content = document.getElementById('friendSelectContent');
+      const friends = GameCache.friends.map(fid => GameCache.profiles[fid]).filter(p => p);
+      
+      content.innerHTML = friends.map(p => {
+        const isAlreadyInLobby = freeForAllPlayers.includes(p.id) || teamAPlayers.includes(p.id) || teamBPlayers.includes(p.id);
+        return `<div class="social-item" style="${isAlreadyInLobby ? 'opacity:0.5;pointer-events:none;' : 'cursor:pointer;'}" onclick="${isAlreadyInLobby ? '' : `selectFriend('${p.id}')`}">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <img src="${p.avatar_url || avatars[0]}" style="width:32px;height:32px;border-radius:50%;">
+            <div style="font-weight:700;">${p.display_name}</div>
+          </div>
+          ${isAlreadyInLobby ? '<span style="font-size:12px;opacity:0.6;">Already in lobby</span>' : ''}
+        </div>`;
+      }).join('') || "<p style='text-align:center;opacity:0.5'>No friends available</p>";
+      
+      openModal('friendSelectModal');
+    }
+    
+    function selectFriend(friendId) {
+      if (currentTeam === 'ffa') {
+        freeForAllPlayers[currentSlotIndex] = friendId;
+        freeForAllStatus[currentSlotIndex] = 'pending';
+        renderFreeForAllSlots();
+      } else if (currentTeam === 'teama') {
+        teamAPlayers[currentSlotIndex] = friendId;
+        teamAStatus[currentSlotIndex] = 'pending';
+        renderTeamSlots();
+      } else if (currentTeam === 'teamb') {
+        teamBPlayers[currentSlotIndex] = friendId;
+        teamBStatus[currentSlotIndex] = 'pending';
+        renderTeamSlots();
+      }
+      closeModal('friendSelectModal');
+    }
+    
+    function removePlayerFromFFA(index) {
+      freeForAllPlayers[index] = null;
+      freeForAllStatus[index] = null;
+      renderFreeForAllSlots();
+    }
+    
+    function removePlayerFromTeamA(index) {
+      teamAPlayers[index] = null;
+      teamAStatus[index] = null;
+      renderTeamSlots();
+    }
+    
+    function removePlayerFromTeamB(index) {
+      teamBPlayers[index] = null;
+      teamBStatus[index] = null;
+      renderTeamSlots();
+    }
+    
+    async function startFreeForAllMatch() {
+      const readyPlayers = freeForAllPlayers.filter(p => p);
+      if (readyPlayers.length < 2) {
+        return alert('You need at least 2 players to start a match.');
+      }
+      
+      // Send invites to all players
+      for (const playerId of freeForAllPlayers) {
+        if (playerId && playerId !== currentUserId) {
+          await sendInvite(playerId, 'ffa');
+        }
+      }
+      
+      closeModal('freeForAllLobbyModal');
+      alert('Invites sent! Waiting for players to accept...');
+    }
+    
+    async function startTeamUpMatch() {
+      const readyTeamA = teamAPlayers.filter(p => p);
+      const readyTeamB = teamBPlayers.filter(p => p);
+      
+      if (readyTeamA.length < 1 || readyTeamB.length < 1) {
+        return alert('Each team needs at least 1 player.');
+      }
+      
+      // Send invites to all players
+      for (const playerId of [...teamAPlayers, ...teamBPlayers]) {
+        if (playerId && playerId !== currentUserId) {
+          await sendInvite(playerId, 'team');
+        }
+      }
+      
+      closeModal('teamUpLobbyModal');
+      alert('Invites sent! Waiting for players to accept...');
+    }
+    
     function closeSocialModal() { setSocialModalFullscreen(false); closeModal('socialModal'); document.getElementById('socialModal').dataset.activeChatId = ""; }
     function getLeague(mmr){ 
       if(mmr >= 3000) return "Master";
@@ -1389,7 +1836,8 @@
       if (error) { console.error('Invite failed', error); return alert('Unable to send invite.'); }
       if (data) {
         GameCache.invites.unshift(data);
-        showToast('invite', 'Game Invite Sent', 'Your invite has been sent successfully.');
+        const modeText = mode === 'ffa' ? 'Free for All' : mode === 'team' ? 'Team Up' : mode;
+        showToast('invite', 'Game Invite Sent', `Your ${modeText} invite has been sent successfully.`);
         // Refresh friends list to update button state
         renderFriendsList();
       }
@@ -1432,11 +1880,21 @@
     async function respondGameInvite(id, status) {
       const invite = GameCache.invites.find(i => i.id === id);
       if (!invite) return;
-      await sb.from('game_invites').update({ status }).eq('id', id);
-      GameCache.invites = GameCache.invites.filter(i => i.id !== id);
-      updateBadges();
+      
       if (status === 'accepted') {
-        // First-accept-wins logic: decline all other pending invites from the same sender
+        // Use database transaction to ensure only first acceptor wins
+        const { data: updatedInvite, error } = await sb.from('game_invites').update({ status: 'accepted' }).eq('id', id).select().single();
+        
+        if (error || !updatedInvite || updatedInvite.status !== 'accepted') {
+          // Someone else already accepted
+          alert('This invite has already been accepted by another player.');
+          GameCache.invites = GameCache.invites.filter(i => i.id !== id);
+          updateBadges();
+          openInvites();
+          return;
+        }
+        
+        // Decline all other pending invites from the same sender
         const otherInvites = GameCache.invites.filter(i => i.from_user_id === invite.from_user_id && i.status === 'pending');
         for (const otherInvite of otherInvites) {
           await sb.from('game_invites').update({ status: 'declined' }).eq('id', otherInvite.id);
@@ -1446,7 +1904,12 @@
         const matchPayload = createMatchPayload(invite);
         startMatchSession(matchPayload);
         try { socialChannel.send({ type: 'broadcast', event: 'match_start', payload: matchPayload }); } catch(e) {}
+      } else {
+        await sb.from('game_invites').update({ status }).eq('id', id);
       }
+      
+      GameCache.invites = GameCache.invites.filter(i => i.id !== id);
+      updateBadges();
       openInvites();
     }
 
@@ -1652,6 +2115,9 @@
         else if (mmr < 1500) wordLength = 5;
         else if (mmr < 2000) wordLength = 6;
         else wordLength = 7;
+      } else if (mode === 'ffa' || mode === 'team') {
+        duration = 420; // 7 minutes for multiplayer modes
+        wordLength = 5; // 5 letter words for multiplayer
       } else {
         // Quick match and friend invites: 3 minutes, 5 letter words
         duration = 180;
@@ -1831,7 +2297,168 @@
       if (aiInterval) clearInterval(aiInterval);
       if (GameCache.match.timer) clearInterval(GameCache.match.timer);
       
+      const mode = GameCache.match.mode;
       const meScore = GameCache.match.playerScores[currentUserId] || 0;
+      
+      // Handle different match modes
+      if (mode === 'team') {
+        // Team mode results
+        const teamAName = 'Scramble Kings';
+        const teamBName = 'Vocab Vikings';
+        
+        // Calculate team scores
+        let teamAScore = 0;
+        let teamBScore = 0;
+        const teamAPlayersData = [];
+        const teamBPlayersData = [];
+        
+        Object.keys(GameCache.match.playerScores).forEach(playerId => {
+          const score = GameCache.match.playerScores[playerId];
+          const profile = GameCache.profiles[playerId] || { display_name: 'Player', avatar_url: avatars[0] };
+          const playerData = { playerId, score, ...profile };
+          
+          // Determine which team (simplified - in real implementation, need team assignment)
+          if (teamAPlayers.includes(playerId)) {
+            teamAScore += score;
+            teamAPlayersData.push(playerData);
+          } else {
+            teamBScore += score;
+            teamBPlayersData.push(playerData);
+          }
+        });
+        
+        // Sort players by score (highest to lowest)
+        teamAPlayersData.sort((a, b) => b.score - a.score);
+        teamBPlayersData.sort((a, b) => b.score - a.score);
+        
+        const teamResult = teamAScore > teamBScore ? 'win' : teamAScore < teamBScore ? 'loss' : 'tie';
+        const winningTeam = teamResult === 'win' ? teamAName : teamResult === 'loss' ? teamBName : 'Tie';
+        const teamAMVP = teamAPlayersData[0];
+        const teamBMVP = teamBPlayersData[0];
+        
+        // Show team results
+        const summaryHTML = `
+          <div style="text-align:center;padding:20px;">
+            <h2 style="font-size:32px;font-weight:800;margin-bottom:10px;color:${teamResult === 'win' ? 'var(--success)' : teamResult === 'loss' ? 'var(--danger)' : 'var(--warning)'}">${teamResult.toUpperCase()}!</h2>
+            <div style="font-size:48px;margin-bottom:20px;">${teamResult === 'win' ? '🏆' : teamResult === 'loss' ? '😔' : '🤝'}</div>
+            
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px;">
+              <div style="background:rgba(59,130,246,0.1);padding:15px;border-radius:16px;border:2px solid ${teamResult === 'win' ? 'var(--success)' : 'rgba(59,130,246,0.3)'};">
+                <div style="font-size:14px;font-weight:700;color:var(--blue);margin-bottom:8px;">${teamAName}</div>
+                <div style="font-size:28px;font-weight:800;">${teamAScore}</div>
+                <div style="font-size:12px;opacity:0.6;margin-top:4px;">${teamResult === 'win' ? '🏆 Winner' : ''}</div>
+                ${teamAMVP ? `<div style="margin-top:8px;padding:8px;background:rgba(255,193,7,0.1);border-radius:8px;font-size:11px;">
+                  <div style="color:var(--warning);">👑 MVP: ${teamAMVP.display_name}</div>
+                  <div style="opacity:0.7;">Score: ${teamAMVP.score}</div>
+                </div>` : ''}
+              </div>
+              <div style="background:rgba(139,92,246,0.1);padding:15px;border-radius:16px;border:2px solid ${teamResult === 'loss' ? 'var(--success)' : 'rgba(139,92,246,0.3)'};">
+                <div style="font-size:14px;font-weight:700;color:var(--purple);margin-bottom:8px;">${teamBName}</div>
+                <div style="font-size:28px;font-weight:800;">${teamBScore}</div>
+                <div style="font-size:12px;opacity:0.6;margin-top:4px;">${teamResult === 'loss' ? '🏆 Winner' : ''}</div>
+                ${teamBMVP ? `<div style="margin-top:8px;padding:8px;background:rgba(255,193,7,0.1);border-radius:8px;font-size:11px;">
+                  <div style="color:var(--warning);">👑 MVP: ${teamBMVP.display_name}</div>
+                  <div style="opacity:0.7;">Score: ${teamBMVP.score}</div>
+                </div>` : ''}
+              </div>
+            </div>
+            
+            <div style="background:rgba(255,255,255,0.05);padding:15px;border-radius:16px;margin-bottom:20px;">
+              <h3 style="margin-bottom:12px;">${teamAName} Players</h3>
+              ${teamAPlayersData.map((p, i) => `
+                <div style="display:flex;align-items:center;gap:10px;padding:8px;background:rgba(255,255,255,0.03);border-radius:8px;margin-bottom:4px;">
+                  <img src="${p.avatar_url || avatars[0]}" style="width:32px;height:32px;border-radius:50%;">
+                  <div style="flex:1;">
+                    <div style="font-weight:700;font-size:13px;">${p.display_name}</div>
+                    <div style="font-size:11px;opacity:0.6;">Score: ${p.score}</div>
+                  </div>
+                  ${i === 0 ? '<span style="font-size:16px;">👑</span>' : ''}
+                </div>
+              `).join('')}
+            </div>
+            
+            <div style="background:rgba(255,255,255,0.05);padding:15px;border-radius:16px;margin-bottom:20px;">
+              <h3 style="margin-bottom:12px;">${teamBName} Players</h3>
+              ${teamBPlayersData.map((p, i) => `
+                <div style="display:flex;align-items:center;gap:10px;padding:8px;background:rgba(255,255,255,0.03);border-radius:8px;margin-bottom:4px;">
+                  <img src="${p.avatar_url || avatars[0]}" style="width:32px;height:32px;border-radius:50%;">
+                  <div style="flex:1;">
+                    <div style="font-weight:700;font-size:13px;">${p.display_name}</div>
+                    <div style="font-size:11px;opacity:0.6;">Score: ${p.score}</div>
+                  </div>
+                  ${i === 0 ? '<span style="font-size:16px;">👑</span>' : ''}
+                </div>
+              `).join('')}
+            </div>
+            
+            <button class="btn modern" style="width:100%;" onclick="closeModal('resultModal');showScreen('homeScreen');">Return to Home</button>
+          </div>
+        `;
+        
+        document.getElementById('resultContent').innerHTML = summaryHTML;
+        openModal('resultModal');
+        updateProfileAfterMatch(teamResult, false, 0);
+        return;
+      }
+      
+      if (mode === 'ffa') {
+        // Free for All mode results
+        const playersData = Object.keys(GameCache.match.playerScores).map(playerId => {
+          const score = GameCache.match.playerScores[playerId];
+          const profile = GameCache.profiles[playerId] || { display_name: 'Player', avatar_url: avatars[0] };
+          return { playerId, score, ...profile };
+        });
+        
+        // Sort by score (highest to lowest)
+        playersData.sort((a, b) => b.score - a.score);
+        
+        const mvp = playersData[0];
+        const myRank = playersData.findIndex(p => p.playerId === currentUserId) + 1;
+        const myResult = myRank === 1 ? 'win' : myRank <= 2 ? 'top3' : 'loss';
+        
+        const summaryHTML = `
+          <div style="text-align:center;padding:20px;">
+            <h2 style="font-size:32px;font-weight:800;margin-bottom:10px;">FREE FOR ALL RESULTS</h2>
+            <div style="font-size:48px;margin-bottom:20px;">⚔️</div>
+            
+            <div style="background:rgba(255,193,7,0.1);padding:20px;border-radius:16px;margin-bottom:20px;border:2px solid var(--warning);">
+              <div style="font-size:14px;opacity:0.7;margin-bottom:8px;">👑 MVP</div>
+              <img src="${mvp.avatar_url || avatars[0]}" style="width:64px;height:64px;border-radius:50%;margin-bottom:8px;">
+              <div style="font-size:20px;font-weight:800;">${mvp.display_name}</div>
+              <div style="font-size:24px;font-weight:700;color:var(--warning);">${mvp.score} pts</div>
+            </div>
+            
+            <div style="background:rgba(255,255,255,0.05);padding:15px;border-radius:16px;margin-bottom:20px;">
+              <h3 style="margin-bottom:12px;">Leaderboard</h3>
+              ${playersData.map((p, i) => `
+                <div style="display:flex;align-items:center;gap:10px;padding:10px;background:${p.playerId === currentUserId ? 'rgba(59,130,246,0.1)' : 'rgba(255,255,255,0.03)'};border-radius:8px;margin-bottom:4px;border:${p.playerId === currentUserId ? '1px solid var(--blue)' : 'none'};">
+                  <div style="font-weight:700;font-size:16px;width:24px;">${i + 1}</div>
+                  <img src="${p.avatar_url || avatars[0]}" style="width:36px;height:36px;border-radius:50%;">
+                  <div style="flex:1;">
+                    <div style="font-weight:700;font-size:14px;">${p.display_name}</div>
+                    <div style="font-size:12px;opacity:0.6;">Score: ${p.score}</div>
+                  </div>
+                  ${i === 0 ? '<span style="font-size:20px;">👑</span>' : i === 1 ? '<span style="font-size:20px;">🥈</span>' : i === 2 ? '<span style="font-size:20px;">🥉</span>' : ''}
+                </div>
+              `).join('')}
+            </div>
+            
+            <div style="background:rgba(59,130,246,0.1);padding:15px;border-radius:12px;margin-bottom:20px;">
+              <div style="font-size:14px;">Your Rank: <strong style="color:var(--blue);">#${myRank}</strong></div>
+              <div style="font-size:14px;">Your Score: <strong>${meScore}</strong></div>
+            </div>
+            
+            <button class="btn modern" style="width:100%;" onclick="closeModal('resultModal');showScreen('homeScreen');">Return to Home</button>
+          </div>
+        `;
+        
+        document.getElementById('resultContent').innerHTML = summaryHTML;
+        openModal('resultModal');
+        updateProfileAfterMatch(myResult === 'win' ? 'win' : 'loss', false, 0);
+        return;
+      }
+      
+      // Original 1v1 match logic
       const oppId = GameCache.match.from_user_id === currentUserId ? GameCache.match.to_user_id : GameCache.match.from_user_id;
       const oppScore = GameCache.match.playerScores[oppId] || 0;
       const result = meScore > oppScore ? 'win' : meScore < oppScore ? 'loss' : 'tie';
