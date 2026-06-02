@@ -13,6 +13,12 @@
       document.write('<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"><\/script>');
     }
   </script>
+  <script>
+    // Fallback if unpkg fails
+    if (typeof window.supabase === 'undefined') {
+      document.write('<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"><\/script>');
+    }
+  </script>
   <style>
     :root{ --bg:#0F172A; --card:#1E293B; --blue:#3B82F6; --purple:#8B5CF6; --white:#F8FAFC; --glass:rgba(255,255,255,0.08); --border:rgba(255,255,255,0.12); --success:#22c55e; --danger:#ef4444; --warning:#f59e0b; }
     *{ margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color: transparent; }
