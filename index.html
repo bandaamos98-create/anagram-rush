@@ -208,9 +208,9 @@
             <div class="stat-box"><div class="stat-title">Losses</div><div class="stat-value" id="losses">0</div></div>
             <div class="stat-box"><div class="stat-title">Win Rate</div><div class="stat-value" id="winrate">0%</div></div>
           </div>
-          <div style="margin-top:18px; display:flex; gap:10px;">
-            <button class="leader-secondary" style="flex:1;padding:16px;" onclick="openOnlinePlayers()">🟢 Players Online</button>
-            <button class="leader-secondary" style="flex:1;padding:16px;" onclick="openFriends()">🔍 Find Friends</button>
+          <div style="margin-top:18px; display:grid; grid-template-columns:repeat(2,1fr); gap:10px;">
+            <button class="leader-secondary" style="padding:16px;" onclick="openOnlinePlayers()">🟢 Players Online</button>
+            <button class="leader-secondary" style="padding:16px;" onclick="openFriends()">🔍 Find Friends</button>
           </div>
           <button class="btn modern" style="margin-top:14px;background:linear-gradient(135deg,var(--warning),#f59e0b);" onclick="claimDailyReward()">🎁 Claim Daily Reward</button>
         </div>
@@ -429,6 +429,7 @@
           mmr: 0,
           wins: 0,
           losses: 0,
+          draws: 0,
           streak: 0,
           xp: 0,
           level: 1,
@@ -465,32 +466,45 @@
         }
       }
       if(profile) {
+        profile.mmr = profile.mmr ?? 0;
+        profile.wins = profile.wins ?? 0;
+        profile.losses = profile.losses ?? 0;
+        profile.draws = profile.draws ?? 0;
+        profile.xp = profile.xp ?? 0;
+        profile.level = profile.level ?? 1;
+        profile.coins = profile.coins ?? 0;
+        profile.daily_streak = profile.daily_streak ?? 0;
+        profile.last_daily = profile.last_daily || null;
+        profile.achievements = profile.achievements || [];
         GameCache.user = { 
           id: profile.id,
           email: authUser?.email || profile.email || "",
           display_name: profile.display_name || authUser?.user_metadata?.full_name || authUser?.email?.split('@')[0] || "Player",
           avatar_url: profile.avatar_url || avatars[0],
-          mmr: profile.mmr || 0,
-          wins: profile.wins || 0,
-          losses: profile.losses || 0,
-          draws: profile.draws || 0,
+          mmr: profile.mmr,
+          wins: profile.wins,
+          losses: profile.losses,
+          draws: profile.draws,
           rank_points: profile.rank_points || 0,
           streak: profile.streak || 0,
-          league: profile.league || getLeague(profile.mmr || 0),
-          xp: profile.xp || 0,
-          level: profile.level || 1,
-          coins: profile.coins || 0,
-          dailyStreak: profile.daily_streak || 0,
-          lastDaily: profile.last_daily || null,
-          achievements: profile.achievements || []
+          league: profile.league || getLeague(profile.mmr),
+          xp: profile.xp,
+          level: profile.level,
+          coins: profile.coins,
+          dailyStreak: profile.daily_streak,
+          lastDaily: profile.last_daily,
+          achievements: profile.achievements
         };
         document.getElementById("headerName").innerText = GameCache.user.display_name;
         document.getElementById("headerAvatar").src = profile.avatar_url || avatars[0];
-        document.getElementById("mmr").innerText = profile.mmr;
-        document.getElementById("wins").innerText = profile.wins || 0;
-        document.getElementById("losses").innerText = profile.losses || 0;
-        document.getElementById("leagueBadge").innerText = `💎 ${getLeague(profile.mmr)}`;
-        document.getElementById("headerRank").innerText = `${getLeague(profile.mmr)} League`;
+        document.getElementById("mmr").innerText = GameCache.user.mmr;
+        document.getElementById("wins").innerText = GameCache.user.wins;
+        document.getElementById("losses").innerText = GameCache.user.losses;
+        const totalGames = (GameCache.user.wins || 0) + (GameCache.user.losses || 0);
+        const winRate = totalGames > 0 ? Math.round((GameCache.user.wins / totalGames) * 100) : 0;
+        document.getElementById("winrate").innerText = `${winRate}%`;
+        document.getElementById("leagueBadge").innerText = `💎 ${getLeague(GameCache.user.mmr)}`;
+        document.getElementById("headerRank").innerText = `${getLeague(GameCache.user.mmr)} League`;
         
         // Update new progression UI
         document.getElementById("levelDisplay").innerText = GameCache.user.level;
@@ -502,10 +516,6 @@
         const neededXP = getLevelXP(GameCache.user.level + 1) - getLevelXP(GameCache.user.level);
         document.getElementById("xpText").innerText = `${Math.max(0, currentXP)} / ${neededXP}`;
         
-        // Calculate win rate
-        const totalGames = (profile.wins || 0) + (profile.losses || 0);
-        const winRate = totalGames > 0 ? Math.round((profile.wins / totalGames) * 100) : 0;
-        document.getElementById("winrate").innerText = `${winRate}%`;
       }
     }
 
@@ -522,7 +532,7 @@
         sb.from('game_invites').select('*').or(`to_user_id.eq.${currentUserId},from_user_id.eq.${currentUserId}`).eq('status', 'pending'),
         sb.from('friend_requests').select('*').eq('to_user_id', currentUserId).eq('status', 'pending'),
         sb.from('notifications').select('*').eq('user_id', currentUserId).eq('is_read', false),
-        sb.from('profiles').select('id, display_name, mmr, avatar_url').order('mmr', {ascending: false}).limit(100),
+        sb.from('profiles').select('id, display_name, mmr, avatar_url, wins, losses').order('mmr', {ascending: false}).limit(100),
         sb.from('friends').select('friend_id').eq('user_id', currentUserId)
       ]);
       GameCache.messages = msgs.data || [];
@@ -814,19 +824,6 @@
       document.getElementById("profileLeagueBadge").innerText = getLeague(data.mmr) + " League";
       document.getElementById("displayNameInput").value = data.display_name || "";
       
-      // Render achievements
-      const achievementsList = document.getElementById('achievementsList');
-      const unlockedAchievements = data.achievements || [];
-      achievementsList.innerHTML = Object.values(ACHIEVEMENTS).map(achievement => {
-        const isUnlocked = unlockedAchievements.includes(achievement.id);
-        return `
-          <div style="padding:12px;background:${isUnlocked ? 'rgba(139,92,246,0.15)' : 'rgba(255,255,255,0.03)'};border:1px solid ${isUnlocked ? 'rgba(139,92,246,0.4)' : 'rgba(255,255,255,0.08)'};border-radius:12px;text-align:center;opacity:${isUnlocked ? 1 : 0.5};">
-            <div style="font-size:28px;margin-bottom:4px;">${isUnlocked ? achievement.icon : '🔒'}</div>
-            <div style="font-size:10px;font-weight:700;">${achievement.name}</div>
-          </div>
-        `;
-      }).join('');
-      
       openModal("profileModal");
     }
 
@@ -988,12 +985,12 @@
     }
     function renderLeaderboardPreview(){
       const cont = document.getElementById('leaderboardPreview');
-      cont.innerHTML = GameCache.leaderboard.slice(0,5).map((l, i) => `<div class="leader-item"><div class="leader-left"><img class="small-avatar" src="${l.avatar_url || avatars[0]}"><div><div style="font-weight:700">${i+1}. ${l.display_name}</div><div style="font-size:11px;opacity:0.6">${getLeague(l.mmr)}</div></div></div><div style="font-weight:800">${l.mmr}</div></div>`).join('');
+      cont.innerHTML = GameCache.leaderboard.slice(0,5).map((l, i) => `<div class="leader-item"><div class="leader-left"><img class="small-avatar" src="${l.avatar_url || avatars[0]}"><div><div style="font-weight:700">${i+1}. ${l.display_name}</div><div style="font-size:11px;opacity:0.6">${getLeague(l.mmr)}</div></div></div><div style="text-align:right"><div style="font-weight:800">${l.mmr}</div><div style="font-size:11px;opacity:0.7">W:${l.wins||0} L:${l.losses||0}</div></div></div>`).join('');
     }
     function openLeaderboard(){
       document.getElementById('socialTitle').innerText = "Global Leaders";
       const cont = document.getElementById('socialContent');
-      cont.innerHTML = GameCache.leaderboard.map((l, i) => `<div class="leader-item"><div class="leader-left"><img class="small-avatar" src="${l.avatar_url || avatars[0]}"><div><div style="font-weight:700">${i+1}. ${l.display_name}</div><div style="font-size:11px;opacity:0.6">${getLeague(l.mmr)}</div></div></div><div style="font-weight:800">${l.mmr}</div></div>`).join('');
+      cont.innerHTML = GameCache.leaderboard.map((l, i) => `<div class="leader-item"><div class="leader-left"><img class="small-avatar" src="${l.avatar_url || avatars[0]}"><div><div style="font-weight:700">${i+1}. ${l.display_name}</div><div style="font-size:11px;opacity:0.6">${getLeague(l.mmr)}</div></div></div><div style="text-align:right"><div style="font-weight:800">${l.mmr}</div><div style="font-size:11px;opacity:0.7">W:${l.wins||0} L:${l.losses||0}</div></div></div>`).join('');
       openModal('socialModal');
     }
     async function logout(){ await trackPresence('offline'); cleanupRealtime(); await sb.auth.signOut(); window.location.reload(); }
@@ -1283,6 +1280,8 @@
       
       if (newUnlocks.length > 0) {
         GameCache.user.achievements = currentAchievements;
+        // Save achievements to database
+        sb.from('profiles').update({ achievements: currentAchievements }).eq('id', currentUserId).catch(e => console.error('Failed to save achievements:', e));
         showAchievementNotification(newUnlocks);
       }
       
