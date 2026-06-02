@@ -514,22 +514,7 @@
         };
         document.getElementById("headerName").innerText = GameCache.user.display_name;
         document.getElementById("headerAvatar").src = profile.avatar_url || avatars[0];
-        document.getElementById("mmr").innerText = GameCache.user.mmr;
-        document.getElementById("wins").innerText = GameCache.user.wins;
-        document.getElementById("losses").innerText = GameCache.user.losses;
-        document.getElementById("draws").innerText = GameCache.user.draws || 0;
-        document.getElementById("leagueBadge").innerText = `💎 ${getLeague(GameCache.user.mmr)}`;
-        document.getElementById("headerRank").innerText = `${getLeague(GameCache.user.mmr)} League`;
-        
-        // Update new progression UI
-        document.getElementById("levelDisplay").innerText = GameCache.user.level;
-        document.getElementById("coinsDisplay").innerText = GameCache.user.coins;
-        
-        const xpProgress = getXPProgress();
-        document.getElementById("xpBar").style.width = `${xpProgress}%`;
-        const currentXP = GameCache.user.xp - getLevelXP(GameCache.user.level);
-        const neededXP = getLevelXP(GameCache.user.level + 1) - getLevelXP(GameCache.user.level);
-        document.getElementById("xpText").innerText = `${Math.max(0, currentXP)} / ${neededXP}`;
+        updateStatsUI();
         
       }
     }
@@ -1026,8 +1011,8 @@
       }catch(e){ console.warn('showApp error', e); }
     }
     function updateBadges(){
-      // Count all incoming messages as unread
-      const unreadMsgs = GameCache.messages.filter(m => m.to_user_id === currentUserId).length;
+      // Count only incoming messages (to_user_id === currentUserId AND from_user_id !== currentUserId)
+      const unreadMsgs = GameCache.messages.filter(m => m.to_user_id === currentUserId && m.from_user_id !== currentUserId).length;
       // Count only pending invites and friend requests
       const unreadInvs = GameCache.invites.filter(i => i.status === 'pending').length + GameCache.friendRequests.filter(r => r.status === 'pending').length;
       const mB = document.getElementById('msgBadge'); if(unreadMsgs > 0) { mB.innerText = unreadMsgs; mB.classList.remove('hidden'); } else mB.classList.add('hidden');
@@ -1036,6 +1021,25 @@
       const isInvitesOpen = socialModal.classList.contains('active') && document.getElementById('socialTitle').innerText === "Invites";
       const iB = document.getElementById('invBadge'); if(unreadInvs > 0 && !isInvitesOpen) { iB.innerText = unreadInvs; iB.classList.remove('hidden'); } else iB.classList.add('hidden');
       document.getElementById('headerNotifDot').style.display = GameCache.notifications.length > 0 ? 'block' : 'none';
+    }
+
+    function updateStatsUI(){
+      document.getElementById("mmr").innerText = GameCache.user.mmr;
+      document.getElementById("wins").innerText = GameCache.user.wins;
+      document.getElementById("losses").innerText = GameCache.user.losses;
+      document.getElementById("draws").innerText = GameCache.user.draws || 0;
+      document.getElementById("leagueBadge").innerText = `💎 ${getLeague(GameCache.user.mmr)}`;
+      document.getElementById("headerRank").innerText = `${getLeague(GameCache.user.mmr)} League`;
+      
+      // Update new progression UI
+      document.getElementById("levelDisplay").innerText = GameCache.user.level;
+      document.getElementById("coinsDisplay").innerText = GameCache.user.coins;
+      
+      const xpProgress = getXPProgress();
+      document.getElementById("xpBar").style.width = `${xpProgress}%`;
+      const currentXP = GameCache.user.xp - getLevelXP(GameCache.user.level);
+      const neededXP = getLevelXP(GameCache.user.level + 1) - getLevelXP(GameCache.user.level);
+      document.getElementById("xpText").innerText = `${Math.max(0, currentXP)} / ${neededXP}`;
     }
     function renderLeaderboardPreview(){
       const cont = document.getElementById('leaderboardPreview');
@@ -1601,7 +1605,12 @@
       } else if (result === 'loss') {
         GameCache.user.losses = (GameCache.user.losses || 0) + 1;
         GameCache.user.streak = 0;
+      } else if (result === 'tie') {
+        GameCache.user.draws = (GameCache.user.draws || 0) + 1;
       }
+      
+      // Update stats UI in real-time
+      updateStatsUI();
       
       if (isRanked) {
         if (result === 'win') {
