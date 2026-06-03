@@ -1397,37 +1397,67 @@
         { name: "Grandmaster", icon: "🔥", startMMR: 3600 },
         { name: "Legend", icon: "⚡", startMMR: 4200 },
         { name: "Mythic", icon: "🌟", startMMR: 4800 },
-        { name: "Anagram Champion", icon: "🏆", startMMR: 5500 }
+        { name: "Anagram Champion", icon: "🏆", startMMR: 5500 },
+        { name: "Anagram King", icon: "👑", startMMR: 6000 },
+        { name: "World #1", icon: "🌎", startMMR: 7000 },
+        { name: "Verified Legend", icon: "💎", startMMR: 9000 }
       ];
 
       let levelsHTML = '';
-      tiers.forEach(tier => {
-        const isCurrentTier = currentMMR >= tier.startMMR && (tier === tiers[tiers.length-1] || currentMMR < tiers[tiers.indexOf(tier)+1].startMMR);
+      tiers.forEach((tier, tIdx) => {
+        const nextTier = tiers[tIdx + 1];
+        const isCurrentTier = currentMMR >= tier.startMMR && (!nextTier || currentMMR < nextTier.startMMR);
         
-        for (let div = 1; div <= 3; div++) {
-          if (tier.name === "Anagram Champion" && div > 1) break;
+        // Divisions (I, II, III) apply only to the first 9 tiers
+        const hasDivisions = tIdx < 9;
 
-          const divName = tier.name === "Anagram Champion" ? tier.name : `${tier.name} ${div === 1 ? 'I' : div === 2 ? 'II' : 'III'}`;
-          const divMMR = tier.startMMR + (div - 1) * 200;
-          const isUnlocked = currentMMR >= divMMR;
-          const isCurrentDiv = isCurrentTier && (tier.name === "Anagram Champion" || (currentMMR >= divMMR && currentMMR < divMMR + 200));
+        if (hasDivisions) {
+          for (let div = 1; div <= 3; div++) {
+            const divName = `${tier.name} ${div === 1 ? 'I' : div === 2 ? 'II' : 'III'}`;
+            const divMMR = tier.startMMR + (div - 1) * 200;
+            const isUnlocked = currentMMR >= divMMR;
+            const isCurrentDiv = isCurrentTier && (currentMMR >= divMMR && currentMMR < divMMR + 200);
 
+            let progress = 0;
+            if (isCurrentDiv) {
+              progress = ((currentMMR - divMMR) / 200) * 100;
+            } else if (isUnlocked) {
+              progress = 100;
+            }
+
+            levelsHTML += `
+              <div style="display:flex;align-items:center;gap:12px;padding:12px;background:${isCurrentDiv ? 'rgba(59,130,246,0.1)' : 'rgba(255,255,255,0.03)'};border-radius:12px;margin-bottom:8px;border:${isCurrentDiv ? '1px solid var(--blue)' : 'none'};">
+                <div style="font-size:20px;width:30px;">${tier.icon}</div>
+                <div style="flex:1;">
+                  <div style="font-weight:700;font-size:14px;">${divName}</div>
+                  <div style="font-size:12px;opacity:0.6;">${divMMR} MMR required</div>
+                  <div style="background:rgba(255,255,255,0.1);height:6px;border-radius:3px;overflow:hidden;margin-top:6px;">
+                    <div style="background:${isCurrentDiv ? 'var(--blue)' : isUnlocked ? 'var(--success)' : 'rgba(255,255,255,0.3)'};height:100%;width:${progress}%;"></div>
+                  </div>
+                </div>
+                ${isUnlocked ? '<span style="font-size:16px;color:var(--success);">✓</span>' : '<span style="font-size:16px;opacity:0.3;">🔒</span>'}
+              </div>
+            `;
+          }
+        } else {
+          // Top tiers without divisions
+          const isUnlocked = currentMMR >= tier.startMMR;
+          const nextMMR = nextTier ? nextTier.startMMR : 10000;
           let progress = 0;
-          if (isCurrentDiv) {
-            const nextThreshold = tier.name === "Anagram Champion" ? 10000 : divMMR + 200;
-            progress = ((currentMMR - divMMR) / (nextThreshold - divMMR)) * 100;
+          if (isCurrentTier) {
+            progress = ((currentMMR - tier.startMMR) / (nextMMR - tier.startMMR)) * 100;
           } else if (isUnlocked) {
             progress = 100;
           }
 
           levelsHTML += `
-            <div style="display:flex;align-items:center;gap:12px;padding:12px;background:${isCurrentDiv ? 'rgba(59,130,246,0.1)' : 'rgba(255,255,255,0.03)'};border-radius:12px;margin-bottom:8px;border:${isCurrentDiv ? '1px solid var(--blue)' : 'none'};">
+            <div style="display:flex;align-items:center;gap:12px;padding:12px;background:${isCurrentTier ? 'rgba(59,130,246,0.1)' : 'rgba(255,255,255,0.03)'};border-radius:12px;margin-bottom:8px;border:${isCurrentTier ? '1px solid var(--blue)' : 'none'};">
               <div style="font-size:20px;width:30px;">${tier.icon}</div>
               <div style="flex:1;">
-                <div style="font-weight:700;font-size:14px;">${divName}</div>
-                <div style="font-size:12px;opacity:0.6;">${divMMR} MMR required</div>
+                <div style="font-weight:700;font-size:14px;">${tier.name}</div>
+                <div style="font-size:12px;opacity:0.6;">${tier.startMMR} MMR required</div>
                 <div style="background:rgba(255,255,255,0.1);height:6px;border-radius:3px;overflow:hidden;margin-top:6px;">
-                  <div style="background:${isCurrentDiv ? 'var(--blue)' : isUnlocked ? 'var(--success)' : 'rgba(255,255,255,0.3)'};height:100%;width:${progress}%;"></div>
+                  <div style="background:${isCurrentTier ? 'var(--blue)' : isUnlocked ? 'var(--success)' : 'rgba(255,255,255,0.3)'};height:100%;width:${progress}%;"></div>
                 </div>
               </div>
               ${isUnlocked ? '<span style="font-size:16px;color:var(--success);">✓</span>' : '<span style="font-size:16px;opacity:0.3;">🔒</span>'}
@@ -1450,7 +1480,7 @@
           ${levelsHTML}
         </div>
       `;
-      
+
       openModal('levelProgressModal');
     }
     
@@ -1651,30 +1681,40 @@
     
     function closeSocialModal() { setSocialModalFullscreen(false); closeModal('socialModal'); document.getElementById('socialModal').dataset.activeChatId = ""; }
     function getRankData(mmr, leaderboardPos = null) {
-      const currentMMR = parseInt(mmr) || 0;
-      if (leaderboardPos === 1) return { name: "World #1", icon: "🌎", color: "#3b82f6" };
-      if (leaderboardPos <= 10 && leaderboardPos !== null && leaderboardPos > 0) return { name: "Word God", icon: "💀", color: "#ef4444" };
-      if (leaderboardPos <= 100 && leaderboardPos !== null && leaderboardPos > 0) return { name: "Anagram King", icon: "👑", color: "#f59e0b" };
-      if (currentMMR >= 5500) return { name: "Anagram Champion", icon: "🏆", color: "#22c55e" };
+      const val = parseInt(mmr) || 0;
+
+      // Top Tiers (Hard MMR thresholds)
+      if (val >= 9000) return { name: "Verified Legend", icon: "💎", color: "#f8fafc" };
+      if (val >= 7000) return { name: "World #1", icon: "🌎", color: "#3b82f6" };
+      if (val >= 6000) return { name: "Anagram King", icon: "👑", color: "#f59e0b" };
+      if (val >= 5500) return { name: "Anagram Champion", icon: "🏆", color: "#22c55e" };
 
       const tiers = [
-        { name: "Bronze", icon: "🥉", color: "#cd7f32" },
-        { name: "Silver", icon: "🥈", color: "#c0c0c0" },
-        { name: "Gold", icon: "🥇", color: "#ffd700" },
-        { name: "Platinum", icon: "💎", color: "#e5e4e2" },
-        { name: "Diamond", icon: "🔷", color: "#b9f2ff" },
-        { name: "Master", icon: "👑", color: "#ff6b6b" },
-        { name: "Grandmaster", icon: "🔥", color: "#ff3333" },
-        { name: "Legend", icon: "⚡", color: "#ffcc00" },
-        { name: "Mythic", icon: "🌟", color: "#cc33ff" }
+        { name: "Bronze", icon: "🥉", color: "#cd7f32", start: 0 },
+        { name: "Silver", icon: "🥈", color: "#c0c0c0", start: 600 },
+        { name: "Gold", icon: "🥇", color: "#ffd700", start: 1200 },
+        { name: "Platinum", icon: "💎", color: "#e5e4e2", start: 1800 },
+        { name: "Diamond", icon: "🔷", color: "#b9f2ff", start: 2400 },
+        { name: "Master", icon: "👑", color: "#ff6b6b", start: 3000 },
+        { name: "Grandmaster", icon: "🔥", color: "#ff3333", start: 3600 },
+        { name: "Legend", icon: "⚡", color: "#ffcc00", start: 4200 },
+        { name: "Mythic", icon: "🌟", color: "#cc33ff", start: 4800 }
       ];
 
-      let tierIdx = Math.floor(currentMMR / 600);
-      tierIdx = Math.max(0, Math.min(tierIdx, tiers.length - 1));
-      const tier = tiers[tierIdx];
+      // Find current tier
+      let tier = tiers[0];
+      for (let i = tiers.length - 1; i >= 0; i--) {
+        if (val >= tiers[i].start) {
+          tier = tiers[i];
+          break;
+        }
+      }
 
-      const divisionNum = Math.floor((Math.abs(currentMMR) % 600) / 200) + 1;
-      const division = divisionNum === 1 ? "I" : divisionNum === 2 ? "II" : "III";
+      // Calculate division
+      const mmrInTier = val - tier.start;
+      let division = "I";
+      if (mmrInTier >= 400) division = "III";
+      else if (mmrInTier >= 200) division = "II";
 
       return { name: `${tier.name} ${division}`, icon: tier.icon, color: tier.color };
     }
@@ -1694,20 +1734,7 @@
       return pos === -1 ? null : pos + 1;
     }
     
-    function getLeagueColor(mmr) {
-      const rank = getRank(mmr);
-      if (rank.includes("Bronze")) return '#cd7f32';
-      if (rank.includes("Silver")) return '#c0c0c0';
-      if (rank.includes("Gold")) return '#ffd700';
-      if (rank.includes("Platinum")) return '#e5e4e2';
-      if (rank.includes("Diamond")) return '#b9f2ff';
-      if (rank.includes("Master")) return '#ff6b6b';
-      if (rank.includes("Grandmaster")) return '#ff3333';
-      if (rank.includes("Legend")) return '#ffcc00';
-      if (rank.includes("Mythic")) return '#cc33ff';
-      return '#3b82f6';
-    }
-    
+
     function getLevelXP(level){ return Math.floor(100 * Math.pow(1.5, level - 1)); }
     function getXPProgress(){ const needed = getLevelXP(GameCache.user.level + 1); const current = GameCache.user.xp - getLevelXP(GameCache.user.level); return Math.min(100, Math.max(0, (current / needed) * 100)); }
     function openModal(id){ document.getElementById(id).classList.add("active"); }
