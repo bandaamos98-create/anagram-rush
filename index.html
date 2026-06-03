@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Poppins:wght@500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-  <!-- Developer System Notifications (disabled for APK) -->
+  <!-- Developer System Notifications -->
   <script id="developerNotificationScript"></script>
   <script>
     if (typeof window.supabase === 'undefined') {
@@ -555,32 +555,8 @@
 
     const avatars = ["https://i.pravatar.cc/150?img=1","https://i.pravatar.cc/150?img=2","https://i.pravatar.cc/150?img=3"];
 
-    function getLocalProfileKey() {
-      return `localProfile_${currentUserId}`;
-    }
-
-    function loadLocalProfileFallback() {
-      if (!currentUserId) return null;
-      try {
-        const item = localStorage.getItem(getLocalProfileKey());
-        return item ? JSON.parse(item) : null;
-      } catch (e) {
-        console.warn('[LocalStorage] Failed to load fallback profile:', e);
-        return null;
-      }
-    }
-
-    function saveLocalProfileFallback(profile) {
-      if (!currentUserId) return;
-      try {
-        localStorage.setItem(getLocalProfileKey(), JSON.stringify(profile));
-      } catch (e) {
-        console.warn('[LocalStorage] Failed to save fallback profile:', e);
-      }
-    }
-
     /* ========================================== CORE ========================================== */
-    async function initSupabase(){
+    function initSupabase(){
       if(!window.supabase) { setTimeout(initSupabase, 100); return; }
       sb = window.supabase.createClient(SB_URL, SB_KEY);
       initApp();
@@ -592,31 +568,20 @@
           const frag = window.location.hash.replace(/^#/, '');
           const params = new URLSearchParams(frag);
           const access_token = params.get('access_token');
-          if(access_token) {
-            console.log('[Login] Setting session from hash');
-            await sb.auth.setSession({ access_token, refresh_token: params.get('refresh_token') });
-          }
+          if(access_token) await sb.auth.setSession({ access_token, refresh_token: params.get('refresh_token') });
           history.replaceState(null, "", window.location.pathname);
         }
 
         const { data: { session } } = await sb.auth.getSession();
-        console.log('[Login] Session check:', !!session?.user);
-        if(session?.user) {
-          await setupSession(session.user);
-        } else {
-          showLogin();
-        }
+        if(session?.user) setupSession(session.user);
+        else showLogin();
 
-        sb.auth.onAuthStateChange(async (event, session) => {
-          console.log('[Login] Auth state changed:', event, !!session?.user);
-          if(session?.user) {
-            await setupSession(session.user);
-          } else {
-            showLogin();
-          }
+        sb.auth.onAuthStateChange((event, session) => {
+          if(session?.user) setupSession(session.user);
+          else showLogin();
         });
       } catch (err) {
-        console.error('[Login] App initialization failed:', err);
+        console.error('App initialization failed:', err);
         showLogin();
       }
     }
@@ -624,57 +589,33 @@
     async function setupSession(userObj){
       if (currentUserId === userObj.id) return;
       currentUserId = userObj.id;
-      console.log('[Login] Starting setupSession for user:', currentUserId);
-      
-      try {
-        loadLastSeen();
-        console.log('[Login] Loaded last seen');
-        
-        const [profileResult, preloadResult] = await Promise.all([
-          loadProfile().catch(err => { console.error('[Login] loadProfile failed:', err); return null; }),
-          preloadData().catch(err => { console.error('[Login] preloadData failed:', err); return null; })
-        ]);
-        console.log('[Login] Profile and data preloaded');
-
-        // Ensure leaderboard rank is calculated after data is loaded
-        const pos = getLeaderboardPosition(currentUserId);
-        GameCache.user.leaderboardPos = pos;
-
-        setupRealtime();
-        console.log('[Login] Realtime setup complete, showing app...');
-        showApp();
-        updateBadges();
-        renderLeaderboardPreview();
-        console.log('[Login] App fully initialized');
-      } catch (err) {
-        console.error('[Login] setupSession failed:', err);
-        showLogin();
-      }
+      loadLastSeen();
+      await Promise.all([loadProfile(), preloadData()]);
+      setupRealtime();
+      showApp();
+      updateBadges();
+      renderLeaderboardPreview();
+      fetchDeveloperNotifications();
+      setInterval(fetchDeveloperNotifications, 300000); // Check for dev updates every 5 minutes
     }
 
     /* ========================================== DATA ========================================== */
     async function loadProfile(){
-      let profile = null;
-      const { data, error: profileErr } = await sb.from('profiles').select('*').eq('id', currentUserId).maybeSingle();
-      profile = data;
+      const { data: profile, error: profileErr } = await sb.from('profiles').select('*').eq('id', currentUserId).maybeSingle();
       if (profileErr) console.error('[Profile] Error fetching profile:', profileErr);
 
-      const localProfile = loadLocalProfileFallback();
       let authUser = null;
       const { data: sessionData } = await sb.auth.getSession();
       if (sessionData.session) {
         authUser = sessionData.session.user;
       }
 
-      const fallbackName = authUser?.user_metadata?.full_name || authUser?.email?.split('@')[0] || 'Player';
-      const fallbackAvatar = localProfile?.avatar_url || avatars[0];
-      const fallbackDisplayName = localProfile?.display_name || fallbackName;
-
-      if (!profile && localProfile) {
-        profile = {
-          id: currentUserId,
-          display_name: fallbackDisplayName,
-          avatar_url: fallbackAvatar,
+      if(!profile) {
+        const fallbackName = authUser?.user_metadata?.full_name || authUser?.email?.split('@')[0] || 'Player';
+        const insertPayload = { 
+          id: currentUserId, 
+          display_name: fallbackName, 
+          avatar_url: avatars[0], 
           mmr: 0,
           wins: 0,
           losses: 0,
@@ -688,110 +629,37 @@
           achievements: [],
           email: authUser?.email || ''
         };
-      }
-
-      if(!profile) {
-        if (profileErr) {
-          console.warn('[Profile] Remote profile unavailable, using local fallback or defaults.');
-          profile = {
-            id: currentUserId,
-            display_name: fallbackDisplayName,
-            avatar_url: fallbackAvatar,
-            mmr: 0,
-            wins: 0,
-            losses: 0,
-            draws: 0,
-            streak: 0,
-            xp: 0,
-            level: 1,
-            coins: 200,
-            daily_streak: 0,
-            last_daily: null,
-            achievements: [],
-            email: authUser?.email || ''
-          };
-        } else {
-          const insertPayload = { 
-            id: currentUserId, 
-            display_name: fallbackName, 
-            avatar_url: avatars[0], 
-            mmr: 0,
-            wins: 0,
-            losses: 0,
-            draws: 0,
-            streak: 0,
-            xp: 0,
-            level: 1,
-            coins: 200,
-            daily_streak: 0,
-            last_daily: null,
-            achievements: [],
-            email: authUser?.email || ''
-          };
-          const { data: createdData, error: createErr } = await sb.from('profiles').insert(insertPayload).select().single();
-          if (createErr) {
-            console.error('[Profile] Profile creation failed:', createErr);
-            // If email column doesn't exist, try without it
-            if (createErr.code === 'PGRST204' || (createErr.message && createErr.message.includes('email'))) {
-              const payloadWithoutEmail = { ...insertPayload };
-              delete payloadWithoutEmail.email;
-              const { data: retryData, error: retryErr } = await sb.from('profiles').insert(payloadWithoutEmail).select().single();
-              if (retryErr) {
-                console.error('[Profile] Profile creation failed (retry):', retryErr);
-                profile = {
-                  id: currentUserId,
-                  display_name: fallbackDisplayName,
-                  avatar_url: fallbackAvatar,
-                  mmr: 0,
-                  wins: 0,
-                  losses: 0,
-                  draws: 0,
-                  streak: 0,
-                  xp: 0,
-                  level: 1,
-                  coins: 200,
-                  daily_streak: 0,
-                  last_daily: null,
-                  achievements: [],
-                  email: authUser?.email || ''
-                };
-              } else {
-                profile = retryData;
-              }
-            } else {
-              profile = {
-                id: currentUserId,
-                display_name: fallbackDisplayName,
-                avatar_url: fallbackAvatar,
-                mmr: 0,
-                wins: 0,
-                losses: 0,
-                draws: 0,
-                streak: 0,
-                xp: 0,
-                level: 1,
-                coins: 200,
-                daily_streak: 0,
-                last_daily: null,
-                achievements: [],
-                email: authUser?.email || ''
-              };
+        console.log('[Profile] Creating new profile with payload:', insertPayload);
+        const { data: createdData, error: createErr } = await sb.from('profiles').insert(insertPayload).select().single();
+        if (createErr) {
+          console.error('[Profile] Profile creation failed:', createErr);
+          // If email column doesn't exist, try without it
+          if (createErr.code === 'PGRST204' || (createErr.message && createErr.message.includes('email'))) {
+            console.log('[Profile] Email column not found or error, retrying without email');
+            const payloadWithoutEmail = { ...insertPayload };
+            delete payloadWithoutEmail.email;
+            const { data: retryData, error: retryErr } = await sb.from('profiles').insert(payloadWithoutEmail).select().single();
+            if (retryErr) {
+              console.error('[Profile] Profile creation failed (retry):', retryErr);
+              return;
             }
+            profile = retryData;
           } else {
-            profile = createdData;
+            return;
           }
+        } else {
+          profile = createdData;
         }
       }
       if(profile) {
-        profile.mmr = Number(profile.mmr) || 0;
-        profile.wins = Number(profile.wins) || 0;
-        profile.losses = Number(profile.losses) || 0;
-        profile.draws = Number(profile.draws) || 0;
-        profile.xp = Number(profile.xp) || 0;
-        profile.level = Number(profile.level) || 1;
-        profile.coins = Number(profile.coins) || 0;
-        profile.streak = Number(profile.streak) || 0;
-        profile.daily_streak = Number(profile.daily_streak) || 0;
+        profile.mmr = profile.mmr ?? 0;
+        profile.wins = profile.wins ?? 0;
+        profile.losses = profile.losses ?? 0;
+        profile.draws = profile.draws ?? 0;
+        profile.xp = profile.xp ?? 0;
+        profile.level = profile.level ?? 1;
+        profile.coins = profile.coins ?? 0;
+        profile.daily_streak = profile.daily_streak ?? 0;
         profile.last_daily = profile.last_daily || null;
         profile.achievements = profile.achievements || [];
         GameCache.user = { 
@@ -826,9 +694,12 @@
     }
 
     async function preloadData(){
+      console.log("[Cache] Preloading state...");
       // Debug: fetch raw messages to inspect schema and errors
       try{
-        await sb.from('messages').select('*');
+        const { data: dbgData, error: dbgErr } = await sb.from('messages').select('*');
+        console.log('MESSAGES DATA:', dbgData);
+        console.log('MESSAGES ERROR:', dbgErr);
       }catch(e){ console.warn('Debug messages fetch failed', e); }
       const [msgs, invs, friendReqs, notifs, globalMsgs, leaders, friends] = await Promise.all([
         sb.from('messages').select('*').or(`to_user_id.eq.${currentUserId},from_user_id.eq.${currentUserId}`).order('created_at', {ascending: false}),
@@ -845,12 +716,7 @@
       GameCache.notifications = notifs.data || [];
       GameCache.globalChatMessages = globalMsgs.data || [];
       // Ensure leaderboard is sorted by MMR descending and limited to top 100
-      GameCache.leaderboard = (leaders.data || []).map(p => ({
-        ...p,
-        mmr: Number(p.mmr) || 0,
-        wins: Number(p.wins) || 0,
-        losses: Number(p.losses) || 0
-      })).sort((a,b) => (b.mmr || 0) - (a.mmr || 0)).slice(0,100);
+      GameCache.leaderboard = (leaders.data || []).sort((a,b) => (b.mmr || 0) - (a.mmr || 0)).slice(0,100);
       GameCache.friends = (friends.data || []).map(f => f.friend_id);
       GameCache.leaderboard.forEach(p => GameCache.profiles[p.id] = p);
       // Update user's leaderboard position now that leaderboard is available
@@ -868,10 +734,6 @@
       }
       // Ensure created_at is present and parseable
       GameCache.messages = GameCache.messages.map(m => ({ ...m, created_at: m.created_at || new Date().toISOString() }));
-      
-      // Fetch developer notifications at startup and every 5 minutes
-      fetchDeveloperNotifications();
-      setInterval(fetchDeveloperNotifications, 300000);
     }
 
     function cleanupRealtime() {
@@ -881,6 +743,7 @@
 
     function setupRealtime(){
       cleanupRealtime();
+      console.log('[Realtime] Initializing subscription for:', currentUserId);
 
       socialChannel = sb.channel('social-sync', { config: { presence: { key: currentUserId } } });
       socialChannel.on('presence', { event: 'sync' }, () => {
@@ -908,13 +771,19 @@
         }
       });
       socialChannel.subscribe(async (status) => { 
+        console.log('[Realtime] Social channel status:', status);
         if (status === 'SUBSCRIBED') await trackPresence('online');
       });
       
       dbChannel = sb.channel('db-sync');
       dbChannel
+        // WILD-CARD LISTENER FOR DEBUGGING
+        .on('postgres_changes', { event: '*', schema: 'public' }, (payload) => {
+          console.log('[Realtime] DB Change Received (Any):', payload);
+        })
         // Messages: INSERT for received messages
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `to_user_id=eq.${currentUserId}` }, async (p) => {
+          console.log('[Realtime] New message received:', p.new);
           if (!GameCache.profiles[p.new.from_user_id]) await fetchProfile(p.new.from_user_id);
           if (!GameCache.messages.some(m => m.id === p.new.id)) {
             GameCache.messages.unshift(p.new);
@@ -937,6 +806,7 @@
         })
         // Messages: INSERT for sent messages (sync across devices)
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `from_user_id=eq.${currentUserId}` }, async (p) => {
+          console.log('[Realtime] Message sent confirmation:', p.new);
           if (!GameCache.profiles[p.new.to_user_id]) await fetchProfile(p.new.to_user_id);
           if (!GameCache.messages.some(m => m.id === p.new.id)) {
             GameCache.messages.unshift(p.new);
@@ -961,6 +831,7 @@
         })
         // Game Invites
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'game_invites', filter: `to_user_id=eq.${currentUserId}` }, async (p) => {
+          console.log('[Realtime] New game invite received:', p.new);
           if (!GameCache.profiles[p.new.from_user_id]) await fetchProfile(p.new.from_user_id);
           if (!GameCache.invites.some(i => i.id === p.new.id)) {
             GameCache.invites.unshift(p.new);
@@ -985,6 +856,7 @@
         })
         // Friend Requests
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'friend_requests', filter: `to_user_id=eq.${currentUserId}` }, async (p) => {
+          console.log('[Realtime] Friend Request received:', p.new);
           if (!GameCache.profiles[p.new.from_user_id]) await fetchProfile(p.new.from_user_id);
           GameCache.friendRequests.unshift(p.new);
           updateBadges();
@@ -992,75 +864,13 @@
           const sender = GameCache.profiles[p.new.from_user_id]?.display_name || 'Someone';
           showToast('friend', `Friend Request from ${sender}`, 'Click to view', () => openInvites());
         })
-        // Friends list updates
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'friends', filter: `user_id=eq.${currentUserId}` }, async (p) => {
-          if (!GameCache.friends.includes(p.new.friend_id)) {
-            GameCache.friends.unshift(p.new.friend_id);
-          }
-          if (!GameCache.profiles[p.new.friend_id]) await fetchProfile(p.new.friend_id);
-          updateBadges();
-          refreshOpenSocialView();
-        })
         // Notifications
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${currentUserId}` }, (p) => {
+          console.log('[Realtime] Notification received:', p.new);
           GameCache.notifications.unshift(p.new);
           updateBadges();
           refreshOpenSocialView();
           showToast('notification', p.new.title || 'Notification', p.new.body || p.new.message || '', () => openNotifications());
-        })
-        // Profile updates: keep leaderboard and current user MMR in sync
-        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles' }, async (p) => {
-          const profile = {
-            ...p.new,
-            mmr: Number(p.new.mmr) || 0,
-            wins: Number(p.new.wins) || 0,
-            losses: Number(p.new.losses) || 0,
-            draws: Number(p.new.draws) || 0,
-            xp: Number(p.new.xp) || 0,
-            level: Number(p.new.level) || 1,
-            coins: Number(p.new.coins) || 0
-          };
-          GameCache.profiles[profile.id] = profile;
-
-          // Update current user stats if this is our profile
-          if (profile.id === currentUserId) {
-            GameCache.user = {
-              ...GameCache.user,
-              mmr: profile.mmr,
-              wins: profile.wins,
-              losses: profile.losses,
-              draws: profile.draws,
-              xp: profile.xp,
-              level: profile.level,
-              coins: profile.coins,
-              league: profile.league || getRank(profile.mmr)
-            };
-            GameCache.user.leaderboardPos = getLeaderboardPosition(currentUserId);
-            updateStatsUI();
-          }
-
-          // Update leaderboard entries and keep ordered top 100
-          const existingIndex = GameCache.leaderboard.findIndex(item => item.id === profile.id);
-          const updatedProfile = {
-            id: profile.id,
-            display_name: profile.display_name,
-            avatar_url: profile.avatar_url,
-            mmr: profile.mmr ?? 0,
-            wins: profile.wins ?? 0,
-            losses: profile.losses ?? 0
-          };
-          if (existingIndex !== -1) {
-            GameCache.leaderboard[existingIndex] = updatedProfile;
-          } else {
-            GameCache.leaderboard.unshift(updatedProfile);
-          }
-          GameCache.leaderboard.sort((a,b) => (b.mmr || 0) - (a.mmr || 0));
-          GameCache.leaderboard = GameCache.leaderboard.slice(0,100);
-          GameCache.leaderboard.forEach(p => GameCache.profiles[p.id] = p);
-          renderLeaderboardPreview();
-          if (document.getElementById('socialModal').classList.contains('active') && document.getElementById('socialTitle').innerText === 'Global Leaders') {
-            openLeaderboard();
-          }
         })
         // Global Chat
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'global_chat' }, (p) => {
@@ -1079,14 +889,33 @@
           if (document.getElementById('globalChatModal').classList.contains('active')) renderGlobalChat();
         })
         .subscribe((status, err) => {
+          console.log('[Realtime] DB channel status:', status);
           if (err) console.error('[Realtime] DB channel error:', err);
+        });
+
+      // DEBUG SUBSCRIPTION ADDED HERE
+      sb.channel('debug-messages')
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'messages'
+          },
+          payload => {
+            console.log('MESSAGE EVENT:', payload);
+          }
+        )
+        .subscribe(status => {
+          console.log('DEBUG STATUS:', status);
         });
     }
 
     /* ========= Toast Notifications ========= */
     function showToast(type, title, message, onClick = null) {
+      console.log(`[Toast] ${type}: ${title}`);
       const container = document.getElementById('toastContainer');
-      if (!container) return;
+      if (!container) return console.error('Toast container not found');
 
       const toast = document.createElement('div');
       toast.className = `toast ${type}`;
@@ -1265,12 +1094,11 @@
       const developerNotifications = [];
       try {
         const dev = window.developerNotification;
-        console.log('[DevNotif] In openNotifications, dev =', dev);
+        console.log('[Notifications] Developer notification config in openNotifications:', dev);
         if (dev && dev.enabled) {
-          console.log('[DevNotif] Adding developer notification:', dev.title);
           developerNotifications.push({ title: dev.title || 'Developer', body: dev.body || '', action: null });
         }
-      } catch (e) { console.warn('[DevNotif] Error checking dev notification:', e); }
+      } catch (e) { /* ignore if window not accessible */ }
 
       const combinedNotifications = [...developerNotifications, ...allNotifications];
       
@@ -1465,12 +1293,19 @@
           document.getElementById("profileAvatar").src = base64;
           document.getElementById("headerAvatar").src = base64;
           
-          // Use local preview and save the avatar data locally.
-          GameCache.user.avatar_url = base64;
-          saveLocalProfileFallback({
-            display_name: GameCache.user.display_name || document.getElementById('displayNameInput')?.value || '',
-            avatar_url: base64
-          });
+          // Upload to Supabase Storage
+          try {
+            const fileName = `${Date.now()}_${file.name}`;
+            const filePath = `avatars/${currentUserId}/${fileName}`;
+            const { data: uploadData, error: uploadError } = await sb.storage.from('avatars').upload(filePath, file, { upsert: true });
+            if (uploadError) throw uploadError;
+            
+            const { data: { publicUrl } } = sb.storage.from('avatars').getPublicUrl(filePath);
+            GameCache.user.avatar_url = publicUrl;
+          } catch (err) {
+            console.error('Avatar upload failed:', err);
+            GameCache.user.avatar_url = base64; // Fallback to base64
+          }
       };
       reader.readAsDataURL(file);
     }
@@ -1478,24 +1313,8 @@
     document.getElementById("saveProfileBtn").onclick = async () => {
       const newName = document.getElementById("displayNameInput").value.trim();
       if(!newName) return;
-      const updatePayload = { display_name: newName, avatar_url: GameCache.user.avatar_url || avatars[0] };
-      GameCache.user.display_name = newName;
-      GameCache.user.avatar_url = updatePayload.avatar_url;
-      if (GameCache.profiles[currentUserId]) {
-        GameCache.profiles[currentUserId].display_name = newName;
-        GameCache.profiles[currentUserId].avatar_url = updatePayload.avatar_url;
-      }
-      document.getElementById("headerName").innerText = newName;
-      document.getElementById("profileAvatar").src = updatePayload.avatar_url;
-      document.getElementById("headerAvatar").src = updatePayload.avatar_url;
-      saveLocalProfileFallback(updatePayload);
-      showToast('notification', 'Profile saved', 'Your profile changes were updated locally.');
-      (async () => {
-        const { error } = await sb.from('profiles').update(updatePayload).eq('id', currentUserId);
-        if (error) {
-          console.warn('[Profile] Remote save failed:', error);
-        }
-      })();
+      const { error } = await sb.from('profiles').update({ display_name: newName, avatar_url: GameCache.user.avatar_url }).eq('id', currentUserId);
+      if(!error) { alert("Profile saved!"); loadProfile(); }
     };
 
     function openAboutModal(){ openModal("aboutModal"); }
@@ -1514,9 +1333,13 @@
     
     function renderGlobalChat() {
       const container = document.getElementById('globalChatMessages');
+      console.log('Rendering global chat, messages count:', GameCache.globalChatMessages.length);
+      
       // Filter out messages older than 24 hours
       const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
       const recentMessages = GameCache.globalChatMessages.filter(m => m.created_at >= twentyFourHoursAgo);
+      console.log('Recent messages after filtering:', recentMessages.length);
+      
       container.innerHTML = recentMessages.map(m => {
         // Use display_name from message if available, otherwise get from profiles cache
         let sender = GameCache.profiles[m.user_id] || { 
@@ -1536,6 +1359,7 @@
         const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         const dateStr = date.toLocaleDateString([], { month: 'short', day: 'numeric' });
         
+        console.log('Rendering message:', { sender: sender.display_name, isMe, message: m.message });
         
         return `<div style="display:flex;align-items:flex-end;gap:8px;margin-bottom:12px;${isMe ? 'flex-direction:row-reverse;' : ''}">
           <img src="${sender.avatar_url || avatars[0]}" style="width:32px;height:32px;border-radius:50%;">
@@ -1547,6 +1371,7 @@
       }).join('');
       
       container.scrollTop = container.scrollHeight;
+      console.log('Global chat rendered');
     }
     
     async function sendGlobalMessage() {
@@ -1567,6 +1392,8 @@
         message: message,
         display_name: GameCache.user.display_name
       }).select();
+      
+      console.log('Global chat send result:', { data, error });
       
       if (error) {
         console.error('Failed to send global message:', error);
@@ -2009,12 +1836,12 @@
     }
     function renderLeaderboardPreview(){
       const cont = document.getElementById('leaderboardPreview');
-      cont.innerHTML = GameCache.leaderboard.slice(0,5).map((l, i) => `<div class="leader-item"><div class="leader-left"><img class="small-avatar" src="${l.avatar_url || avatars[0]}"><div><div style="font-weight:700">${i+1}. ${l.display_name}</div><div style="font-size:11px;opacity:0.6">${getRank(l.mmr)}</div></div></div><div style="text-align:right"><div style="font-weight:800">${l.mmr} MMR</div><div style="font-size:11px;opacity:0.7">W:${l.wins||0} D:${l.draws||0} L:${l.losses||0}</div></div></div>`).join('');
+      cont.innerHTML = GameCache.leaderboard.slice(0,5).map((l, i) => `<div class="leader-item"><div class="leader-left"><img class="small-avatar" src="${l.avatar_url || avatars[0]}"><div><div style="font-weight:700">${i+1}. ${l.display_name}</div><div style="font-size:11px;opacity:0.6">${getRank(l.mmr)}</div></div></div><div style="text-align:right"><div style="font-weight:800">${l.mmr}</div><div style="font-size:11px;opacity:0.7">W:${l.wins||0} D:${l.draws||0} L:${l.losses||0}</div></div></div>`).join('');
     }
     function openLeaderboard(){
-      document.getElementById('socialTitle').innerText = "Global Leaders (Top 100)";
+      document.getElementById('socialTitle').innerText = "Global Leaders";
       const cont = document.getElementById('socialContent');
-      cont.innerHTML = GameCache.leaderboard.map((l, i) => `<div class="leader-item"><div class="leader-left"><img class="small-avatar" src="${l.avatar_url || avatars[0]}"><div><div style="font-weight:700">${i+1}. ${l.display_name}</div><div style="font-size:11px;opacity:0.6">${getRank(l.mmr)}</div></div></div><div style="text-align:right"><div style="font-weight:800">${l.mmr} MMR</div><div style="font-size:11px;opacity:0.7">W:${l.wins||0} D:${l.draws||0} L:${l.losses||0}</div></div></div>`).join('');
+      cont.innerHTML = GameCache.leaderboard.map((l, i) => `<div class="leader-item"><div class="leader-left"><img class="small-avatar" src="${l.avatar_url || avatars[0]}"><div><div style="font-weight:700">${i+1}. ${l.display_name}</div><div style="font-size:11px;opacity:0.6">${getRank(l.mmr)}</div></div></div><div style="text-align:right"><div style="font-weight:800">${l.mmr}</div><div style="font-size:11px;opacity:0.7">W:${l.wins||0} D:${l.draws||0} L:${l.losses||0}</div></div></div>`).join('');
       openModal('socialModal');
     }
     async function logout(){ await trackPresence('offline'); cleanupRealtime(); await sb.auth.signOut(); window.location.reload(); }
@@ -2047,18 +1874,9 @@
     }
 
     async function searchFriend() {
-      const searchInput = document.getElementById('friendSearch');
-      if (!searchInput) {
-        console.warn('[Friends] friendSearch input missing, cannot perform search.');
-        return;
-      }
-      const q = searchInput.value.trim();
+      const q = document.getElementById('friendSearch').value.trim();
       if (!q) return;
       const res = document.getElementById('searchResult');
-      if (!res) {
-        console.warn('[Friends] searchResult container missing, cannot display search results.');
-        return;
-      }
       res.innerHTML = "Searching...";
       const { data } = await sb.from('profiles').select('id, display_name, avatar_url, mmr, email').or(`display_name.ilike.%${q}%,email.ilike.%${q}%`).limit(8);
       if (data) {
@@ -2089,10 +1907,8 @@
       if (error) { console.error('Friend request failed', error); return alert('Unable to send request.'); }
       if (data) GameCache.friendRequests.unshift(data);
       showToast('friend', 'Friend Request Sent', 'Your request has been sent successfully.');
-      // Refresh the search results to update button state if the search UI is present.
-      if (document.getElementById('friendSearch') && document.getElementById('searchResult')) {
-        searchFriend();
-      }
+      // Refresh the search results to update button state
+      searchUsers();
     }
 
     function showGameInvitePopup(invite) {
@@ -2126,10 +1942,6 @@
 
     function renderFriendsList() {
       const list = document.getElementById('friendsList');
-      if (!list) {
-        console.warn('[Friends] friendsList element not present, skipping render.');
-        return;
-      }
       list.innerHTML = GameCache.friends.map(fid => {
         const p = GameCache.profiles[fid] || { display_name: 'Player', avatar_url: avatars[0] };
         // Remove invite limit - allow unlimited invites
@@ -2150,10 +1962,8 @@
         GameCache.invites.unshift(data);
         const modeText = mode === 'ffa' ? 'Free for All' : mode === 'team' ? 'Team Up' : mode;
         showToast('invite', 'Game Invite Sent', `Your ${modeText} invite has been sent successfully.`);
-        // Refresh friends list only if the friends list UI is present.
-        if (document.getElementById('friendsList')) {
-          renderFriendsList();
-        }
+        // Refresh friends list to update button state
+        renderFriendsList();
       }
     }
 
@@ -2263,6 +2073,8 @@
         ])
         .select();
 
+      console.log(data);
+      console.log(error);
       if (error) { console.error('sendMsg error', error); chatInput.value = messageText; return; }
 
       // Immediately add to local cache and re-render
@@ -2796,7 +2608,6 @@
 
     async function updateProfileAfterMatch(result, isRanked, mmrChange, xpGained = 0) {
       try {
-        GameCache.user.mmr = Number(GameCache.user.mmr) || 0;
         const oldRank = getRank(GameCache.user.mmr);
 
         // Bonus MMR from XP gained (e.g. 5% of XP)
@@ -2863,7 +2674,7 @@
 
     async function fetchDeveloperNotifications() {
       const notificationUrl = `https://raw.githubusercontent.com/bandaamos98-create/anagram-rush/main/notification.js?t=${Date.now()}`;
-      console.log('[DevNotif] Fetching from:', notificationUrl);
+      console.log('[Notifications] Fetching developer notification from', notificationUrl);
 
       try {
         const response = await fetch(notificationUrl);
@@ -2871,6 +2682,7 @@
           throw new Error(`HTTP ${response.status}`);
         }
         const text = await response.text();
+        console.log('[Notifications] Loaded successfully');
 
         // Simple extraction logic if they use window.developerNotification = { ... }
         if (text.includes('developerNotification')) {
@@ -2878,11 +2690,10 @@
           const end = text.lastIndexOf('}') + 1;
           const jsonStr = text.substring(start, end);
           const config = JSON.parse(jsonStr);
-          console.log('[DevNotif] Parsed config:', config);
 
           if (config && config.enabled) {
             window.developerNotification = config;
-            console.log('[DevNotif] Notification enabled, will add to system.');
+            console.log('[Notifications] Developer notification config saved:', config);
             // Check if we've already shown this specific notification ID
             const lastId = localStorage.getItem('last_dev_notif_id');
             if (lastId !== config.id) {
@@ -2895,7 +2706,7 @@
           }
         }
       } catch (e) {
-        console.error('[DevNotif] Failed to load:', e);
+        console.error('[Notifications] Failed to load:', e);
       }
     }
 
@@ -2935,7 +2746,6 @@
       else if (title === "Invites") openInvites();
       else if (title === "Players Online") openOnlinePlayers();
       else if (title === "Friends") openFriends();
-      else if (title === "Global Leaders") openLeaderboard();
       else if (title.startsWith("Chat with")) {
         const otherId = modal.dataset.activeChatId;
         if (otherId) viewChat(otherId);
