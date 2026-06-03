@@ -2112,11 +2112,29 @@
     
     function calculateMMRChange(winnerMMR, loserMMR, isRanked) {
       if (!isRanked) return { winnerChange: 0, loserChange: 0 };
-      const K = 32;
+
+      // Dynamic K-factor: Higher at lower ranks to make gaining easy, lower at high ranks to make it hard
+      // Starts at 64 (fast climb) and scales down to 16 (pro level)
+      let K = 32;
+      if (winnerMMR < 1200) K = 64; // Bronze/Silver climb fast
+      else if (winnerMMR < 3000) K = 40; // Gold/Platinum/Diamond
+      else if (winnerMMR < 5500) K = 24; // Master/Grandmaster/Legend
+      else K = 16; // Mythic and above - every point matters
+
       const expectedWinner = 1 / (1 + Math.pow(10, (loserMMR - winnerMMR) / 400));
       const expectedLoser = 1 / (1 + Math.pow(10, (winnerMMR - loserMMR) / 400));
-      const winnerChange = Math.round(K * (1 - expectedWinner));
-      const loserChange = Math.round(K * (0 - expectedLoser));
+
+      let winnerChange = Math.round(K * (1 - expectedWinner));
+      let loserChange = Math.round(K * (0 - expectedLoser));
+
+      // Easy Mode for low ranks: Guaranteed minimum gain on win, reduced loss
+      if (winnerMMR < 1200) {
+        winnerChange = Math.max(winnerChange, 25); // Min 25 MMR gain for Bronze/Silver
+      }
+      if (loserMMR < 600) {
+        loserChange = Math.max(loserChange, -15); // Lose max 15 MMR in Bronze
+      }
+
       return { winnerChange, loserChange };
     }
     
@@ -2703,11 +2721,29 @@
 
     function calculateMMRChange(winnerMMR, loserMMR, isRanked) {
       if (!isRanked) return { winnerChange: 0, loserChange: 0 };
-      const K = 32;
+
+      // Dynamic K-factor: Higher at lower ranks to make gaining easy, lower at high ranks to make it hard
+      // Starts at 64 (fast climb) and scales down to 16 (pro level)
+      let K = 32;
+      if (winnerMMR < 1200) K = 64; // Bronze/Silver climb fast
+      else if (winnerMMR < 3000) K = 40; // Gold/Platinum/Diamond
+      else if (winnerMMR < 5500) K = 24; // Master/Grandmaster/Legend
+      else K = 16; // Mythic and above - every point matters
+
       const expectedWinner = 1 / (1 + Math.pow(10, (loserMMR - winnerMMR) / 400));
       const expectedLoser = 1 / (1 + Math.pow(10, (winnerMMR - loserMMR) / 400));
-      const winnerChange = Math.round(K * (1 - expectedWinner));
-      const loserChange = Math.round(K * (0 - expectedLoser));
+
+      let winnerChange = Math.round(K * (1 - expectedWinner));
+      let loserChange = Math.round(K * (0 - expectedLoser));
+
+      // Easy Mode for low ranks: Guaranteed minimum gain on win, reduced loss
+      if (winnerMMR < 1200) {
+        winnerChange = Math.max(winnerChange, 25); // Min 25 MMR gain for Bronze/Silver
+      }
+      if (loserMMR < 600) {
+        loserChange = Math.max(loserChange, -15); // Lose max 15 MMR in Bronze
+      }
+
       return { winnerChange, loserChange };
     }
 
