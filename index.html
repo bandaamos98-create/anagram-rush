@@ -1086,6 +1086,16 @@
         body: n.body || n.message || '',
         action: n.action || null
       }));
+
+      // Also include any inline developer notification (e.g. window.developerNotification)
+      try {
+        const dev = window.developerNotification;
+        if (dev && dev.enabled) {
+          const devObj = { title: dev.title || 'Developer', body: dev.body || '', action: null };
+          // Put developer notification at the front so it's visible immediately
+          dbNotifications.unshift(devObj);
+        }
+      } catch(e) { /* ignore if window not accessible */ }
       
       const allNotifications = [...systemNotifications, ...dbNotifications];
       
