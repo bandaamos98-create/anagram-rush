@@ -7,8 +7,6 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Poppins:wght@500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-  <!-- Developer System Notifications -->
-  <script id="developerNotificationScript"></script>
   <script>
     if (typeof window.supabase === 'undefined') {
       document.write('<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"><\/script>');
@@ -600,7 +598,6 @@
       showApp();
       updateBadges();
       renderLeaderboardPreview();
-      fetchDeveloperNotifications();
     }
 
     /* ========================================== DATA ========================================== */
@@ -1077,25 +1074,18 @@
       const dbNotifications = GameCache.notifications.map(n => ({
         title: n.title || n.body || n.message || 'Notification',
         body: n.body || n.message || '',
-        action: n.action || null
+        action: null
       }));
       
       const allNotifications = [...systemNotifications, ...dbNotifications];
       
       const list = allNotifications.map(n => {
-        let actionAttr = '';
-        if (typeof n.action === 'function') {
-          actionAttr = `onclick="(${n.action.toString()})()"`;
-        } else if (typeof n.action === 'string') {
-          actionAttr = `onclick="${n.action}"`;
-        }
+        const actionAttr = n.action ? `onclick="(${n.action.toString()})()"` : '';
         return `<div class="social-item" ${actionAttr} style="${n.action ? 'cursor:pointer;' : ''}"><div><div style="font-weight:700">${n.title}</div><div style="font-size:12px;opacity:0.7">${n.body}</div></div></div>`;
       }).join('') || "<p style='text-align:center;padding:20px;opacity:0.5'>No notifications</p>";
       
       document.getElementById('notificationContent').innerHTML = list;
-      // Mark all as read when opening
-      GameCache.notifications = [];
-      updateBadges();
+      document.getElementById('headerNotifDot').style.display = 'none';
       openModal('notificationModal');
     }
 
@@ -1138,7 +1128,13 @@
         }
       });
       
-      showAchievementNotification(newAchievements);
+      // Save new achievements to database
+      if (newAchievements.length > 0) {
+        GameCache.user.achievements = unlockedAchievements;
+        sb.from('profiles').update({ achievements: unlockedAchievements }).eq('id', currentUserId).then(({ error }) => {
+          if (error) console.error('Failed to save achievements:', error);
+        });
+        showAchievementNotification(newAchievements.map(a => a.id));
       }
     }
 
@@ -2116,29 +2112,11 @@
     
     function calculateMMRChange(winnerMMR, loserMMR, isRanked) {
       if (!isRanked) return { winnerChange: 0, loserChange: 0 };
-
-      // Dynamic K-factor: Higher at lower ranks to make gaining easy, lower at high ranks to make it hard
-      // Starts at 64 (fast climb) and scales down to 16 (pro level)
-      let K = 32;
-      if (winnerMMR < 1200) K = 64; // Bronze/Silver climb fast
-      else if (winnerMMR < 3000) K = 40; // Gold/Platinum/Diamond
-      else if (winnerMMR < 5500) K = 24; // Master/Grandmaster/Legend
-      else K = 16; // Mythic and above - every point matters
-
+      const K = 32;
       const expectedWinner = 1 / (1 + Math.pow(10, (loserMMR - winnerMMR) / 400));
       const expectedLoser = 1 / (1 + Math.pow(10, (winnerMMR - loserMMR) / 400));
-
-      let winnerChange = Math.round(K * (1 - expectedWinner));
-      let loserChange = Math.round(K * (0 - expectedLoser));
-
-      // Easy Mode for low ranks: Guaranteed minimum gain on win, reduced loss
-      if (winnerMMR < 1200) {
-        winnerChange = Math.max(winnerChange, 25); // Min 25 MMR gain for Bronze/Silver
-      }
-      if (loserMMR < 600) {
-        loserChange = Math.max(loserChange, -15); // Lose max 15 MMR in Bronze
-      }
-
+      const winnerChange = Math.round(K * (1 - expectedWinner));
+      const loserChange = Math.round(K * (0 - expectedLoser));
       return { winnerChange, loserChange };
     }
     
@@ -2188,6 +2166,16 @@
     };
     
     function showAchievementNotification(achievements) {
+      const notification = achievements.map(a => `
+        <div style="display:flex;align-items:center;gap:12px;padding:12px;background:rgba(139,92,246,0.1);border:1px solid rgba(139,92,246,0.3);border-radius:12px;margin-bottom:8px;">
+          <div style="font-size:32px;">${a.icon}</div>
+          <div>
+            <div style="font-weight:700;color:var(--purple);">${a.name}</div>
+            <div style="font-size:12px;opacity:0.7;">${a.description}</div>
+          </div>
+        </div>
+      `).join('');
+      
       alert(`🎉 Achievement Unlocked!\n\n${achievements.map(a => `${a.icon} ${a.name}`).join('\n')}`);
     }
     
@@ -2510,91 +2498,86 @@
         playersData.sort((a, b) => b.score - a.score);
         
         const myRank = playersData.findIndex(p => p.playerId === currentUserId) + 1;
-      }
-      
-      const isRanked = mode !== 'single';
-      
-      let mmrChange = { winnerChange: 0, loserChange: 0 };
-      if (mode === 'ffa') {
-        const playersData = Object.keys(GameCache.match.playerScores).map(playerId => {
-          const score = GameCache.match.playerScores[playerId] || 0;
-          const profile = GameCache.profiles[playerId] || { display_name: 'Player', mmr: 0 };
-          return { playerId, score, mmr: profile.mmr };
-        });
-        const avgMMR = playersData.reduce((sum, p) => sum + (p.mmr || 0), 0) / playersData.length;
-        const myRank = playersData.sort((a,b) => b.score - a.score).findIndex(p => p.playerId === currentUserId) + 1;
         const result = myRank === 1 ? 'win' : 'loss';
-        mmrChange = calculateMMRChange(GameCache.user.mmr, avgMMR, true);
-      } else if (mode === 'team') {
-        const myTeam = GameCache.match.playerTeams ? GameCache.match.playerTeams[currentUserId] : 'B';
-        const teamAPlayersData = Object.keys(GameCache.match.playerScores).filter(pid => GameCache.match.playerTeams[pid] === 'A').map(pid => ({mmr: GameCache.profiles[pid]?.mmr || 0}));
-        const teamBPlayersData = Object.keys(GameCache.match.playerScores).filter(pid => GameCache.match.playerTeams[pid] === 'B').map(pid => ({mmr: GameCache.profiles[pid]?.mmr || 0}));
-        const otherTeam = myTeam === 'A' ? teamBPlayersData : teamAPlayersData;
-        const avgOtherMMR = otherTeam.reduce((sum, p) => sum + (p.mmr || 0), 0) / (otherTeam.length || 1);
+        
+        const summaryHTML = `
+          <div style="text-align:center;padding:20px;">
+            <h2 style="font-size:32px;font-weight:800;margin-bottom:10px;">FREE FOR ALL</h2>
+            <div style="font-size:48px;margin-bottom:20px;">⚔️</div>
 
-        let teamAScore = 0, teamBScore = 0;
-        Object.keys(GameCache.match.playerScores).forEach(pid => {
-          if(GameCache.match.playerTeams[pid] === 'A') teamAScore += GameCache.match.playerScores[pid];
-          else teamBScore += GameCache.match.playerScores[pid];
-        });
-        const teamResult = teamAScore > teamBScore ? (myTeam === 'A' ? 'win' : 'loss') : teamAScore < teamBScore ? (myTeam === 'B' ? 'win' : 'loss') : 'tie';
-        mmrChange = calculateMMRChange(GameCache.user.mmr, avgOtherMMR, true);
-      } else {
-        const opponentId = GameCache.match.participants.find(id => id !== currentUserId);
-        const oppMMR = GameCache.profiles[opponentId]?.mmr || 0;
-        mmrChange = calculateMMRChange(GameCache.user.mmr, oppMMR, isRanked);
+            <div style="background:rgba(255,255,255,0.05);padding:15px;border-radius:16px;margin-bottom:20px;">
+              ${playersData.map((p, i) => `
+                <div style="display:flex;align-items:center;gap:10px;padding:10px;background:${p.playerId === currentUserId ? 'rgba(59,130,246,0.1)' : 'rgba(255,255,255,0.03)'};border-radius:12px;margin-bottom:8px;border:${p.playerId === currentUserId ? '1px solid var(--blue)' : 'none'};">
+                  <div style="font-weight:800;font-size:18px;width:30px;">#${i + 1}</div>
+                  <img src="${p.avatar_url || avatars[0]}" style="width:40px;height:40px;border-radius:50%;">
+                  <div style="flex:1;text-align:left;">
+                    <div style="font-weight:700;font-size:15px;">${p.display_name}</div>
+                    <div style="font-size:12px;opacity:0.6;">Score: ${p.score}</div>
+                  </div>
+                  ${i === 0 ? '<span style="font-size:24px;">👑</span>' : ''}
+                </div>
+              `).join('')}
+            </div>
+            
+            <button class="btn modern" style="width:100%;" onclick="closeModal('resultModal');endMatch();">Continue</button>
+          </div>
+        `;
+        
+        document.getElementById('resultSummary').innerHTML = summaryHTML;
+        openModal('resultModal');
+        updateProfileAfterMatch(result, false, 0);
+        return;
       }
-
-      const result = mode === 'team' ? (teamResult === 'win' ? 'win' : teamResult === 'loss' ? 'loss' : 'tie') :
-                    mode === 'ffa' ? (myRank === 1 ? 'win' : 'loss') :
-                    (meScore > oppScore ? 'win' : meScore < oppScore ? 'loss' : 'tie');
       
-      const xpGained = calculateXP(result, meScore, GameCache.match.playerStreaks[currentUserId] || 0);
-      const coinsGained = calculateCoins(result, meScore, GameCache.match.playerStreaks[currentUserId] || 0);
+      // Original 1v1 match logic
+      const opponentId = GameCache.match.participants.find(id => id !== currentUserId);
+      const oppId = opponentId;
+      const oppScore = GameCache.match.playerScores[oppId] || 0;
+      const result = meScore > oppScore ? 'win' : meScore < oppScore ? 'loss' : 'tie';
       
-      // Update local cache
+      const meStreak = GameCache.match.playerStreaks[currentUserId] || 0;
+      const meCorrect = GameCache.match.playerCorrectCount[currentUserId] || 0;
+      const meWrong = GameCache.match.playerWrongCount[currentUserId] || 0;
+      const meSolveTimes = GameCache.match.playerSolveTimes[currentUserId] || [];
+      const avgSolveTime = meSolveTimes.length > 0 ? (meSolveTimes.reduce((a, b) => a + b, 0) / meSolveTimes.length).toFixed(1) : 0;
+      const accuracy = meCorrect + meWrong > 0 ? Math.round((meCorrect / (meCorrect + meWrong)) * 100) : 0;
+      
+      const isRanked = GameCache.match.mode === 'ranked';
+      const mmrChange = calculateMMRChange(GameCache.user.mmr, GameCache.profiles[oppId]?.mmr || 0, isRanked);
+      const xpGained = calculateXP(result, meScore, meStreak);
+      const coinsGained = calculateCoins(result, meScore, meStreak);
+      
+      // Update user stats - allow earning from any game mode
       GameCache.user.xp += xpGained;
       GameCache.user.coins += coinsGained;
-
       if (result === 'win') {
-        GameCache.user.wins++;
-        GameCache.user.streak++;
-        GameCache.user.mmr += mmrChange.winnerChange;
+        GameCache.user.wins = (GameCache.user.wins || 0) + 1;
+        GameCache.user.streak = (GameCache.user.streak || 0) + 1;
+        
+        // Unlock first victory achievement for non-AI wins
+        const isAIGame = GameCache.match.mode === 'single' || GameCache.match.mode === 'ai';
+        if (!isAIGame && GameCache.user.wins === 1) {
+          const currentAchievements = GameCache.user.achievements || [];
+          if (!currentAchievements.includes('first_win')) {
+            currentAchievements.push('first_win');
+            GameCache.user.achievements = currentAchievements;
+            // Save to database
+            sb.from('profiles').update({ achievements: currentAchievements }).eq('id', currentUserId).then(({ error }) => {
+              if (error) console.error('Failed to save achievement:', error);
+            });
+            showAchievementNotification(['first_win']);
+          }
+        }
       } else if (result === 'loss') {
-        GameCache.user.losses++;
+        GameCache.user.losses = (GameCache.user.losses || 0) + 1;
         GameCache.user.streak = 0;
-        GameCache.user.mmr += mmrChange.loserChange;
-      } else {
-        GameCache.user.draws++;
+      } else if (result === 'tie') {
+        GameCache.user.draws = (GameCache.user.draws || 0) + 1;
       }
-
+      
+      // Update stats UI in real-time
       updateStatsUI();
-      checkAchievements();
-
-      // Show comprehensive result summary
-      const summaryHTML = `
-        <div style="text-align:center;padding:20px;">
-          <h2 style="font-size:32px;font-weight:800;margin-bottom:10px;color:${result === 'win' ? 'var(--success)' : result === 'loss' ? 'var(--danger)' : 'var(--warning)'}">${result.toUpperCase()}!</h2>
-          <div style="font-size:48px;margin-bottom:20px;">${result === 'win' ? '🏆' : result === 'loss' ? '😔' : '🤝'}</div>
-
-          <div style="background:rgba(59,130,246,0.1);padding:20px;border-radius:16px;margin-bottom:20px;border:1px solid rgba(59,130,246,0.3);">
-            <h3 style="margin-bottom:15px;color:var(--blue);">Rewards</h3>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:14px;">
-              <div>XP Gained: <strong style="color:var(--success);">+${xpGained}</strong></div>
-              <div>Coins: <strong style="color:var(--warning);">+${coinsGained}</strong></div>
-              ${isRanked ? `<div>MMR Change: <strong style="color:${result === 'win' ? 'var(--success)' : 'var(--danger)'};">${result === 'win' ? '+' : ''}${result === 'win' ? mmrChange.winnerChange : mmrChange.loserChange}</strong></div>` : ''}
-              <div>New Rank: <strong>${getRank(GameCache.user.mmr)}</strong></div>
-            </div>
-          </div>
-
-          <button class="btn modern" style="width:100%;" onclick="closeModal('resultModal');endMatch();">Continue</button>
-        </div>
-      `;
-
-      document.getElementById('resultSummary').innerHTML = summaryHTML;
-      openModal('resultModal');
-      updateProfileAfterMatch(result, isRanked, mmrChange);
-
+      
       // Check for achievements after match
       checkAchievements();
       
@@ -2697,7 +2680,6 @@
     
     async function updateProfileAfterMatch(result, isRanked, mmrChange) {
       try {
-        const oldRank = getRank(GameCache.user.mmr);
         const updateData = {
           xp: GameCache.user.xp,
           level: GameCache.user.level,
@@ -2705,8 +2687,7 @@
           wins: GameCache.user.wins,
           losses: GameCache.user.losses,
           draws: GameCache.user.draws || 0,
-          streak: GameCache.user.streak,
-          achievements: GameCache.user.achievements
+          streak: GameCache.user.streak
         };
         
         if (isRanked) {
@@ -2715,79 +2696,18 @@
         }
         
         await sb.from('profiles').update(updateData).eq('id', currentUserId);
-
-        // Check for Rank Up notification
-        const newRank = getRank(GameCache.user.mmr);
-        if (oldRank !== newRank && GameCache.user.mmr > 0) {
-          addSystemNotification(`🎉 Rank Up!`, `Congratulations! You've been promoted to ${newRank}!`);
-        }
       } catch (err) {
         console.error('Failed to update profile after match:', err);
       }
     }
 
-    function addSystemNotification(title, body) {
-      const notif = { title, body, created_at: new Date().toISOString(), id: 'sys-' + Date.now() };
-      GameCache.notifications.unshift(notif);
-      updateBadges();
-      showToast('notification', title, body, () => openNotifications());
-    }
-
-    async function fetchDeveloperNotifications() {
-      // THE DEVELOPER CAN CHANGE THIS URL TO THEIR GITHUB RAW FILE
-      // Example: https://raw.githubusercontent.com/bandaamos/anagram-rush/main/notification.js
-      const GITHUB_URL = "https://raw.githubusercontent.com/bandaamos/anagram-rush/main/notification.js";
-
-      try {
-        const resp = await fetch(GITHUB_URL + "?t=" + Date.now());
-        const text = await resp.text();
-
-        // Simple extraction logic if they use window.developerNotification = { ... }
-        if (text.includes('developerNotification')) {
-          const start = text.indexOf('{');
-          const end = text.lastIndexOf('}') + 1;
-          const jsonStr = text.substring(start, end);
-          const config = JSON.parse(jsonStr);
-
-          if (config && config.enabled) {
-            // Check if we've already shown this specific notification ID
-            const lastId = localStorage.getItem('last_dev_notif_id');
-            if (lastId !== config.id) {
-              addSystemNotification(config.title, config.body);
-              localStorage.setItem('last_dev_notif_id', config.id);
-            }
-          }
-        }
-      } catch (e) {
-        console.warn('Developer notifications could not be fetched (normal if URL is not set yet)');
-      }
-    }
-
     function calculateMMRChange(winnerMMR, loserMMR, isRanked) {
       if (!isRanked) return { winnerChange: 0, loserChange: 0 };
-
-      // Dynamic K-factor: Higher at lower ranks to make gaining easy, lower at high ranks to make it hard
-      // Starts at 64 (fast climb) and scales down to 16 (pro level)
-      let K = 32;
-      if (winnerMMR < 1200) K = 64; // Bronze/Silver climb fast
-      else if (winnerMMR < 3000) K = 40; // Gold/Platinum/Diamond
-      else if (winnerMMR < 5500) K = 24; // Master/Grandmaster/Legend
-      else K = 16; // Mythic and above - every point matters
-
+      const K = 32;
       const expectedWinner = 1 / (1 + Math.pow(10, (loserMMR - winnerMMR) / 400));
       const expectedLoser = 1 / (1 + Math.pow(10, (winnerMMR - loserMMR) / 400));
-
-      let winnerChange = Math.round(K * (1 - expectedWinner));
-      let loserChange = Math.round(K * (0 - expectedLoser));
-
-      // Easy Mode for low ranks: Guaranteed minimum gain on win, reduced loss
-      if (winnerMMR < 1200) {
-        winnerChange = Math.max(winnerChange, 25); // Min 25 MMR gain for Bronze/Silver
-      }
-      if (loserMMR < 600) {
-        loserChange = Math.max(loserChange, -15); // Lose max 15 MMR in Bronze
-      }
-
+      const winnerChange = Math.round(K * (1 - expectedWinner));
+      const loserChange = Math.round(K * (0 - expectedLoser));
       return { winnerChange, loserChange };
     }
 
