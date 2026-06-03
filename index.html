@@ -652,14 +652,15 @@
         }
       }
       if(profile) {
-        profile.mmr = profile.mmr ?? 0;
-        profile.wins = profile.wins ?? 0;
-        profile.losses = profile.losses ?? 0;
-        profile.draws = profile.draws ?? 0;
-        profile.xp = profile.xp ?? 0;
-        profile.level = profile.level ?? 1;
-        profile.coins = profile.coins ?? 0;
-        profile.daily_streak = profile.daily_streak ?? 0;
+        profile.mmr = Number(profile.mmr) || 0;
+        profile.wins = Number(profile.wins) || 0;
+        profile.losses = Number(profile.losses) || 0;
+        profile.draws = Number(profile.draws) || 0;
+        profile.xp = Number(profile.xp) || 0;
+        profile.level = Number(profile.level) || 1;
+        profile.coins = Number(profile.coins) || 0;
+        profile.streak = Number(profile.streak) || 0;
+        profile.daily_streak = Number(profile.daily_streak) || 0;
         profile.last_daily = profile.last_daily || null;
         profile.achievements = profile.achievements || [];
         GameCache.user = { 
@@ -716,7 +717,12 @@
       GameCache.notifications = notifs.data || [];
       GameCache.globalChatMessages = globalMsgs.data || [];
       // Ensure leaderboard is sorted by MMR descending and limited to top 100
-      GameCache.leaderboard = (leaders.data || []).sort((a,b) => (b.mmr || 0) - (a.mmr || 0)).slice(0,100);
+      GameCache.leaderboard = (leaders.data || []).map(p => ({
+        ...p,
+        mmr: Number(p.mmr) || 0,
+        wins: Number(p.wins) || 0,
+        losses: Number(p.losses) || 0
+      })).sort((a,b) => (b.mmr || 0) - (a.mmr || 0)).slice(0,100);
       GameCache.friends = (friends.data || []).map(f => f.friend_id);
       GameCache.leaderboard.forEach(p => GameCache.profiles[p.id] = p);
       // Update user's leaderboard position now that leaderboard is available
@@ -864,6 +870,15 @@
           const sender = GameCache.profiles[p.new.from_user_id]?.display_name || 'Someone';
           showToast('friend', `Friend Request from ${sender}`, 'Click to view', () => openInvites());
         })
+        // Friends list updates
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'friends', filter: `user_id=eq.${currentUserId}` }, async (p) => {
+          if (!GameCache.friends.includes(p.new.friend_id)) {
+            GameCache.friends.unshift(p.new.friend_id);
+          }
+          if (!GameCache.profiles[p.new.friend_id]) await fetchProfile(p.new.friend_id);
+          updateBadges();
+          refreshOpenSocialView();
+        })
         // Notifications
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${currentUserId}` }, (p) => {
           console.log('[Realtime] Notification received:', p.new);
@@ -871,6 +886,61 @@
           updateBadges();
           refreshOpenSocialView();
           showToast('notification', p.new.title || 'Notification', p.new.body || p.new.message || '', () => openNotifications());
+        })
+        // Profile updates: keep leaderboard and current user MMR in sync
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles' }, async (p) => {
+          const profile = {
+            ...p.new,
+            mmr: Number(p.new.mmr) || 0,
+            wins: Number(p.new.wins) || 0,
+            losses: Number(p.new.losses) || 0,
+            draws: Number(p.new.draws) || 0,
+            xp: Number(p.new.xp) || 0,
+            level: Number(p.new.level) || 1,
+            coins: Number(p.new.coins) || 0
+          };
+          console.log('[Realtime] Profile updated:', profile);
+          GameCache.profiles[profile.id] = profile;
+
+          // Update current user stats if this is our profile
+          if (profile.id === currentUserId) {
+            GameCache.user = {
+              ...GameCache.user,
+              mmr: profile.mmr,
+              wins: profile.wins,
+              losses: profile.losses,
+              draws: profile.draws,
+              xp: profile.xp,
+              level: profile.level,
+              coins: profile.coins,
+              league: profile.league || getRank(profile.mmr)
+            };
+            GameCache.user.leaderboardPos = getLeaderboardPosition(currentUserId);
+            updateStatsUI();
+          }
+
+          // Update leaderboard entries and keep ordered top 100
+          const existingIndex = GameCache.leaderboard.findIndex(item => item.id === profile.id);
+          const updatedProfile = {
+            id: profile.id,
+            display_name: profile.display_name,
+            avatar_url: profile.avatar_url,
+            mmr: profile.mmr ?? 0,
+            wins: profile.wins ?? 0,
+            losses: profile.losses ?? 0
+          };
+          if (existingIndex !== -1) {
+            GameCache.leaderboard[existingIndex] = updatedProfile;
+          } else {
+            GameCache.leaderboard.unshift(updatedProfile);
+          }
+          GameCache.leaderboard.sort((a,b) => (b.mmr || 0) - (a.mmr || 0));
+          GameCache.leaderboard = GameCache.leaderboard.slice(0,100);
+          GameCache.leaderboard.forEach(p => GameCache.profiles[p.id] = p);
+          renderLeaderboardPreview();
+          if (document.getElementById('socialModal').classList.contains('active') && document.getElementById('socialTitle').innerText === 'Global Leaders') {
+            openLeaderboard();
+          }
         })
         // Global Chat
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'global_chat' }, (p) => {
@@ -2608,6 +2678,7 @@
 
     async function updateProfileAfterMatch(result, isRanked, mmrChange, xpGained = 0) {
       try {
+        GameCache.user.mmr = Number(GameCache.user.mmr) || 0;
         const oldRank = getRank(GameCache.user.mmr);
 
         // Bonus MMR from XP gained (e.g. 5% of XP)
@@ -2746,6 +2817,7 @@
       else if (title === "Invites") openInvites();
       else if (title === "Players Online") openOnlinePlayers();
       else if (title === "Friends") openFriends();
+      else if (title === "Global Leaders") openLeaderboard();
       else if (title.startsWith("Chat with")) {
         const otherId = modal.dataset.activeChatId;
         if (otherId) viewChat(otherId);
