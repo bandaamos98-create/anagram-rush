@@ -7,6 +7,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Poppins:wght@500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <!-- Developer System Notifications -->
+  <script id="developerNotificationScript"></script>
   <script>
     if (typeof window.supabase === 'undefined') {
       document.write('<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"><\/script>');
@@ -598,6 +600,7 @@
       showApp();
       updateBadges();
       renderLeaderboardPreview();
+      fetchDeveloperNotifications();
     }
 
     /* ========================================== DATA ========================================== */
@@ -1074,18 +1077,25 @@
       const dbNotifications = GameCache.notifications.map(n => ({
         title: n.title || n.body || n.message || 'Notification',
         body: n.body || n.message || '',
-        action: null
+        action: n.action || null
       }));
       
       const allNotifications = [...systemNotifications, ...dbNotifications];
       
       const list = allNotifications.map(n => {
-        const actionAttr = n.action ? `onclick="(${n.action.toString()})()"` : '';
+        let actionAttr = '';
+        if (typeof n.action === 'function') {
+          actionAttr = `onclick="(${n.action.toString()})()"`;
+        } else if (typeof n.action === 'string') {
+          actionAttr = `onclick="${n.action}"`;
+        }
         return `<div class="social-item" ${actionAttr} style="${n.action ? 'cursor:pointer;' : ''}"><div><div style="font-weight:700">${n.title}</div><div style="font-size:12px;opacity:0.7">${n.body}</div></div></div>`;
       }).join('') || "<p style='text-align:center;padding:20px;opacity:0.5'>No notifications</p>";
       
       document.getElementById('notificationContent').innerHTML = list;
-      document.getElementById('headerNotifDot').style.display = 'none';
+      // Mark all as read when opening
+      GameCache.notifications = [];
+      updateBadges();
       openModal('notificationModal');
     }
 
@@ -2698,6 +2708,7 @@
     
     async function updateProfileAfterMatch(result, isRanked, mmrChange) {
       try {
+        const oldRank = getRank(GameCache.user.mmr);
         const updateData = {
           xp: GameCache.user.xp,
           level: GameCache.user.level,
@@ -2714,8 +2725,51 @@
         }
         
         await sb.from('profiles').update(updateData).eq('id', currentUserId);
+
+        // Check for Rank Up notification
+        const newRank = getRank(GameCache.user.mmr);
+        if (oldRank !== newRank && GameCache.user.mmr > 0) {
+          addSystemNotification(`🎉 Rank Up!`, `Congratulations! You've been promoted to ${newRank}!`);
+        }
       } catch (err) {
         console.error('Failed to update profile after match:', err);
+      }
+    }
+
+    function addSystemNotification(title, body) {
+      const notif = { title, body, created_at: new Date().toISOString(), id: 'sys-' + Date.now() };
+      GameCache.notifications.unshift(notif);
+      updateBadges();
+      showToast('notification', title, body, () => openNotifications());
+    }
+
+    async function fetchDeveloperNotifications() {
+      // THE DEVELOPER CAN CHANGE THIS URL TO THEIR GITHUB RAW FILE
+      // Example: https://raw.githubusercontent.com/bandaamos/anagram-rush/main/notification.js
+      const GITHUB_URL = "https://raw.githubusercontent.com/bandaamos/anagram-rush/main/notification.js";
+
+      try {
+        const resp = await fetch(GITHUB_URL + "?t=" + Date.now());
+        const text = await resp.text();
+
+        // Simple extraction logic if they use window.developerNotification = { ... }
+        if (text.includes('developerNotification')) {
+          const start = text.indexOf('{');
+          const end = text.lastIndexOf('}') + 1;
+          const jsonStr = text.substring(start, end);
+          const config = JSON.parse(jsonStr);
+
+          if (config && config.enabled) {
+            // Check if we've already shown this specific notification ID
+            const lastId = localStorage.getItem('last_dev_notif_id');
+            if (lastId !== config.id) {
+              addSystemNotification(config.title, config.body);
+              localStorage.setItem('last_dev_notif_id', config.id);
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('Developer notifications could not be fetched (normal if URL is not set yet)');
       }
     }
 
