@@ -1288,24 +1288,11 @@
     async function handleAvatarUpload(e){
       const file = e.target.files[0]; if(!file) return;
       const reader = new FileReader();
-      reader.onload = async (event) => {
+      reader.onload = (event) => {
           const base64 = event.target.result;
           document.getElementById("profileAvatar").src = base64;
           document.getElementById("headerAvatar").src = base64;
-          
-          // Upload to Supabase Storage
-          try {
-            const fileName = `${Date.now()}_${file.name}`;
-            const filePath = `avatars/${currentUserId}/${fileName}`;
-            const { data: uploadData, error: uploadError } = await sb.storage.from('avatars').upload(filePath, file, { upsert: true });
-            if (uploadError) throw uploadError;
-            
-            const { data: { publicUrl } } = sb.storage.from('avatars').getPublicUrl(filePath);
-            GameCache.user.avatar_url = publicUrl;
-          } catch (err) {
-            console.error('Avatar upload failed:', err);
-            GameCache.user.avatar_url = base64; // Fallback to base64
-          }
+          GameCache.user.avatar_url = base64;
       };
       reader.readAsDataURL(file);
     }
@@ -2674,39 +2661,32 @@
 
     async function fetchDeveloperNotifications() {
       const notificationUrl = `https://raw.githubusercontent.com/bandaamos98-create/anagram-rush/main/notification.js?t=${Date.now()}`;
-      console.log('[Notifications] Fetching developer notification from', notificationUrl);
-
       try {
         const response = await fetch(notificationUrl);
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
-        }
-        const text = await response.text();
-        console.log('[Notifications] Loaded successfully');
-
-        // Simple extraction logic if they use window.developerNotification = { ... }
-        if (text.includes('developerNotification')) {
-          const start = text.indexOf('{');
-          const end = text.lastIndexOf('}') + 1;
-          const jsonStr = text.substring(start, end);
-          const config = JSON.parse(jsonStr);
-
-          if (config && config.enabled) {
-            window.developerNotification = config;
-            console.log('[Notifications] Developer notification config saved:', config);
-            // Check if we've already shown this specific notification ID
-            const lastId = localStorage.getItem('last_dev_notif_id');
-            if (lastId !== config.id) {
-              addSystemNotification(config.title, config.body, { id: config.id, source: 'developer' });
-              localStorage.setItem('last_dev_notif_id', config.id);
-              if (await requestNotificationPermission()) {
-                showNativeNotification(config.title, config.body);
-              }
+        if (response.ok) {
+          const text = await response.text();
+          const match = text.match(/window\.developerNotification\s*=\s*(\{[\s\S]*?\});?/);
+          if (match) {
+            const config = JSON.parse(match[1]);
+            if (config && config.enabled) {
+              window.developerNotification = config;
             }
           }
         }
       } catch (e) {
-        console.error('[Notifications] Failed to load:', e);
+        console.warn('[Notifications] Unable to fetch developer notification:', e);
+      }
+
+      const config = window.developerNotification;
+      if (!config || !config.enabled) return;
+
+      const lastId = localStorage.getItem('last_dev_notif_id');
+      if (lastId !== config.id) {
+        addSystemNotification(config.title, config.body, { id: config.id, source: 'developer' });
+        localStorage.setItem('last_dev_notif_id', config.id);
+        if (await requestNotificationPermission()) {
+          showNativeNotification(config.title, config.body);
+        }
       }
     }
 
