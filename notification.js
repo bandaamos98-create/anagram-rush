@@ -7,6 +7,6 @@ window.developerNotification = {
   "enabled": true,
   "id": "update-v2-launch", 
   "title": "Game Updates",
-  "body": "we are working tirelessly to bring multiplayer mode, modes include FREE FOR ALL and TEAM UP. stay tined",
+  "body": "we are working tirelessly to bring multiplayer mode, modes include FREE FOR ALL and TEAM UP. stay tuned",
   "icon": "📢"
 };
