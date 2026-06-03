@@ -463,7 +463,7 @@
           <p>Anagram Rush is a fast-paced word battle game with realtime multiplayer and social features.</p>
           <p style="font-weight:700;margin-top:12px;margin-bottom:8px;">Our Games</p>
           <p>1. Anagram Rush</p>
-          <p>2. Wordfury</p>
+          <p>2. Wordfury (pending)</p>
         </div>
       </div>
     </div>
@@ -477,29 +477,27 @@
       </div>
       <div style="line-height:1.6; opacity:0.9;">
         <p style="font-weight:700;margin-bottom:12px;">🎯 Objective</p>
-        <p>Unscramble the given letters to form valid words as fast as possible. The player with the most points wins!</p>
+        <p>Unscramble the letters to form valid words as fast as possible. Every correct answer scores points, and the highest scoring player or team wins.</p>
         
         <p style="font-weight:700;margin-top:16px;margin-bottom:12px;">🎮 Game Modes</p>
-        <p><strong>Play Against AI:</strong> 4-letter words, 2-minute timer</p>
-        <p><strong>Quick Match:</strong> 5-letter words, 3-minute timer</p>
-        <p><strong>Ranked Match:</strong> 4-7 letter words (based on rank), 5-minute timer</p>
-        <p><strong>Friend Invite:</strong> 5-letter words, 3-minute timer</p>
+        <p><strong>FFA (Free For All):</strong> Four players compete individually. Each round, solve the word before the others to earn top points. Faster solves earn higher rewards.</p>
+        <p><strong>Team Up:</strong> Two teams cooperate and compete. Each team member solves words to add to the shared team score. Work together to outscore the opposing team.</p>
+        <p><strong>Ranked & Quick Matches:</strong> Play head-to-head or in small groups with faster timers and higher-stakes scoring.</p>
         
         <p style="font-weight:700;margin-top:16px;margin-bottom:12px;">⭐ Scoring</p>
-        <p><strong>First to solve:</strong> 100 points</p>
-        <p><strong>Second to solve:</strong> 50 points</p>
-        <p><strong>Speed bonus:</strong> +50 (≤3s), +25 (≤5s), +10 (≤10s)</p>
-        <p><strong>Streak bonus:</strong> +100 (10+ streak), +50 (5+ streak), +25 (3+ streak)</p>
+        <p><strong>Correct words:</strong> Points are awarded for each valid answer.</p>
+        <p><strong>Fastest answer:</strong> Highest points for the quickest correct submission.</p>
+        <p><strong>Team score (Team Up):</strong> All correct answers count toward the team total.</p>
+        <p><strong>Streak bonuses:</strong> Keep solving correctly to earn extra score boosts.</p>
         
         <p style="font-weight:700;margin-top:16px;margin-bottom:12px;">💡 Tips</p>
-        <p>• Type your answer and press Enter or click Submit</p>
-        <p>• Use hints (costs coins) if you're stuck</p>
-        <p>• Build streaks for bonus points</p>
-        <p>• Solve quickly for speed bonuses</p>
-        <p>• Earn XP and coins from all game modes</p>
+        <p>• Type your answer and press Enter or click Submit.</p>
+        <p>• In FFA, prioritize speed and accuracy — the fastest solver wins the biggest rewards.</p>
+        <p>• In Team Up, communicate with your teammate and focus on building the shared team score.</p>
+        <p>• Use streaks to amplify your score and climb the leaderboard.</p>
         
         <p style="font-weight:700;margin-top:16px;margin-bottom:12px;">🏆 Ranking System</p>
-        <p>MMR increases with wins and decreases with losses in ranked matches. Higher MMR unlocks longer words and better leagues!</p>
+        <p>MMR increases with wins and decreases with losses in ranked matches. Higher MMR unlocks tougher words and better league placement.</p>
       </div>
     </div>
   </div>
@@ -1088,26 +1086,20 @@
         action: n.action || null
       }));
 
-      // Also include any inline developer notification (e.g. window.developerNotification)
+      const allNotifications = [...systemNotifications, ...dbNotifications];
+      
+      // Developer notices always appear first, followed by system and other notifications.
+      const developerNotifications = [];
       try {
         const dev = window.developerNotification;
         if (dev && dev.enabled) {
-          const devObj = { title: dev.title || 'Developer', body: dev.body || '', action: null };
-          const lastDevId = localStorage.getItem('last_dev_notif_id');
-          // Put developer notification at the front so it's visible immediately
-          dbNotifications.unshift(devObj);
-          if (dev.id && lastDevId !== dev.id) {
-            requestNotificationPermission().then(granted => {
-              if (granted) showNativeNotification(dev.title || 'Developer', dev.body || '');
-            });
-            localStorage.setItem('last_dev_notif_id', dev.id);
-          }
+          developerNotifications.push({ title: dev.title || 'Developer', body: dev.body || '', action: null });
         }
-      } catch(e) { /* ignore if window not accessible */ }
+      } catch (e) { /* ignore if window not accessible */ }
+
+      const combinedNotifications = [...developerNotifications, ...allNotifications];
       
-      const allNotifications = [...systemNotifications, ...dbNotifications];
-      
-      const list = allNotifications.map(n => {
+      const list = combinedNotifications.map(n => {
         let actionAttr = '';
         if (typeof n.action === 'function') {
           actionAttr = `onclick="(${n.action.toString()})()"`;
