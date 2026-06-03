@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Poppins:wght@500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-  <!-- Developer System Notifications -->
+  <!-- Developer System Notifications (disabled for APK) -->
   <script id="developerNotificationScript"></script>
   <script>
     if (typeof window.supabase === 'undefined') {
@@ -624,8 +624,7 @@
       showApp();
       updateBadges();
       renderLeaderboardPreview();
-      fetchDeveloperNotifications();
-      setInterval(fetchDeveloperNotifications, 300000); // Check for dev updates every 5 minutes
+      // Developer notifications are disabled for APK release.
     }
 
     /* ========================================== DATA ========================================== */
@@ -704,13 +703,11 @@
             achievements: [],
             email: authUser?.email || ''
           };
-          console.log('[Profile] Creating new profile with payload:', insertPayload);
           const { data: createdData, error: createErr } = await sb.from('profiles').insert(insertPayload).select().single();
           if (createErr) {
             console.error('[Profile] Profile creation failed:', createErr);
             // If email column doesn't exist, try without it
             if (createErr.code === 'PGRST204' || (createErr.message && createErr.message.includes('email'))) {
-              console.log('[Profile] Email column not found or error, retrying without email');
               const payloadWithoutEmail = { ...insertPayload };
               delete payloadWithoutEmail.email;
               const { data: retryData, error: retryErr } = await sb.from('profiles').insert(payloadWithoutEmail).select().single();
@@ -804,12 +801,9 @@
     }
 
     async function preloadData(){
-      console.log("[Cache] Preloading state...");
       // Debug: fetch raw messages to inspect schema and errors
       try{
-        const { data: dbgData, error: dbgErr } = await sb.from('messages').select('*');
-        console.log('MESSAGES DATA:', dbgData);
-        console.log('MESSAGES ERROR:', dbgErr);
+        await sb.from('messages').select('*');
       }catch(e){ console.warn('Debug messages fetch failed', e); }
       const [msgs, invs, friendReqs, notifs, globalMsgs, leaders, friends] = await Promise.all([
         sb.from('messages').select('*').or(`to_user_id.eq.${currentUserId},from_user_id.eq.${currentUserId}`).order('created_at', {ascending: false}),
@@ -858,7 +852,6 @@
 
     function setupRealtime(){
       cleanupRealtime();
-      console.log('[Realtime] Initializing subscription for:', currentUserId);
 
       socialChannel = sb.channel('social-sync', { config: { presence: { key: currentUserId } } });
       socialChannel.on('presence', { event: 'sync' }, () => {
@@ -886,19 +879,13 @@
         }
       });
       socialChannel.subscribe(async (status) => { 
-        console.log('[Realtime] Social channel status:', status);
         if (status === 'SUBSCRIBED') await trackPresence('online');
       });
       
       dbChannel = sb.channel('db-sync');
       dbChannel
-        // WILD-CARD LISTENER FOR DEBUGGING
-        .on('postgres_changes', { event: '*', schema: 'public' }, (payload) => {
-          console.log('[Realtime] DB Change Received (Any):', payload);
-        })
         // Messages: INSERT for received messages
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `to_user_id=eq.${currentUserId}` }, async (p) => {
-          console.log('[Realtime] New message received:', p.new);
           if (!GameCache.profiles[p.new.from_user_id]) await fetchProfile(p.new.from_user_id);
           if (!GameCache.messages.some(m => m.id === p.new.id)) {
             GameCache.messages.unshift(p.new);
@@ -921,7 +908,6 @@
         })
         // Messages: INSERT for sent messages (sync across devices)
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `from_user_id=eq.${currentUserId}` }, async (p) => {
-          console.log('[Realtime] Message sent confirmation:', p.new);
           if (!GameCache.profiles[p.new.to_user_id]) await fetchProfile(p.new.to_user_id);
           if (!GameCache.messages.some(m => m.id === p.new.id)) {
             GameCache.messages.unshift(p.new);
@@ -946,7 +932,6 @@
         })
         // Game Invites
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'game_invites', filter: `to_user_id=eq.${currentUserId}` }, async (p) => {
-          console.log('[Realtime] New game invite received:', p.new);
           if (!GameCache.profiles[p.new.from_user_id]) await fetchProfile(p.new.from_user_id);
           if (!GameCache.invites.some(i => i.id === p.new.id)) {
             GameCache.invites.unshift(p.new);
@@ -971,7 +956,6 @@
         })
         // Friend Requests
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'friend_requests', filter: `to_user_id=eq.${currentUserId}` }, async (p) => {
-          console.log('[Realtime] Friend Request received:', p.new);
           if (!GameCache.profiles[p.new.from_user_id]) await fetchProfile(p.new.from_user_id);
           GameCache.friendRequests.unshift(p.new);
           updateBadges();
@@ -990,7 +974,6 @@
         })
         // Notifications
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${currentUserId}` }, (p) => {
-          console.log('[Realtime] Notification received:', p.new);
           GameCache.notifications.unshift(p.new);
           updateBadges();
           refreshOpenSocialView();
@@ -1008,7 +991,6 @@
             level: Number(p.new.level) || 1,
             coins: Number(p.new.coins) || 0
           };
-          console.log('[Realtime] Profile updated:', profile);
           GameCache.profiles[profile.id] = profile;
 
           // Update current user stats if this is our profile
@@ -1068,33 +1050,14 @@
           if (document.getElementById('globalChatModal').classList.contains('active')) renderGlobalChat();
         })
         .subscribe((status, err) => {
-          console.log('[Realtime] DB channel status:', status);
           if (err) console.error('[Realtime] DB channel error:', err);
-        });
-
-      // DEBUG SUBSCRIPTION ADDED HERE
-      sb.channel('debug-messages')
-        .on(
-          'postgres_changes',
-          {
-            event: '*',
-            schema: 'public',
-            table: 'messages'
-          },
-          payload => {
-            console.log('MESSAGE EVENT:', payload);
-          }
-        )
-        .subscribe(status => {
-          console.log('DEBUG STATUS:', status);
         });
     }
 
     /* ========= Toast Notifications ========= */
     function showToast(type, title, message, onClick = null) {
-      console.log(`[Toast] ${type}: ${title}`);
       const container = document.getElementById('toastContainer');
-      if (!container) return console.error('Toast container not found');
+      if (!container) return;
 
       const toast = document.createElement('div');
       toast.className = `toast ${type}`;
@@ -1273,7 +1236,6 @@
       const developerNotifications = [];
       try {
         const dev = window.developerNotification;
-        console.log('[Notifications] Developer notification config in openNotifications:', dev);
         if (dev && dev.enabled) {
           developerNotifications.push({ title: dev.title || 'Developer', body: dev.body || '', action: null });
         }
@@ -1485,19 +1447,24 @@
     document.getElementById("saveProfileBtn").onclick = async () => {
       const newName = document.getElementById("displayNameInput").value.trim();
       if(!newName) return;
-      const updatePayload = { display_name: newName, avatar_url: GameCache.user.avatar_url };
-      const { error } = await sb.from('profiles').update(updatePayload).eq('id', currentUserId);
-      if (!error) {
-        alert("Profile saved!");
-        saveLocalProfileFallback(updatePayload);
-        loadProfile();
-      } else {
-        console.warn('[Profile] Remote save failed, storing locally instead:', error);
-        saveLocalProfileFallback(updatePayload);
-        alert("Profile save failed online, but your avatar and name are saved locally.");
-        GameCache.user.display_name = newName;
-        updateStatsUI();
+      const updatePayload = { display_name: newName, avatar_url: GameCache.user.avatar_url || avatars[0] };
+      GameCache.user.display_name = newName;
+      GameCache.user.avatar_url = updatePayload.avatar_url;
+      if (GameCache.profiles[currentUserId]) {
+        GameCache.profiles[currentUserId].display_name = newName;
+        GameCache.profiles[currentUserId].avatar_url = updatePayload.avatar_url;
       }
+      document.getElementById("headerName").innerText = newName;
+      document.getElementById("profileAvatar").src = updatePayload.avatar_url;
+      document.getElementById("headerAvatar").src = updatePayload.avatar_url;
+      saveLocalProfileFallback(updatePayload);
+      showToast('notification', 'Profile saved', 'Your profile changes were updated locally.');
+      (async () => {
+        const { error } = await sb.from('profiles').update(updatePayload).eq('id', currentUserId);
+        if (error) {
+          console.warn('[Profile] Remote save failed:', error);
+        }
+      })();
     };
 
     function openAboutModal(){ openModal("aboutModal"); }
@@ -1516,13 +1483,9 @@
     
     function renderGlobalChat() {
       const container = document.getElementById('globalChatMessages');
-      console.log('Rendering global chat, messages count:', GameCache.globalChatMessages.length);
-      
       // Filter out messages older than 24 hours
       const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
       const recentMessages = GameCache.globalChatMessages.filter(m => m.created_at >= twentyFourHoursAgo);
-      console.log('Recent messages after filtering:', recentMessages.length);
-      
       container.innerHTML = recentMessages.map(m => {
         // Use display_name from message if available, otherwise get from profiles cache
         let sender = GameCache.profiles[m.user_id] || { 
@@ -1542,7 +1505,6 @@
         const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         const dateStr = date.toLocaleDateString([], { month: 'short', day: 'numeric' });
         
-        console.log('Rendering message:', { sender: sender.display_name, isMe, message: m.message });
         
         return `<div style="display:flex;align-items:flex-end;gap:8px;margin-bottom:12px;${isMe ? 'flex-direction:row-reverse;' : ''}">
           <img src="${sender.avatar_url || avatars[0]}" style="width:32px;height:32px;border-radius:50%;">
@@ -1554,7 +1516,6 @@
       }).join('');
       
       container.scrollTop = container.scrollHeight;
-      console.log('Global chat rendered');
     }
     
     async function sendGlobalMessage() {
@@ -1575,8 +1536,6 @@
         message: message,
         display_name: GameCache.user.display_name
       }).select();
-      
-      console.log('Global chat send result:', { data, error });
       
       if (error) {
         console.error('Failed to send global message:', error);
@@ -2256,8 +2215,6 @@
         ])
         .select();
 
-      console.log(data);
-      console.log(error);
       if (error) { console.error('sendMsg error', error); chatInput.value = messageText; return; }
 
       // Immediately add to local cache and re-render
@@ -2857,8 +2814,10 @@
     }
 
     async function fetchDeveloperNotifications() {
-      const notificationUrl = `https://raw.githubusercontent.com/bandaamos98-create/anagram-rush/main/notification.js?t=${Date.now()}`;
-      console.log('[Notifications] Fetching developer notification from', notificationUrl);
+      // Remote developer notifications are disabled for APK release.
+      return;
+
+      const notificationUrl = `https://raw.githubusercontent.com/OWNER/REPO/main/notification.js?t=${Date.now()}`;
 
       try {
         const response = await fetch(notificationUrl);
@@ -2866,7 +2825,6 @@
           throw new Error(`HTTP ${response.status}`);
         }
         const text = await response.text();
-        console.log('[Notifications] Loaded successfully');
 
         // Simple extraction logic if they use window.developerNotification = { ... }
         if (text.includes('developerNotification')) {
@@ -2877,7 +2835,6 @@
 
           if (config && config.enabled) {
             window.developerNotification = config;
-            console.log('[Notifications] Developer notification config saved:', config);
             // Check if we've already shown this specific notification ID
             const lastId = localStorage.getItem('last_dev_notif_id');
             if (lastId !== config.id) {
