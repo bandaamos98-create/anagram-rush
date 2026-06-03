@@ -1651,11 +1651,11 @@
     
     function closeSocialModal() { setSocialModalFullscreen(false); closeModal('socialModal'); document.getElementById('socialModal').dataset.activeChatId = ""; }
     function getRankData(mmr, leaderboardPos = null) {
-      mmr = mmr || 0;
+      const currentMMR = parseInt(mmr) || 0;
       if (leaderboardPos === 1) return { name: "World #1", icon: "🌎", color: "#3b82f6" };
-      if (leaderboardPos <= 10 && leaderboardPos !== null) return { name: "Word God", icon: "💀", color: "#ef4444" };
-      if (leaderboardPos <= 100 && leaderboardPos !== null) return { name: "Anagram King", icon: "👑", color: "#f59e0b" };
-      if (mmr >= 5500) return { name: "Anagram Champion", icon: "🏆", color: "#22c55e" };
+      if (leaderboardPos <= 10 && leaderboardPos !== null && leaderboardPos > 0) return { name: "Word God", icon: "💀", color: "#ef4444" };
+      if (leaderboardPos <= 100 && leaderboardPos !== null && leaderboardPos > 0) return { name: "Anagram King", icon: "👑", color: "#f59e0b" };
+      if (currentMMR >= 5500) return { name: "Anagram Champion", icon: "🏆", color: "#22c55e" };
 
       const tiers = [
         { name: "Bronze", icon: "🥉", color: "#cd7f32" },
@@ -1669,9 +1669,11 @@
         { name: "Mythic", icon: "🌟", color: "#cc33ff" }
       ];
 
-      const tierIdx = Math.floor(mmr / 600);
-      const tier = tiers[Math.max(0, Math.min(tierIdx, tiers.length - 1))];
-      const divisionNum = Math.floor((Math.abs(mmr) % 600) / 200) + 1;
+      let tierIdx = Math.floor(currentMMR / 600);
+      tierIdx = Math.max(0, Math.min(tierIdx, tiers.length - 1));
+      const tier = tiers[tierIdx];
+
+      const divisionNum = Math.floor((Math.abs(currentMMR) % 600) / 200) + 1;
       const division = divisionNum === 1 ? "I" : divisionNum === 2 ? "II" : "III";
 
       return { name: `${tier.name} ${division}`, icon: tier.icon, color: tier.color };
@@ -1687,6 +1689,7 @@
     }
 
     function getLeaderboardPosition(userId) {
+      if (!GameCache.leaderboard || !Array.isArray(GameCache.leaderboard)) return null;
       const pos = GameCache.leaderboard.findIndex(p => p.id === userId);
       return pos === -1 ? null : pos + 1;
     }
@@ -2279,10 +2282,12 @@
         document.getElementById('roundCount').innerText = timeDisplay;
         
         // Update opponent score if changed (check if opponent made progress)
-        const opponentId = GameCache.match.from_user_id === currentUserId ? GameCache.match.to_user_id : GameCache.match.from_user_id;
-        const oppScoreEl = document.getElementById('oppScore');
-        if (oppScoreEl && oppScoreEl.innerText != GameCache.match.playerScores[opponentId]) {
-          oppScoreEl.innerText = GameCache.match.playerScores[opponentId];
+        const opponentId = GameCache.match.participants.find(id => id !== currentUserId);
+        if (opponentId && document.getElementById('oppScore')) {
+          const score = GameCache.match.playerScores[opponentId] || 0;
+          if (document.getElementById('oppScore').innerText != score) {
+            document.getElementById('oppScore').innerText = score;
+          }
         }
         
         if (remaining <= 0) {
@@ -2322,8 +2327,8 @@
         const opponentId = GameCache.match.participants.find(id => id !== currentUserId);
         document.getElementById('meName').innerText = "You";
         document.getElementById('oppName').innerText = GameCache.match.playerNames[opponentId];
-        document.getElementById('myScore').innerText = GameCache.match.playerScores[currentUserId];
-        document.getElementById('oppScore').innerText = GameCache.match.playerScores[opponentId];
+        document.getElementById('myScore').innerText = GameCache.match.playerScores[currentUserId] || 0;
+        document.getElementById('oppScore').innerText = GameCache.match.playerScores[opponentId] || 0;
         document.getElementById('meAvatar').style.backgroundImage = `url('${GameCache.match.playerAvatars[currentUserId]}')`;
         document.getElementById('oppAvatar').style.backgroundImage = `url('${GameCache.match.playerAvatars[opponentId]}')`;
       }
@@ -2335,7 +2340,22 @@
       const remainingTime = Math.max(0, Math.ceil((GameCache.match.endsAt - Date.now()) / 1000));
       const minutes = Math.floor(remainingTime / 60);
       const seconds = remainingTime % 60;
-      document.getElementById('roundCount').innerText = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+      const timeDisplay = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+      document.getElementById('roundCount').innerText = timeDisplay;
+
+      // Update hint button text based on match mode and player coins
+      const hintBtn = document.getElementById('hintBtn');
+      if (hintBtn) {
+        let hintCost = 10;
+        if (GameCache.match.mode === 'single' || GameCache.match.mode === 'ai') {
+          hintCost = 10;
+        } else if (GameCache.match.mode === 'ranked' || GameCache.match.mode === 'team') {
+          hintCost = 30;
+        } else {
+          hintCost = 20;
+        }
+        hintBtn.innerText = `💡 Hint (${hintCost} 🪙 | Own: ${GameCache.user.coins})`;
+      }
       
       if (!GameCache.match.roundStartTime) GameCache.match.roundStartTime = Date.now();
 
@@ -2365,12 +2385,12 @@
         const teamBPlayersData = [];
         
         Object.keys(GameCache.match.playerScores).forEach(playerId => {
-          const score = GameCache.match.playerScores[playerId];
+          const score = GameCache.match.playerScores[playerId] || 0;
           const profile = GameCache.profiles[playerId] || { display_name: 'Player', avatar_url: avatars[0] };
           const playerData = { playerId, score, ...profile };
           
           // Determine which team
-          if (GameCache.match.playerTeams[playerId] === 'A') {
+          if (GameCache.match.playerTeams && GameCache.match.playerTeams[playerId] === 'A') {
             teamAScore += score;
             teamAPlayersData.push(playerData);
           } else {
@@ -2383,7 +2403,7 @@
         teamAPlayersData.sort((a, b) => b.score - a.score);
         teamBPlayersData.sort((a, b) => b.score - a.score);
         
-        const myTeam = GameCache.match.playerTeams[currentUserId];
+        const myTeam = (GameCache.match.playerTeams && GameCache.match.playerTeams[currentUserId]) || 'B';
         const teamResult = teamAScore > teamBScore ? (myTeam === 'A' ? 'win' : 'loss') : teamAScore < teamBScore ? (myTeam === 'B' ? 'win' : 'loss') : 'tie';
 
         const summaryHTML = `
@@ -2442,7 +2462,7 @@
       if (mode === 'ffa') {
         // Free for All mode results
         const playersData = Object.keys(GameCache.match.playerScores).map(playerId => {
-          const score = GameCache.match.playerScores[playerId];
+          const score = GameCache.match.playerScores[playerId] || 0;
           const profile = GameCache.profiles[playerId] || { display_name: 'Player', avatar_url: avatars[0] };
           return { playerId, score, ...profile };
         });
@@ -2483,7 +2503,8 @@
       }
       
       // Original 1v1 match logic
-      const oppId = GameCache.match.from_user_id === currentUserId ? GameCache.match.to_user_id : GameCache.match.from_user_id;
+      const opponentId = GameCache.match.participants.find(id => id !== currentUserId);
+      const oppId = opponentId;
       const oppScore = GameCache.match.playerScores[oppId] || 0;
       const result = meScore > oppScore ? 'win' : meScore < oppScore ? 'loss' : 'tie';
       
@@ -2589,27 +2610,16 @@
             </div>
           </div>
           
-          ${isRanked ? `
           <div style="background:rgba(59,130,246,0.1);padding:20px;border-radius:16px;margin-bottom:20px;border:1px solid rgba(59,130,246,0.3);">
             <h3 style="margin-bottom:15px;color:var(--blue);">Rewards</h3>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:14px;">
               <div>XP Gained: <strong style="color:var(--success);">+${xpGained}</strong></div>
               <div>Coins: <strong style="color:var(--warning);">+${coinsGained}</strong></div>
-              <div>MMR Change: <strong style="color:${result === 'win' ? 'var(--success)' : 'var(--danger)'};">${result === 'win' ? '+' : ''}${mmrChange.winnerChange || mmrChange.loserChange}</strong></div>
-              <div>Level: <strong>${GameCache.user.level}</strong></div>
+              ${isRanked ? `<div>MMR Change: <strong style="color:${result === 'win' ? 'var(--success)' : 'var(--danger)'};">${result === 'win' ? '+' : ''}${mmrChange.winnerChange || mmrChange.loserChange}</strong></div>` : ''}
+              <div>Current Level: <strong>${GameCache.user.level}</strong></div>
             </div>
           </div>
-          ` : `
-          <div style="background:rgba(59,130,246,0.1);padding:20px;border-radius:16px;margin-bottom:20px;border:1px solid rgba(59,130,246,0.3);">
-            <h3 style="margin-bottom:15px;color:var(--blue);">Rewards</h3>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:14px;">
-              <div>XP Gained: <strong style="color:var(--success);">+${xpGained}</strong></div>
-              <div>Coins: <strong style="color:var(--warning);">+${coinsGained}</strong></div>
-              <div>Level: <strong>${GameCache.user.level}</strong></div>
-            </div>
-          </div>
-          `}
-          
+
           ${mvp ? `<div style="background:rgba(139,92,246,0.1);padding:15px;border-radius:12px;margin-bottom:20px;border:1px solid rgba(139,92,246,0.3);text-align:center;"><strong style="color:var(--purple);">${mvp}</strong></div>` : ''}
           
           <div style="background:rgba(255,255,255,0.05);padding:15px;border-radius:12px;margin-bottom:20px;">
@@ -2617,7 +2627,7 @@
             <div style="background:rgba(255,255,255,0.1);height:8px;border-radius:4px;overflow:hidden;">
               <div style="background:linear-gradient(90deg,var(--blue),var(--purple));height:100%;width:${getXPProgress()}%;transition:width 0.5s;"></div>
             </div>
-            <div style="font-size:11px;opacity:0.6;margin-top:4px;">${getXPProgress()}% to Level ${GameCache.user.level + 1}</div>
+            <div style="font-size:11px;opacity:0.6;margin-top:4px;">${getXPProgress().toFixed(1)}% to Level ${GameCache.user.level + 1}</div>
           </div>
         </div>
       `;
@@ -2628,7 +2638,7 @@
       // Save match history
       GameCache.matchHistory.push({
         matchId: GameCache.match.matchId,
-        opponent: GameCache.match.playerNames[oppId],
+        opponent: GameCache.match.playerNames[oppId] || 'Opponent',
         result,
         score: meScore,
         oppScore,
@@ -2639,8 +2649,6 @@
       
       // Update profile in database
       updateProfileAfterMatch(result, isRanked, mmrChange);
-      
-      setTimeout(() => endMatch(), 5000);
     }
     
     async function updateProfileAfterMatch(result, isRanked, mmrChange) {
