@@ -606,11 +606,9 @@
       if (profileErr) console.error('[Profile] Error fetching profile:', profileErr);
 
       let authUser = null;
-      try {
-        const { data } = await sb.auth.getUser();
-        authUser = data.user;
-      } catch (e) {
-        console.warn('[Auth] getUser failed, might be session issue:', e);
+      const { data: sessionData } = await sb.auth.getSession();
+      if (sessionData.session) {
+        authUser = sessionData.session.user;
       }
 
       if(!profile) {
@@ -676,7 +674,7 @@
           draws: profile.draws,
           rank_points: profile.rank_points || 0,
           streak: profile.streak || 0,
-          league: profile.league || getLeague(profile.mmr),
+          league: profile.league || getRank(profile.mmr),
           xp: profile.xp,
           level: profile.level,
           coins: profile.coins,
@@ -710,7 +708,7 @@
         sb.from('friend_requests').select('*').eq('to_user_id', currentUserId).eq('status', 'pending'),
         sb.from('notifications').select('*').eq('user_id', currentUserId).eq('is_read', false),
         sb.from('global_chat').select('*').order('created_at', {ascending: false}).limit(100),
-        sb.from('profiles').select('id, display_name, mmr, avatar_url, wins, losses, draws').order('mmr', {ascending: false}).limit(1000),
+        sb.from('profiles').select('id, display_name, mmr, avatar_url, wins, losses, draws').order('mmr', {ascending: false}),
         sb.from('friends').select('friend_id').eq('user_id', currentUserId)
       ]);
       GameCache.messages = msgs.data || [];
@@ -978,7 +976,7 @@
       document.getElementById("profileName").innerText = data.display_name || "Player";
       document.getElementById("profileAvatar").src = data.avatar_url || avatars[0];
       document.getElementById("profileEmail").innerText = data.email || "Signed in with Google";
-      document.getElementById("profileLeagueBadge").innerText = getLeague(data.mmr) + " League";
+      document.getElementById("profileLeagueBadge").innerText = getRank(data.mmr) + " League";
       document.getElementById("displayNameInput").value = data.display_name || "";
       
       openModal("profileModal");
@@ -1049,7 +1047,7 @@
       
       // League notification
       const currentMMR = GameCache.user.mmr || 0;
-      const currentLeague = getLeague(currentMMR);
+      const currentLeague = getRank(currentMMR);
       systemNotifications.push({
         title: '🏆 Current League',
         body: `You are in ${currentLeague} with ${currentMMR} MMR`,
@@ -1380,26 +1378,7 @@
         return;
       }
       
-      // Immediately add to local cache and re-render
-      if (data) {
-        // Handle both array and single object responses
-        const messageData = Array.isArray(data) ? data[0] : data;
-        console.log('Adding message to cache:', messageData);
-        GameCache.globalChatMessages.unshift(messageData);
-        
-        // Force re-render with a small delay to ensure DOM is ready
-        setTimeout(() => {
-          const container = document.getElementById('globalChatMessages');
-          if (container) {
-            console.log('Container found, rendering...');
-            renderGlobalChat();
-          } else {
-            console.log('Container not found');
-          }
-        }, 100);
-      } else {
-        console.log('No data returned from insert');
-      }
+      // Removed manual addition to GameCache - let Realtime listener handle it
       
       input.value = '';
     }
@@ -1672,6 +1651,7 @@
     
     function closeSocialModal() { setSocialModalFullscreen(false); closeModal('socialModal'); document.getElementById('socialModal').dataset.activeChatId = ""; }
     function getRankData(mmr, leaderboardPos = null) {
+      mmr = mmr || 0;
       if (leaderboardPos === 1) return { name: "World #1", icon: "🌎", color: "#3b82f6" };
       if (leaderboardPos <= 10 && leaderboardPos !== null) return { name: "Word God", icon: "💀", color: "#ef4444" };
       if (leaderboardPos <= 100 && leaderboardPos !== null) return { name: "Anagram King", icon: "👑", color: "#f59e0b" };
@@ -1690,8 +1670,8 @@
       ];
 
       const tierIdx = Math.floor(mmr / 600);
-      const tier = tiers[Math.min(tierIdx, tiers.length - 1)];
-      const divisionNum = Math.floor((mmr % 600) / 200) + 1;
+      const tier = tiers[Math.max(0, Math.min(tierIdx, tiers.length - 1))];
+      const divisionNum = Math.floor((Math.abs(mmr) % 600) / 200) + 1;
       const division = divisionNum === 1 ? "I" : divisionNum === 2 ? "II" : "III";
 
       return { name: `${tier.name} ${division}`, icon: tier.icon, color: tier.color };
@@ -1761,16 +1741,6 @@
     }
 
     function updateStatsUI(){
-      const rank = getRank(GameCache.user.mmr, GameCache.user.leaderboardPos);
-      document.getElementById("mmr").innerText = GameCache.user.mmr;
-      document.getElementById("wins").innerText = GameCache.user.wins;
-      document.getElementById("losses").innerText = GameCache.user.losses;
-      document.getElementById("draws").innerText = GameCache.user.draws || 0;
-
-      const totalGames = (GameCache.user.wins || 0) + (GameCache.user.losses || 0) + (GameCache.user.draws || 0);
-      const winRate = totalGames > 0 ? Math.round((GameCache.user.wins / totalGames) * 100) : 0;
-
-    function updateStatsUI(){
       const currentMMR = GameCache.user.mmr || 0;
       const rankData = getRankData(currentMMR, GameCache.user.leaderboardPos);
       const rank = `${rankData.icon} ${rankData.name}`;
@@ -1781,34 +1751,40 @@
       document.getElementById("draws").innerText = GameCache.user.draws || 0;
 
       const leagueBadge = document.getElementById("leagueBadge");
-      leagueBadge.innerText = rank;
-      leagueBadge.style.color = rankData.color;
+      if (leagueBadge) {
+        leagueBadge.innerText = rank;
+        leagueBadge.style.color = rankData.color;
+      }
 
-      document.getElementById("headerRank").innerText = rankData.name;
-      document.getElementById("rankNameDisplay").innerText = rankData.name;
+      const headerRank = document.getElementById("headerRank");
+      if (headerRank) headerRank.innerText = rankData.name;
+
+      const rankNameDisplay = document.getElementById("rankNameDisplay");
+      if (rankNameDisplay) rankNameDisplay.innerText = rankData.name;
+
+      const coinsDisplay = document.getElementById("coinsDisplay");
+      if (coinsDisplay) coinsDisplay.innerText = GameCache.user.coins;
       
       // Update Rank Progress Bar based on MMR
       const tierMMR = 600;
       const currentTierStart = Math.floor(currentMMR / tierMMR) * tierMMR;
       const currentTierProgress = ((currentMMR - currentTierStart) / tierMMR) * 100;
       
-      document.getElementById("xpBar").style.width = `${Math.min(100, Math.max(0, currentTierProgress))}%`;
+      const xpBar = document.getElementById("xpBar");
+      if (xpBar) xpBar.style.width = `${Math.min(100, Math.max(0, currentTierProgress))}%`;
 
       const nextRankThreshold = currentTierStart + tierMMR;
-      document.getElementById("xpText").innerText = `${currentMMR} / ${nextRankThreshold} MMR`;
-
-      const coinsDisplay = document.getElementById("coinsDisplay");
-      if (coinsDisplay) coinsDisplay.innerText = GameCache.user.coins;
-    }
+      const xpText = document.getElementById("xpText");
+      if (xpText) xpText.innerText = `${currentMMR} / ${nextRankThreshold} MMR`;
     }
     function renderLeaderboardPreview(){
       const cont = document.getElementById('leaderboardPreview');
-      cont.innerHTML = GameCache.leaderboard.slice(0,5).map((l, i) => `<div class="leader-item"><div class="leader-left"><img class="small-avatar" src="${l.avatar_url || avatars[0]}"><div><div style="font-weight:700">${i+1}. ${l.display_name}</div><div style="font-size:11px;opacity:0.6">${getLeague(l.mmr)}</div></div></div><div style="text-align:right"><div style="font-weight:800">${l.mmr}</div><div style="font-size:11px;opacity:0.7">W:${l.wins||0} D:${l.draws||0} L:${l.losses||0}</div></div></div>`).join('');
+      cont.innerHTML = GameCache.leaderboard.slice(0,5).map((l, i) => `<div class="leader-item"><div class="leader-left"><img class="small-avatar" src="${l.avatar_url || avatars[0]}"><div><div style="font-weight:700">${i+1}. ${l.display_name}</div><div style="font-size:11px;opacity:0.6">${getRank(l.mmr)}</div></div></div><div style="text-align:right"><div style="font-weight:800">${l.mmr}</div><div style="font-size:11px;opacity:0.7">W:${l.wins||0} D:${l.draws||0} L:${l.losses||0}</div></div></div>`).join('');
     }
     function openLeaderboard(){
       document.getElementById('socialTitle').innerText = "Global Leaders";
       const cont = document.getElementById('socialContent');
-      cont.innerHTML = GameCache.leaderboard.map((l, i) => `<div class="leader-item"><div class="leader-left"><img class="small-avatar" src="${l.avatar_url || avatars[0]}"><div><div style="font-weight:700">${i+1}. ${l.display_name}</div><div style="font-size:11px;opacity:0.6">${getLeague(l.mmr)}</div></div></div><div style="text-align:right"><div style="font-weight:800">${l.mmr}</div><div style="font-size:11px;opacity:0.7">W:${l.wins||0} D:${l.draws||0} L:${l.losses||0}</div></div></div>`).join('');
+      cont.innerHTML = GameCache.leaderboard.map((l, i) => `<div class="leader-item"><div class="leader-left"><img class="small-avatar" src="${l.avatar_url || avatars[0]}"><div><div style="font-weight:700">${i+1}. ${l.display_name}</div><div style="font-size:11px;opacity:0.6">${getRank(l.mmr)}</div></div></div><div style="text-align:right"><div style="font-weight:800">${l.mmr}</div><div style="font-size:11px;opacity:0.7">W:${l.wins||0} D:${l.draws||0} L:${l.losses||0}</div></div></div>`).join('');
       openModal('socialModal');
     }
     async function logout(){ await trackPresence('offline'); cleanupRealtime(); await sb.auth.signOut(); window.location.reload(); }
@@ -2061,7 +2037,10 @@
     const additionalWords = ['abduct','abroad','absent','absorb','accent','accept','access','accident','accord','account','accrue','accuse','active','actual','advice','advise','aerial','affair','affect','afford','afraid','agency','agenda','almost','always','amount','anchor','animal','annual','answer','anxiety','anybody','anyone','anywhere','appear','around','arrange','arrest','arrive','artist','aspect','assess','assist','assume','assure','attach','attack','attend','august','author','autumn','backup','barely','barrel','basket','battle','beauty','became','become','before','behave','behind','belief','belong','beside','better','beyond','bishop','bitter','blanket','blind','blossom','borrow','bother','bounce','branch','breath','bridge','bright','broken','bubble','budget','burden','bureau','button','cabinet','camera','cancel','cannot','canvas','carbon','career','castle','casual','catcher','caught','center','centre','chance','change','charge','charity','charter','chase','cheap','cheese','cherry','choice','choose','chosen','church','circle','client','cliff','clinic','closed','closer','closet','clothe','coffee','column','combat','comedy','comfort','command','comment','common','company','compare','compete','comply','compose','compute','concept','concern','conduct','confess','confirm','connect','consent','consist','consult','contact','contain','content','contest','context','control','convert','convict','convince','cook','cooker','cookie','copper','corner','correct','cotton','council','counsel','counter','country','county','couple','course','cousin','create','credit','crisis','critic','custom','damage','danger','dealer','debate','decade','decide','decree','defeat','defend','define','degree','demand','denial','depend','deputy','desert','design','desire','detail','detect','device','devote','differ','dinner','direct','doctor','dollar','domain','double','dozen','drawer','driver','during','easier','easily','eating','editor','effect','effort','eighth','either','eleven','emerge','empire','employ','enable','ending','energy','engage','engine','enough','ensure','entire','entity','entry','equal','equip','escape','estate','ethnic','exceed','except','excess','excite','excuse','exempt','expand','expect','expert','export','expose','extend','extent','fabric','factor','failed','fairly','fallen','family','famous','farmer','father','fellow','female','figure','filter','finger','finish','finite','firmly','fiscal','flight','flower','flying','follow','forbid','forced','forest','forget','formal','format','former','foster','fought','fourth','freeze','french','friend','frozen','future','garden','gather','gender','general','gentle','gently','giant','given','glasses','golden','gospel','gotten','govern','governor','grains','grand','grant','grapes','graph','grateful','ground','growth','guilty','handle','happen','hardly','harvest','hazard','headed','health','hearing','heaven','height','helmet','hidden','higher','highly','history','holder','honest','honour','hoping','horror','hosted','hostel','hostile','hotels','household','housing','humans','hunter','hurt','ignore','illness','impact','import','income','indeed','inform','injury','insect','insert','inside','insist','install','insult','intact','intend','intent','inter','invest','invite','involve','irony','island','itself','jacket','jewish','joined','joints','journey','judge','jungle','junior','keeper','kernel','killed','killer','killing','kingdom','knight','labour','lacked','ladder','ladies','latter','launch','lawyer','layout','leader','league','leaves','legacy','legend','length','lesson','letter','liable','liberal','liberty','library','license','lifted','lights','likely','linked','listen','little','living','locate','locked','lonely','longer','looked','lookup','lovely','loving','lower','lowest','loyalty','lumber','luxury','machine','madness','magnet','manage','manner','manual','margin','marine','market','master','matter','mature','medium','member','memory','mental','mentor','menu','merely','merit','merry','message','method','middle','miller','million','mineral','minimal','minimum','mining','minute','mirror','mobile','modern','modest','module','moment','monkey','monster','months','moral','mostly','motion','motor','mount','mountain','mouse','mouth','moving','murder','museum','mutual','myself','mystery','myth','native','nature','nearby','nearly','neatly','needed','needle','neither','nervous','nest','neutral','newest','night','nobody','normal','notice','notify','notion','number','object','obtain','occupy','ocean','office','offset','online','opened','operate','opinion','oppose','option','orange','origin','output','outset','outside','overall','pacify','packed','packet','palace','parent','parish','partly','partner','passage','passed','patent','patrol','patron','pattern','paying','payment','peaceful','pearl','pedest','people','period','permit','person','phrase','picked','pigeon','pillow','pioneer','planet','planned','plastic','player','please','pledge','plenty','pocket','poetry','police','policy','polite','poll','polls','pond','poorest','portion','portal','portray','pose','posed','poster','potato','potent','poverty','powder','power','praise','prayer','prefer','prefix','prem','premi','prepare','present','prevent','preview','previous','price','prince','prison','private','prize','problem','proceed','process','produce','product','profit','program','project','promote','proper','protect','protest','proud','provide','public','publish','pull','pulled','pulse','pump','punch','pupil','purity','pursue','push','pushed','putting','quaint','quality','quarter','queens','quest','quick','quiet','quit','quite','radical','raised','random','ranger','rapid','rarely','rating','reader','really','reason','recall','recent','record','reduce','reflect','refuse','regard','region','reject','relate','relief','remain','remark','remedy','remote','remove','render','renew','rent','rental','repair','repeat','replace','reply','report','repose','rescue','resent','reside','resign','resist','resort','result','resume','retail','retain','retire','return','reveal','review','revise','revive','revolt','reward','rhythm','ribbon','riding','rights','rising','robust','rocket','rotate','rotten','rough','round','routine','royal','rubber','ruling','rumour','runner','rural','safety','sailed','saint','salary','sample','saving','saying','scale','scared','scene','scheme','school','science','screen','script','search','season','second','secret','sector','secure','seeing','seek','seem','seemed','segment','seize','seldom','select','self','seller','senate','senior','sensing','senses','sensor','sent','series','server','settle','severe','sexual','shadow','shaken','shaped','shared','shaved','sheep','sheet','shelf','shell','shelter','shepherd','sheriff','shield','shift','shiny','shipped','shirt','shock','shoe','shook','shoot','shop','short','shot','shoulder','shout','shown','show','shrink','shrub','shrug','shut','shy','sibling','sick','side','sides','siege','sight','sights','sign','signal','signed','signs','silence','silent','silk','silky','silly','silver','simple','simply','since','sing','singer','single','sink','sinks','sir','sister','sit','site','size','sizes','skill','skills','skin','skins','skip','skips','skirt','skirts','skull','sky','slab','slabs','slack','slain','slam','slams','slang','slap','slaps','slate','slave','slaves','sled','sleds','sleep','sleeps','sleet','slept','slice','slices','slide','slides','slight','slim','slime','slimy','sling','slings','slip','slips','slit','slits','slope','slopes','slot','slots','slow','slug','slugs','slum','slump','slumps','slur','slush','sly','smack','small','smart','smash','smell','smells','smelt','smile','smiles','smirk','smith','smoke','smokes','smooth','smug','snack','snacks','snail','snails','snake','snakes','snap','snaps','snare','snarl','sneak','sneaks','sneeze','sniff','sniffs','snipe','snipes','snob','snobs','snoop','snoops','snow','soak','soaks','soap','soar','soars','sob','sobs','soccer','social','sock','socks','soda','sofa','sofas','soft','soil','soils','solar','sold','sole','soles','solid','solve','solved','solves','some','son','song','songs','sons','soon','soot','soots','sore','sores','sorry','sort','sorts','soul','souls','sound','sounds','soup','soups','sour','source','south','soy','space','spaces','spade','spades','span','spans','spare','spares','spark','sparks','sparrow','speak','speaks','spear','spears','speech','speed','speeds','spell','spells','spend','spends','spent','spice','spices','spider','spike','spikes','spill','spills','spin','spins','spine','spines','spiral','spirit','spite','splash','split','splits','spoil','spoke','spoken','sponge','spoon','spoons','sport','sports','spot','spots','spout','spray','spreads','spring','sprout','spur','spurs','squad','square','squash','squat','squid','stab','stable','stack','stacks','staff','stage','stages','stain','stains','stair','stairs','stake','stakes','stale','stalk','stalks','stall','stalls','stamp','stamps','stand','stands','star','stars','stare','stares','stark','start','starts','starve','state','states','static','statue','status','stay','stays','steak','steaks','steal','steals','steam','steams','steel','steep','steer','steers','stem','stems','step','steps','stereo','stern','stew','stews','stick','sticks','sticky','stiff','still','sting','stings','stink','stinks','stint','stints','stock','stocks','stole','stolen','stomp','stone','stones','stool','stoop','stop','stops','store','stores','storm','storms','story','stout','stove','stoves','strap','straps','straw','straws','stray','stream','street','streets','stress','strict','stride','strife','strike','string','strip','strips','strive','stroke','strokes','strong','struck','struct','strum','stuck','stud','studs','studio','study','stuff','stump','stumps','stung','stunk','stunt','stunts','style','styles','sub','submit','subt','subtle','subway','such','suck','sucks','sudden','suds','sue','sued','sues','suffer','sugar','suggest','suit','suits','sulky','sullen','sum','sums','summer','summit','summon','sun','sunny','sunset','super','supper','supply','sure','surely','surf','surge','surplus','surprise','surreal','surround','survey','survive','suspect','suspend','sustain','swallow','swamp','swamps','swan','swans','swap','swaps','swarm','swarms','sway','sways','swear','sweat','sweats','sweep','sweeps','sweet','sweets','swept','swift','swim','swims','swing','swings','switch','sword','swords','swore','sworn','swung','symbol','symbols','symptom','synth','system','table','tables','tablet','tablets','tack','tacks','tact','tactic','tag','tags','tail','tails','take','taken','takes','taking','tale','tales','talk','talks','tall','tally','tame','tamed','tames','tamer','tang','tangs','tank','tanks','tap','taps','tape','tapes','target','tariff','tart','tarts','task','tasks','taste','tastes','tasty','tattoo','tax','taxes','taxi','tea','teach','team','teams','tear','tears','tease','tech','teeth','tell','tells','temper','temple','temp','temps','ten','tend','tends','tender','tendon','tennis','tense','tents','term','terms','test','tests','text','texts','than','thank','thanks','that','thaw','the','theft','their','them','theme','themes','then','theory','there','these','thesis','they','thick','thief','thieves','thigh','thighs','thin','thing','things','think','thinks','third','thirst','thirty','this','thorn','thorns','those','though','thought','thread','threads','threat','three','threw','thrill','thrills','thrive','throat','throb','throne','thrones','throng','through','throw','throws','thrown','thru','thud','thug','thumb','thumbs','thump','thunder','thus','tick','ticks','ticket','tickets','tide','tides','tidy','tie','tied','tier','tiers','ties','tiger','tigers','tight','tile','tiles','till','tilt','tilts','timber','time','times','timid','tin','tins','tiny','tip','tips','tire','tired','tires','tissue','title','titles','toad','toads','toast','toasts','today','toe','toes','tofu','together','toilet','token','tokens','told','toll','tolls','tomato','tomb','tombs','ton','tone','tones','tons','too','took','tool','tools','tooth','top','topic','topics','tops','torch','torn','tort','toss','total','totals','touch','tough','tour','tours','towel','towels','tower','towers','town','towns','toxic','toy','toys','trace','traces','track','tracks','tract','trade','trades','trail','trails','train','trains','trait','traits','tram','trams','trance','trap','traps','trash','travel','tray','trays','tread','treat','treats','tree','trees','trend','trends','trial','trials','tribe','tribes','trick','tricks','tried','tries','trill','trim','trims','trio','trios','trip','trips','troop','troops','trot','trots','trouble','truck','trucks','true','truly','trump','trunk','trunks','trust','trusts','truth','truths','try','tube','tubes','tuck','tucks','tuft','tufts','tug','tugs','tulip','tumble','tuna','tune','tunes','tunic','tunnel','turb','turbo','turf','turn','turned','turns','turkey','turnip','turtle','turtles','tusk','tusks','tutor','tutors','tweed','tweet','twelve','twenty','twice','twin','twins','twist','twists','two','type','types','tyrant','udder','ugly','ulcer','ultra','umbra','ump','un','unable','unfit','union','unions','unique','unit','units','unity','unknown','unlock','until','unusual','up','upon','upper','upset','urban','urge','urged','urges','urn','urns','usage','use','used','useful','user','users','uses','using','usual','usurp','utter','vacant','vacuum','vague','vain','valet','valid','valley','value','values','valve','valves','van','vanilla','vanish','vanity','vapor','vault','vaults','veal','vector','vegan','vein','veins','velvet','vendor','venom','vent','vents','verb','verbs','verge','verify','verse','verses','very','vessel','vest','vests','vet','veto','via','vial','vials','vibe','vibes','vice','vices','victim','victor','video','videos','view','views','vigil','vile','villa','villas','vine','vines','violin','virtual','virus','visa','visas','visit','visits','visor','visual','vital','vitamin','vivid','vocal','voice','voices','void','voids','volcano','volt','volts','volume','vote','votes','vow','vows','voyage','wage','wages','wagon','wagons','waist','wait','waits','wake','walk','walks','wall','walls','wallet','walnut','wander','want','wants','war','warm','warn','warns','warp','warps','wary','wash','wasp','wasps','waste','wastes','watch','water','waters','wave','waves','wax','way','ways','weak','wealth','weapon','wear','wears','weary','weather','weave','weaves','web','webs','wed','wedding','wedge','wedges','weed','weeds','week','weeks','weep','weeps','weigh','weight','weird','welcome','well','wells','went','wept','west','western','wet','whale','whales','what','wheat','wheel','wheels','when','where','which','while','whim','whine','whip','whips','whisper','whisky','whistle','white','who','whole','whom','whose','why','wicked','wide','width','wife','wives','wild','will','willow','win','wind','winds','window','windows','wine','wines','wing','wings','wink','winks','winner','winter','wipe','wipes','wire','wires','wisdom','wise','wish','wishes','wit','witch','wits','with','wolf','wolves','woman','women','womb','wombs','wonder','wood','woods','wool','word','words','work','works','world','worm','worms','worn','worry','worse','worst','worth','would','wound','wounds','wrap','wraps','wrath','wreath','wreck','wrist','wrists','write','writes','wrong','wrote','xray','yacht','yard','yards','yarn','yawn','yawns','year','years','yeast','yellow','yes','yesterday','yet','yield','yields','yoga','yogurt','yolk','yolks','you','young','your','yours','youth','zebra','zero','zeros','zinc','zone','zones','zoom','zooms']; additionalWords.forEach(w => validWords.add(w));
     function generateLetters(count = 6) {
       const validWordsArray = Array.from(validWords).filter(w => w.length === count);
-      if (validWordsArray.length === 0) return 'abcdef';
+      if (validWordsArray.length === 0) {
+        // Fallback to avoid breaking the UI
+        return { scrambled: 'abcdef'.slice(0, count), solution: 'abcdef'.slice(0, count) };
+      }
       const randomWord = validWordsArray[Math.floor(Math.random() * validWordsArray.length)];
       const letters = randomWord.split('');
       for (let i = letters.length - 1; i > 0; i--) {
@@ -2070,7 +2049,7 @@
       }
       return { scrambled: letters.join(''), solution: randomWord };
     }
-    
+
     function canFormWord(word, letters) {
       const letterCount = {};
       letters.split('').forEach(l => letterCount[l] = (letterCount[l] || 0) + 1);
@@ -2195,7 +2174,8 @@
       GameCache.user.coins += coins;
       GameCache.user.xp += xp;
       GameCache.user.lastDaily = today;
-      
+      updateStatsUI();
+
       alert(`🎁 Daily Reward Claimed!\n\n+${coins} Coins\n+${xp} XP\n🔥 ${GameCache.user.dailyStreak} Day Streak!`);
       
       // Update database
@@ -2780,6 +2760,7 @@
         },
         startedAt: Date.now(),
         endsAt: Date.now() + (duration * 1000),
+        participants: [currentUserId, 'ai'],
         status: 'active'
       };
 
@@ -2872,10 +2853,10 @@
       // Determine hint cost based on match mode
       if (GameCache.match.mode === 'single' || GameCache.match.mode === 'ai') {
         hintCost = 10; // AI games: 10 coins
-      } else if (GameCache.match.mode === 'ranked') {
-        hintCost = 30; // Ranked matches: 30 coins
+      } else if (GameCache.match.mode === 'ranked' || GameCache.match.mode === 'team') {
+        hintCost = 30; // Ranked and Team Up: 30 coins
       } else {
-        hintCost = 20; // Quick match and friend games: 20 coins
+        hintCost = 20; // Quick match and FFA: 20 coins
       }
       
       if (GameCache.user.coins < hintCost) {
