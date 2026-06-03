@@ -6,7 +6,7 @@
 window.developerNotification = {
   "enabled": true,
   "id": "update-v2-launch", 
-  "title": "🏆 Competitive Season 1 is Live!",
-  "body": "Welcome to the new Anagram Rush! Climb the ranks from Bronze to Verified Legend. Good luck!",
+  "title": "Game Updates",
+  "body": "we are working tirelessly to bring multiplayer mode, modes include FREE FOR ALL and TEAM UP. stay tined",
   "icon": "📢"
 };
