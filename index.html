@@ -555,8 +555,32 @@
 
     const avatars = ["https://i.pravatar.cc/150?img=1","https://i.pravatar.cc/150?img=2","https://i.pravatar.cc/150?img=3"];
 
+    function getLocalProfileKey() {
+      return `localProfile_${currentUserId}`;
+    }
+
+    function loadLocalProfileFallback() {
+      if (!currentUserId) return null;
+      try {
+        const item = localStorage.getItem(getLocalProfileKey());
+        return item ? JSON.parse(item) : null;
+      } catch (e) {
+        console.warn('[LocalStorage] Failed to load fallback profile:', e);
+        return null;
+      }
+    }
+
+    function saveLocalProfileFallback(profile) {
+      if (!currentUserId) return;
+      try {
+        localStorage.setItem(getLocalProfileKey(), JSON.stringify(profile));
+      } catch (e) {
+        console.warn('[LocalStorage] Failed to save fallback profile:', e);
+      }
+    }
+
     /* ========================================== CORE ========================================== */
-    function initSupabase(){
+    async function initSupabase(){
       if(!window.supabase) { setTimeout(initSupabase, 100); return; }
       sb = window.supabase.createClient(SB_URL, SB_KEY);
       initApp();
@@ -591,6 +615,11 @@
       currentUserId = userObj.id;
       loadLastSeen();
       await Promise.all([loadProfile(), preloadData()]);
+
+      // Ensure leaderboard rank is calculated after data is loaded
+      const pos = getLeaderboardPosition(currentUserId);
+      GameCache.user.leaderboardPos = pos;
+
       setupRealtime();
       showApp();
       updateBadges();
@@ -601,21 +630,27 @@
 
     /* ========================================== DATA ========================================== */
     async function loadProfile(){
-      const { data: profile, error: profileErr } = await sb.from('profiles').select('*').eq('id', currentUserId).maybeSingle();
+      let profile = null;
+      const { data, error: profileErr } = await sb.from('profiles').select('*').eq('id', currentUserId).maybeSingle();
+      profile = data;
       if (profileErr) console.error('[Profile] Error fetching profile:', profileErr);
 
+      const localProfile = loadLocalProfileFallback();
       let authUser = null;
       const { data: sessionData } = await sb.auth.getSession();
       if (sessionData.session) {
         authUser = sessionData.session.user;
       }
 
-      if(!profile) {
-        const fallbackName = authUser?.user_metadata?.full_name || authUser?.email?.split('@')[0] || 'Player';
-        const insertPayload = { 
-          id: currentUserId, 
-          display_name: fallbackName, 
-          avatar_url: avatars[0], 
+      const fallbackName = authUser?.user_metadata?.full_name || authUser?.email?.split('@')[0] || 'Player';
+      const fallbackAvatar = localProfile?.avatar_url || avatars[0];
+      const fallbackDisplayName = localProfile?.display_name || fallbackName;
+
+      if (!profile && localProfile) {
+        profile = {
+          id: currentUserId,
+          display_name: fallbackDisplayName,
+          avatar_url: fallbackAvatar,
           mmr: 0,
           wins: 0,
           losses: 0,
@@ -629,26 +664,100 @@
           achievements: [],
           email: authUser?.email || ''
         };
-        console.log('[Profile] Creating new profile with payload:', insertPayload);
-        const { data: createdData, error: createErr } = await sb.from('profiles').insert(insertPayload).select().single();
-        if (createErr) {
-          console.error('[Profile] Profile creation failed:', createErr);
-          // If email column doesn't exist, try without it
-          if (createErr.code === 'PGRST204' || (createErr.message && createErr.message.includes('email'))) {
-            console.log('[Profile] Email column not found or error, retrying without email');
-            const payloadWithoutEmail = { ...insertPayload };
-            delete payloadWithoutEmail.email;
-            const { data: retryData, error: retryErr } = await sb.from('profiles').insert(payloadWithoutEmail).select().single();
-            if (retryErr) {
-              console.error('[Profile] Profile creation failed (retry):', retryErr);
-              return;
-            }
-            profile = retryData;
-          } else {
-            return;
-          }
+      }
+
+      if(!profile) {
+        if (profileErr) {
+          console.warn('[Profile] Remote profile unavailable, using local fallback or defaults.');
+          profile = {
+            id: currentUserId,
+            display_name: fallbackDisplayName,
+            avatar_url: fallbackAvatar,
+            mmr: 0,
+            wins: 0,
+            losses: 0,
+            draws: 0,
+            streak: 0,
+            xp: 0,
+            level: 1,
+            coins: 200,
+            daily_streak: 0,
+            last_daily: null,
+            achievements: [],
+            email: authUser?.email || ''
+          };
         } else {
-          profile = createdData;
+          const insertPayload = { 
+            id: currentUserId, 
+            display_name: fallbackName, 
+            avatar_url: avatars[0], 
+            mmr: 0,
+            wins: 0,
+            losses: 0,
+            draws: 0,
+            streak: 0,
+            xp: 0,
+            level: 1,
+            coins: 200,
+            daily_streak: 0,
+            last_daily: null,
+            achievements: [],
+            email: authUser?.email || ''
+          };
+          console.log('[Profile] Creating new profile with payload:', insertPayload);
+          const { data: createdData, error: createErr } = await sb.from('profiles').insert(insertPayload).select().single();
+          if (createErr) {
+            console.error('[Profile] Profile creation failed:', createErr);
+            // If email column doesn't exist, try without it
+            if (createErr.code === 'PGRST204' || (createErr.message && createErr.message.includes('email'))) {
+              console.log('[Profile] Email column not found or error, retrying without email');
+              const payloadWithoutEmail = { ...insertPayload };
+              delete payloadWithoutEmail.email;
+              const { data: retryData, error: retryErr } = await sb.from('profiles').insert(payloadWithoutEmail).select().single();
+              if (retryErr) {
+                console.error('[Profile] Profile creation failed (retry):', retryErr);
+                profile = {
+                  id: currentUserId,
+                  display_name: fallbackDisplayName,
+                  avatar_url: fallbackAvatar,
+                  mmr: 0,
+                  wins: 0,
+                  losses: 0,
+                  draws: 0,
+                  streak: 0,
+                  xp: 0,
+                  level: 1,
+                  coins: 200,
+                  daily_streak: 0,
+                  last_daily: null,
+                  achievements: [],
+                  email: authUser?.email || ''
+                };
+              } else {
+                profile = retryData;
+              }
+            } else {
+              profile = {
+                id: currentUserId,
+                display_name: fallbackDisplayName,
+                avatar_url: fallbackAvatar,
+                mmr: 0,
+                wins: 0,
+                losses: 0,
+                draws: 0,
+                streak: 0,
+                xp: 0,
+                level: 1,
+                coins: 200,
+                daily_streak: 0,
+                last_daily: null,
+                achievements: [],
+                email: authUser?.email || ''
+              };
+            }
+          } else {
+            profile = createdData;
+          }
         }
       }
       if(profile) {
@@ -1363,19 +1472,12 @@
           document.getElementById("profileAvatar").src = base64;
           document.getElementById("headerAvatar").src = base64;
           
-          // Upload to Supabase Storage
-          try {
-            const fileName = `${Date.now()}_${file.name}`;
-            const filePath = `avatars/${currentUserId}/${fileName}`;
-            const { data: uploadData, error: uploadError } = await sb.storage.from('avatars').upload(filePath, file, { upsert: true });
-            if (uploadError) throw uploadError;
-            
-            const { data: { publicUrl } } = sb.storage.from('avatars').getPublicUrl(filePath);
-            GameCache.user.avatar_url = publicUrl;
-          } catch (err) {
-            console.error('Avatar upload failed:', err);
-            GameCache.user.avatar_url = base64; // Fallback to base64
-          }
+          // Use local preview and save the avatar data locally.
+          GameCache.user.avatar_url = base64;
+          saveLocalProfileFallback({
+            display_name: GameCache.user.display_name || document.getElementById('displayNameInput')?.value || '',
+            avatar_url: base64
+          });
       };
       reader.readAsDataURL(file);
     }
@@ -1383,8 +1485,19 @@
     document.getElementById("saveProfileBtn").onclick = async () => {
       const newName = document.getElementById("displayNameInput").value.trim();
       if(!newName) return;
-      const { error } = await sb.from('profiles').update({ display_name: newName, avatar_url: GameCache.user.avatar_url }).eq('id', currentUserId);
-      if(!error) { alert("Profile saved!"); loadProfile(); }
+      const updatePayload = { display_name: newName, avatar_url: GameCache.user.avatar_url };
+      const { error } = await sb.from('profiles').update(updatePayload).eq('id', currentUserId);
+      if (!error) {
+        alert("Profile saved!");
+        saveLocalProfileFallback(updatePayload);
+        loadProfile();
+      } else {
+        console.warn('[Profile] Remote save failed, storing locally instead:', error);
+        saveLocalProfileFallback(updatePayload);
+        alert("Profile save failed online, but your avatar and name are saved locally.");
+        GameCache.user.display_name = newName;
+        updateStatsUI();
+      }
     };
 
     function openAboutModal(){ openModal("aboutModal"); }
@@ -1906,12 +2019,12 @@
     }
     function renderLeaderboardPreview(){
       const cont = document.getElementById('leaderboardPreview');
-      cont.innerHTML = GameCache.leaderboard.slice(0,5).map((l, i) => `<div class="leader-item"><div class="leader-left"><img class="small-avatar" src="${l.avatar_url || avatars[0]}"><div><div style="font-weight:700">${i+1}. ${l.display_name}</div><div style="font-size:11px;opacity:0.6">${getRank(l.mmr)}</div></div></div><div style="text-align:right"><div style="font-weight:800">${l.mmr}</div><div style="font-size:11px;opacity:0.7">W:${l.wins||0} D:${l.draws||0} L:${l.losses||0}</div></div></div>`).join('');
+      cont.innerHTML = GameCache.leaderboard.slice(0,5).map((l, i) => `<div class="leader-item"><div class="leader-left"><img class="small-avatar" src="${l.avatar_url || avatars[0]}"><div><div style="font-weight:700">${i+1}. ${l.display_name}</div><div style="font-size:11px;opacity:0.6">${getRank(l.mmr)}</div></div></div><div style="text-align:right"><div style="font-weight:800">${l.mmr} MMR</div><div style="font-size:11px;opacity:0.7">W:${l.wins||0} D:${l.draws||0} L:${l.losses||0}</div></div></div>`).join('');
     }
     function openLeaderboard(){
-      document.getElementById('socialTitle').innerText = "Global Leaders";
+      document.getElementById('socialTitle').innerText = "Global Leaders (Top 100)";
       const cont = document.getElementById('socialContent');
-      cont.innerHTML = GameCache.leaderboard.map((l, i) => `<div class="leader-item"><div class="leader-left"><img class="small-avatar" src="${l.avatar_url || avatars[0]}"><div><div style="font-weight:700">${i+1}. ${l.display_name}</div><div style="font-size:11px;opacity:0.6">${getRank(l.mmr)}</div></div></div><div style="text-align:right"><div style="font-weight:800">${l.mmr}</div><div style="font-size:11px;opacity:0.7">W:${l.wins||0} D:${l.draws||0} L:${l.losses||0}</div></div></div>`).join('');
+      cont.innerHTML = GameCache.leaderboard.map((l, i) => `<div class="leader-item"><div class="leader-left"><img class="small-avatar" src="${l.avatar_url || avatars[0]}"><div><div style="font-weight:700">${i+1}. ${l.display_name}</div><div style="font-size:11px;opacity:0.6">${getRank(l.mmr)}</div></div></div><div style="text-align:right"><div style="font-weight:800">${l.mmr} MMR</div><div style="font-size:11px;opacity:0.7">W:${l.wins||0} D:${l.draws||0} L:${l.losses||0}</div></div></div>`).join('');
       openModal('socialModal');
     }
     async function logout(){ await trackPresence('offline'); cleanupRealtime(); await sb.auth.signOut(); window.location.reload(); }
