@@ -624,7 +624,6 @@
       showApp();
       updateBadges();
       renderLeaderboardPreview();
-      // Developer notifications are disabled for APK release.
     }
 
     /* ========================================== DATA ========================================== */
@@ -843,6 +842,10 @@
       }
       // Ensure created_at is present and parseable
       GameCache.messages = GameCache.messages.map(m => ({ ...m, created_at: m.created_at || new Date().toISOString() }));
+      
+      // Fetch developer notifications at startup and every 5 minutes
+      fetchDeveloperNotifications();
+      setInterval(fetchDeveloperNotifications, 300000);
     }
 
     function cleanupRealtime() {
@@ -1236,10 +1239,12 @@
       const developerNotifications = [];
       try {
         const dev = window.developerNotification;
+        console.log('[DevNotif] In openNotifications, dev =', dev);
         if (dev && dev.enabled) {
+          console.log('[DevNotif] Adding developer notification:', dev.title);
           developerNotifications.push({ title: dev.title || 'Developer', body: dev.body || '', action: null });
         }
-      } catch (e) { /* ignore if window not accessible */ }
+      } catch (e) { console.warn('[DevNotif] Error checking dev notification:', e); }
 
       const combinedNotifications = [...developerNotifications, ...allNotifications];
       
@@ -2814,10 +2819,8 @@
     }
 
     async function fetchDeveloperNotifications() {
-      // Remote developer notifications are disabled for APK release.
-      return;
-
-      const notificationUrl = `https://raw.githubusercontent.com/OWNER/REPO/main/notification.js?t=${Date.now()}`;
+      const notificationUrl = `https://raw.githubusercontent.com/bandaamos98-create/anagram-rush/main/notification.js?t=${Date.now()}`;
+      console.log('[DevNotif] Fetching from:', notificationUrl);
 
       try {
         const response = await fetch(notificationUrl);
@@ -2832,9 +2835,11 @@
           const end = text.lastIndexOf('}') + 1;
           const jsonStr = text.substring(start, end);
           const config = JSON.parse(jsonStr);
+          console.log('[DevNotif] Parsed config:', config);
 
           if (config && config.enabled) {
             window.developerNotification = config;
+            console.log('[DevNotif] Notification enabled, will add to system.');
             // Check if we've already shown this specific notification ID
             const lastId = localStorage.getItem('last_dev_notif_id');
             if (lastId !== config.id) {
@@ -2847,7 +2852,7 @@
           }
         }
       } catch (e) {
-        console.error('[Notifications] Failed to load:', e);
+        console.error('[DevNotif] Failed to load:', e);
       }
     }
 
