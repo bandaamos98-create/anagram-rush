@@ -818,9 +818,12 @@
           if (document.getElementById('socialModal').classList.contains('active') && activeChatId === p.new.to_user_id) {
             const chatBody = document.getElementById('chatBody');
             if (chatBody) {
-              const msgHtml = `<div style="display:flex;align-items:flex-end;gap:8px;margin-bottom:8px;flex-direction:row-reverse;"><img src="${GameCache.user.avatar_url || avatars[0]}" style="width:28px;height:28px;border-radius:50%;"><div class="chat-bubble me" style="margin:0;">${p.new.text}</div></div>`;
-              chatBody.insertAdjacentHTML('beforeend', msgHtml);
-              chatBody.scrollTop = chatBody.scrollHeight;
+              const existingMessage = chatBody.querySelector(`[data-message-id="${p.new.id}"]`);
+              if (!existingMessage) {
+                const msgHtml = `<div data-message-id="${p.new.id}" style="display:flex;align-items:flex-end;gap:8px;margin-bottom:8px;flex-direction:row-reverse;"><img src="${GameCache.user.avatar_url || avatars[0]}" style="width:28px;height:28px;border-radius:50%;"><div class="chat-bubble me" style="margin:0;">${p.new.text}</div></div>`;
+                chatBody.insertAdjacentHTML('beforeend', msgHtml);
+                chatBody.scrollTop = chatBody.scrollHeight;
+              }
             }
           }
         })
@@ -1272,7 +1275,7 @@
       chatBody.innerHTML = chatMsgs.map(m => {
         const isMe = m.from_user_id === currentUserId;
         const sender = isMe ? { avatar_url: GameCache.user.avatar_url } : p;
-        return `<div style="display:flex;align-items:flex-end;gap:8px;margin-bottom:8px;${isMe ? 'flex-direction:row-reverse;' : ''}"><img src="${sender.avatar_url || avatars[0]}" style="width:28px;height:28px;border-radius:50%;"><div class="chat-bubble ${isMe ? 'me' : 'them'}" style="margin:0;">${m.text}</div></div>`;
+        return `<div data-message-id="${m.id || ''}" style="display:flex;align-items:flex-end;gap:8px;margin-bottom:8px;${isMe ? 'flex-direction:row-reverse;' : ''}"><img src="${sender.avatar_url || avatars[0]}" style="width:28px;height:28px;border-radius:50%;"><div class="chat-bubble ${isMe ? 'me' : 'them'}" style="margin:0;">${m.text}</div></div>`;
       }).join('');
       
       chatBody.scrollTop = chatBody.scrollHeight;
@@ -2669,13 +2672,16 @@
     }
 
     async function fetchDeveloperNotifications() {
-      // THE DEVELOPER CAN CHANGE THIS URL TO THEIR GITHUB RAW FILE
-      // Example: https://raw.githubusercontent.com/bandaamos/anagram-rush/main/notification.js
-      const GITHUB_URL = "https://raw.githubusercontent.com/bandaamos/anagram-rush/main/notification.js";
+      const notificationUrl = `https://raw.githubusercontent.com/bandaamos98-create/anagram-rush/main/notification.js?t=${Date.now()}`;
+      console.log('[Notifications] Fetching developer notification from', notificationUrl);
 
       try {
-        const resp = await fetch(GITHUB_URL + "?t=" + Date.now());
-        const text = await resp.text();
+        const response = await fetch(notificationUrl);
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        const text = await response.text();
+        console.log('[Notifications] Loaded successfully');
 
         // Simple extraction logic if they use window.developerNotification = { ... }
         if (text.includes('developerNotification')) {
@@ -2697,7 +2703,7 @@
           }
         }
       } catch (e) {
-        console.warn('Developer notifications could not be fetched (normal if URL is not set yet)');
+        console.error('[Notifications] Failed to load:', e);
       }
     }
 
