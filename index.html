@@ -1080,11 +1080,13 @@
       }
       
       // Combine system notifications with database notifications
-      const dbNotifications = GameCache.notifications.map(n => ({
-        title: n.title || n.body || n.message || 'Notification',
-        body: n.body || n.message || '',
-        action: n.action || null
-      }));
+      const dbNotifications = GameCache.notifications
+        .filter(n => n.source !== 'developer')
+        .map(n => ({
+          title: n.title || n.body || n.message || 'Notification',
+          body: n.body || n.message || '',
+          action: n.action || null
+        }));
 
       const allNotifications = [...systemNotifications, ...dbNotifications];
       
@@ -1092,6 +1094,7 @@
       const developerNotifications = [];
       try {
         const dev = window.developerNotification;
+        console.log('[Notifications] Developer notification config in openNotifications:', dev);
         if (dev && dev.enabled) {
           developerNotifications.push({ title: dev.title || 'Developer', body: dev.body || '', action: null });
         }
@@ -2638,8 +2641,14 @@
       }
     }
 
-    function addSystemNotification(title, body) {
-      const notif = { title, body, created_at: new Date().toISOString(), id: 'sys-' + Date.now() };
+    function addSystemNotification(title, body, options = {}) {
+      const notif = {
+        title,
+        body,
+        created_at: new Date().toISOString(),
+        id: options.id || 'sys-' + Date.now(),
+        source: options.source || 'system'
+      };
       GameCache.notifications.unshift(notif);
       updateBadges();
       showToast('notification', title, body, () => openNotifications());
@@ -2683,10 +2692,12 @@
           const config = JSON.parse(jsonStr);
 
           if (config && config.enabled) {
+            window.developerNotification = config;
+            console.log('[Notifications] Developer notification config saved:', config);
             // Check if we've already shown this specific notification ID
             const lastId = localStorage.getItem('last_dev_notif_id');
             if (lastId !== config.id) {
-              addSystemNotification(config.title, config.body);
+              addSystemNotification(config.title, config.body, { id: config.id, source: 'developer' });
               localStorage.setItem('last_dev_notif_id', config.id);
               if (await requestNotificationPermission()) {
                 showNativeNotification(config.title, config.body);
