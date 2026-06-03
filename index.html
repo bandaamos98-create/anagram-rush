@@ -519,7 +519,6 @@
   <div class="modal" id="resultModal">
     <div class="modal-content glass" style="text-align:center;">
       <div id="resultSummary"></div>
-      <button class="btn google-btn" style="margin-top:18px;" onclick="closeModal('resultModal'); endMatch();">Continue</button>
     </div>
   </div>
 
@@ -712,7 +711,7 @@
         sb.from('friend_requests').select('*').eq('to_user_id', currentUserId).eq('status', 'pending'),
         sb.from('notifications').select('*').eq('user_id', currentUserId).eq('is_read', false),
         sb.from('global_chat').select('*').order('created_at', {ascending: false}).limit(100),
-        sb.from('profiles').select('id, display_name, mmr, avatar_url, wins, losses, draws').order('mmr', {ascending: false}),
+        sb.from('profiles').select('id, display_name, mmr, avatar_url, wins, losses').order('mmr', {ascending: false}).limit(100),
         sb.from('friends').select('friend_id').eq('user_id', currentUserId)
       ]);
       GameCache.messages = msgs.data || [];
@@ -720,9 +719,15 @@
       GameCache.friendRequests = friendReqs.data || [];
       GameCache.notifications = notifs.data || [];
       GameCache.globalChatMessages = globalMsgs.data || [];
-      GameCache.leaderboard = leaders.data || [];
+      // Ensure leaderboard is sorted by MMR descending and limited to top 100
+      GameCache.leaderboard = (leaders.data || []).sort((a,b) => (b.mmr || 0) - (a.mmr || 0)).slice(0,100);
       GameCache.friends = (friends.data || []).map(f => f.friend_id);
       GameCache.leaderboard.forEach(p => GameCache.profiles[p.id] = p);
+      // Update user's leaderboard position now that leaderboard is available
+      if (currentUserId) {
+        GameCache.user.leaderboardPos = getLeaderboardPosition(currentUserId);
+        updateStatsUI();
+      }
       const neededIds = new Set();
       GameCache.messages.forEach(m => { neededIds.add(m.from_user_id); neededIds.add(m.to_user_id); });
       GameCache.friends.forEach(fid => neededIds.add(fid));
@@ -1000,9 +1005,10 @@
       profileInfo.style.marginTop = "10px";
       profileInfo.style.fontSize = "13px";
       profileInfo.style.opacity = "0.8";
+      const lbPosDisplay = (typeof data.leaderboardPos === 'number' && data.leaderboardPos > 0) ? `#${data.leaderboardPos}` : 'Unranked';
       profileInfo.innerHTML = `
         <p>Win Rate: <span style="color:var(--success);font-weight:700;">${winRate}%</span></p>
-        <p>Leaderboard Rank: <span style="color:var(--blue);font-weight:700;">#${data.leaderboardPos || 'Unranked'}</span></p>
+        <p>Leaderboard Rank: <span style="color:var(--blue);font-weight:700;">${lbPosDisplay}</span></p>
       `;
 
       const existingInfo = document.getElementById('extraProfileInfo');
@@ -1782,7 +1788,11 @@
       document.getElementById("mmr").innerText = currentMMR;
       document.getElementById("wins").innerText = GameCache.user.wins;
       document.getElementById("losses").innerText = GameCache.user.losses;
-      document.getElementById("draws").innerText = GameCache.user.draws || 0;
+      // Compute and display Win Rate (wins / (wins + losses)) as percent
+      const totalGames = (GameCache.user.wins || 0) + (GameCache.user.losses || 0);
+      const winRate = totalGames > 0 ? Math.round((GameCache.user.wins / totalGames) * 100) : 0;
+      const winrateEl = document.getElementById("winrate");
+      if (winrateEl) winrateEl.innerText = `${winRate}%`;
 
       const leagueBadge = document.getElementById("leagueBadge");
       if (leagueBadge) {
