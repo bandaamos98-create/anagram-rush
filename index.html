@@ -592,20 +592,31 @@
           const frag = window.location.hash.replace(/^#/, '');
           const params = new URLSearchParams(frag);
           const access_token = params.get('access_token');
-          if(access_token) await sb.auth.setSession({ access_token, refresh_token: params.get('refresh_token') });
+          if(access_token) {
+            console.log('[Login] Setting session from hash');
+            await sb.auth.setSession({ access_token, refresh_token: params.get('refresh_token') });
+          }
           history.replaceState(null, "", window.location.pathname);
         }
 
         const { data: { session } } = await sb.auth.getSession();
-        if(session?.user) setupSession(session.user);
-        else showLogin();
+        console.log('[Login] Session check:', !!session?.user);
+        if(session?.user) {
+          await setupSession(session.user);
+        } else {
+          showLogin();
+        }
 
-        sb.auth.onAuthStateChange((event, session) => {
-          if(session?.user) setupSession(session.user);
-          else showLogin();
+        sb.auth.onAuthStateChange(async (event, session) => {
+          console.log('[Login] Auth state changed:', event, !!session?.user);
+          if(session?.user) {
+            await setupSession(session.user);
+          } else {
+            showLogin();
+          }
         });
       } catch (err) {
-        console.error('App initialization failed:', err);
+        console.error('[Login] App initialization failed:', err);
         showLogin();
       }
     }
@@ -613,17 +624,32 @@
     async function setupSession(userObj){
       if (currentUserId === userObj.id) return;
       currentUserId = userObj.id;
-      loadLastSeen();
-      await Promise.all([loadProfile(), preloadData()]);
+      console.log('[Login] Starting setupSession for user:', currentUserId);
+      
+      try {
+        loadLastSeen();
+        console.log('[Login] Loaded last seen');
+        
+        const [profileResult, preloadResult] = await Promise.all([
+          loadProfile().catch(err => { console.error('[Login] loadProfile failed:', err); return null; }),
+          preloadData().catch(err => { console.error('[Login] preloadData failed:', err); return null; })
+        ]);
+        console.log('[Login] Profile and data preloaded');
 
-      // Ensure leaderboard rank is calculated after data is loaded
-      const pos = getLeaderboardPosition(currentUserId);
-      GameCache.user.leaderboardPos = pos;
+        // Ensure leaderboard rank is calculated after data is loaded
+        const pos = getLeaderboardPosition(currentUserId);
+        GameCache.user.leaderboardPos = pos;
 
-      setupRealtime();
-      showApp();
-      updateBadges();
-      renderLeaderboardPreview();
+        setupRealtime();
+        console.log('[Login] Realtime setup complete, showing app...');
+        showApp();
+        updateBadges();
+        renderLeaderboardPreview();
+        console.log('[Login] App fully initialized');
+      } catch (err) {
+        console.error('[Login] setupSession failed:', err);
+        showLogin();
+      }
     }
 
     /* ========================================== DATA ========================================== */
