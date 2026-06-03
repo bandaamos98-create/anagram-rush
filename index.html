@@ -2047,9 +2047,18 @@
     }
 
     async function searchFriend() {
-      const q = document.getElementById('friendSearch').value.trim();
+      const searchInput = document.getElementById('friendSearch');
+      if (!searchInput) {
+        console.warn('[Friends] friendSearch input missing, cannot perform search.');
+        return;
+      }
+      const q = searchInput.value.trim();
       if (!q) return;
       const res = document.getElementById('searchResult');
+      if (!res) {
+        console.warn('[Friends] searchResult container missing, cannot display search results.');
+        return;
+      }
       res.innerHTML = "Searching...";
       const { data } = await sb.from('profiles').select('id, display_name, avatar_url, mmr, email').or(`display_name.ilike.%${q}%,email.ilike.%${q}%`).limit(8);
       if (data) {
@@ -2080,8 +2089,10 @@
       if (error) { console.error('Friend request failed', error); return alert('Unable to send request.'); }
       if (data) GameCache.friendRequests.unshift(data);
       showToast('friend', 'Friend Request Sent', 'Your request has been sent successfully.');
-      // Refresh the search results to update button state
-      searchUsers();
+      // Refresh the search results to update button state if the search UI is present.
+      if (document.getElementById('friendSearch') && document.getElementById('searchResult')) {
+        searchFriend();
+      }
     }
 
     function showGameInvitePopup(invite) {
@@ -2115,6 +2126,10 @@
 
     function renderFriendsList() {
       const list = document.getElementById('friendsList');
+      if (!list) {
+        console.warn('[Friends] friendsList element not present, skipping render.');
+        return;
+      }
       list.innerHTML = GameCache.friends.map(fid => {
         const p = GameCache.profiles[fid] || { display_name: 'Player', avatar_url: avatars[0] };
         // Remove invite limit - allow unlimited invites
@@ -2135,8 +2150,10 @@
         GameCache.invites.unshift(data);
         const modeText = mode === 'ffa' ? 'Free for All' : mode === 'team' ? 'Team Up' : mode;
         showToast('invite', 'Game Invite Sent', `Your ${modeText} invite has been sent successfully.`);
-        // Refresh friends list to update button state
-        renderFriendsList();
+        // Refresh friends list only if the friends list UI is present.
+        if (document.getElementById('friendsList')) {
+          renderFriendsList();
+        }
       }
     }
 
