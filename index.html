@@ -845,52 +845,44 @@
       
       dbChannel = sb.channel('db-sync');
       dbChannel
-        // WILD-CARD LISTENER FOR DEBUGGING
-        .on('postgres_changes', { event: '*', schema: 'public' }, (payload) => {
-          console.log('[Realtime] DB Change Received (Any):', payload);
-        })
-        // Messages: INSERT for received messages
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `to_user_id=eq.${currentUserId}` }, async (p) => {
-          console.log('[Realtime] New message received:', p.new);
-          if (!GameCache.profiles[p.new.from_user_id]) await fetchProfile(p.new.from_user_id);
-          if (!GameCache.messages.some(m => m.id === p.new.id)) {
-            GameCache.messages.unshift(p.new);
-            updateBadges();
-            const activeChatId = document.getElementById('socialModal').dataset.activeChatId;
-            if (activeChatId === p.new.from_user_id) {
-              const chatBody = document.getElementById('chatBody');
-              if (chatBody) {
-                const profile = GameCache.profiles[p.new.from_user_id] || { avatar_url: avatars[0] };
-                const msgHtml = `<div style="display:flex;align-items:flex-end;gap:8px;margin-bottom:8px;"><img src="${profile.avatar_url || avatars[0]}" style="width:28px;height:28px;border-radius:50%;"><div class="chat-bubble them" style="margin:0;">${p.new.text}</div></div>`;
-                chatBody.insertAdjacentHTML('beforeend', msgHtml);
-                chatBody.scrollTop = chatBody.scrollHeight;
-              }
-            } else {
-              refreshOpenSocialView();
-            }
-          }
-          const sender = p.new.from || GameCache.profiles[p.new.from_user_id]?.display_name || 'Someone';
-          showToast('message', `New message from ${sender}`, p.new.text, () => viewChat(p.new.from_user_id));
-        })
-        // Messages: INSERT for sent messages (sync across devices)
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `from_user_id=eq.${currentUserId}` }, async (p) => {
-          console.log('[Realtime] Message sent confirmation:', p.new);
-          if (!GameCache.profiles[p.new.to_user_id]) await fetchProfile(p.new.to_user_id);
-          if (!GameCache.messages.some(m => m.id === p.new.id)) {
-            GameCache.messages.unshift(p.new);
-            updateBadges();
-          }
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, async (p) => {
+          const msg = p.new;
+          if (msg.to_user_id !== currentUserId && msg.from_user_id !== currentUserId) return;
+
+          console.log('[Realtime] Message insert event:', msg);
+
+          // Deduplicate GameCache
+          if (GameCache.messages.some(m => m.id === msg.id)) return;
+          GameCache.messages.unshift(msg);
+          updateBadges();
+
           const activeChatId = document.getElementById('socialModal').dataset.activeChatId;
-          if (document.getElementById('socialModal').classList.contains('active') && activeChatId === p.new.to_user_id) {
+          const otherId = msg.from_user_id === currentUserId ? msg.to_user_id : msg.from_user_id;
+
+          if (document.getElementById('socialModal').classList.contains('active') && activeChatId === otherId) {
             const chatBody = document.getElementById('chatBody');
             if (chatBody) {
-              const existingMessage = chatBody.querySelector(`[data-message-id="${p.new.id}"]`);
+              const existingMessage = chatBody.querySelector(`[data-message-id="${msg.id}"]`);
               if (!existingMessage) {
-                const msgHtml = `<div data-message-id="${p.new.id}" style="display:flex;align-items:flex-end;gap:8px;margin-bottom:8px;flex-direction:row-reverse;"><img src="${GameCache.user.avatar_url || avatars[0]}" style="width:28px;height:28px;border-radius:50%;"><div class="chat-bubble me" style="margin:0;">${p.new.text}</div></div>`;
+                const isMe = msg.from_user_id === currentUserId;
+                if (!isMe && !GameCache.profiles[msg.from_user_id]) await fetchProfile(msg.from_user_id);
+                const profile = isMe ? { avatar_url: GameCache.user.avatar_url } : (GameCache.profiles[msg.from_user_id] || { avatar_url: avatars[0] });
+
+                const msgHtml = `<div data-message-id="${msg.id}" style="display:flex;align-items:flex-end;gap:8px;margin-bottom:8px;${isMe ? 'flex-direction:row-reverse;' : ''}">
+                  <img src="${profile.avatar_url || avatars[0]}" style="width:28px;height:28px;border-radius:50%;">
+                  <div class="chat-bubble ${isMe ? 'me' : 'them'}" style="margin:0;">${msg.text}</div>
+                </div>`;
+
                 chatBody.insertAdjacentHTML('beforeend', msgHtml);
                 chatBody.scrollTop = chatBody.scrollHeight;
               }
             }
+          } else {
+            if (msg.to_user_id === currentUserId) {
+              const sender = msg.from || GameCache.profiles[msg.from_user_id]?.display_name || 'Someone';
+              showToast('message', `New message from ${sender}`, msg.text, () => viewChat(msg.from_user_id));
+            }
+            refreshOpenSocialView();
           }
         })
         .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages' }, (p) => {
@@ -2134,7 +2126,7 @@
       const receiverId = toId;
       const supabase = sb;
 
-      // Clear input first to prevent duplicate sends
+      // Clear input first
       chatInput.value = '';
 
       const { data, error } = await supabase
@@ -2150,20 +2142,24 @@
         ])
         .select();
 
-      console.log(data);
-      console.log(error);
-      if (error) { console.error('sendMsg error', error); chatInput.value = messageText; return; }
+      if (error) {
+        console.error('sendMsg error', error);
+        chatInput.value = messageText;
+        return;
+      }
 
-      // Immediately add to local cache and re-render
+      // Defensive check before adding to cache
       if (data && data.length > 0) {
-        GameCache.messages.unshift(data[0]);
-        // Re-render if this chat is currently open
-        if (document.getElementById('socialModal').dataset.activeChatId === toId) {
-          viewChat(toId);
+        const msg = data[0];
+        if (!GameCache.messages.some(m => m.id === msg.id)) {
+          GameCache.messages.unshift(msg);
+          // Re-render if this chat is currently open
+          if (document.getElementById('socialModal').dataset.activeChatId === toId) {
+            viewChat(toId);
+          }
         }
       }
 
-      // Maintain focus after sending
       chatInput.focus();
     }
 
