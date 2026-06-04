@@ -21,15 +21,26 @@
     .hidden{display:none !important;}
     .app{ width:100%; max-width:720px; margin:auto; min-height:100vh; position:relative; padding-bottom:110px; }
     .glass{ background:var(--glass); backdrop-filter: blur(18px); border:1px solid var(--border); box-shadow: 0 10px 30px rgba(0,0,0,.25), inset 0 1px 0 rgba(255,255,255,.05); }
-    .login-screen{ min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:24px; position:relative; overflow:hidden; }
-    .floating{ position:absolute; border-radius:50%; filter:blur(40px); animation:float 8s infinite ease-in-out; }
+    .login-screen{ min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:24px; position:relative; overflow:hidden; background: linear-gradient(135deg, rgba(15,23,42,0.85), rgba(15,23,42,0.85)), url('images/icon.png') center/cover no-repeat; filter: brightness(1); }
+    .login-screen::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: url('images/icon.png') center/cover no-repeat;
+      filter: blur(8px) brightness(0.5);
+      z-index: -1;
+    }
+    .floating{ position:absolute; border-radius:50%; filter:blur(40px); animation:float 8s infinite ease-in-out; z-index:1; }
     .float1{ width:200px; height:200px; background:rgba(59,130,246,.25); top:-50px; left:-80px; }
     .float2{ width:220px; height:220px; background:rgba(139,92,246,.25); bottom:-80px; right:-80px; animation-delay:2s; }
     @keyframes float{ 0%,100%{transform:translateY(0px);} 50%{transform:translateY(20px);} }
-    .logo{ text-align:center; margin-bottom:40px; z-index:2; }
+    .logo{ text-align:center; margin-bottom:40px; z-index:2; position:relative; }
     .logo h1{ font-family:'Poppins',sans-serif; font-size:42px; line-height:1; font-weight:800; background:linear-gradient(135deg,var(--blue),var(--purple)); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; margin-bottom:10px; }
     .logo p{ opacity:.8; }
-    .login-card{ width:100%; border-radius:30px; padding:30px 22px; z-index:2; }
+    .login-card{ width:100%; border-radius:30px; padding:30px 22px; z-index:2; position:relative; }
     .btn{ width:100%; border:none; outline:none; border-radius:20px; padding:16px; font-weight:700; font-size:16px; cursor:pointer; transition:.25s; font-family:'Inter',sans-serif; }
     .btn:active{ transform:scale(.97); }
     .google-btn{ background:linear-gradient(135deg,var(--blue),var(--purple)); color:white; margin-bottom:14px; box-shadow:0 10px 30px rgba(59,130,246,.3); }
@@ -116,6 +127,47 @@
     .feedback-comeback { animation: shake 0.5s ease-out; color: var(--purple); }
     .feedback-levelup { animation: levelUp 0.6s ease-out; color: var(--success); font-size: 1.2em; }
     
+    /* Splash Screen */
+    #splashScreen {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(135deg, rgba(59,130,246,.25), transparent 25%), radial-gradient(circle at bottom right, rgba(139,92,246,.2), transparent 25%), var(--bg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 99999;
+      flex-direction: column;
+      gap: 20px;
+      overflow: hidden;
+    }
+    #splashScreen.hidden {
+      display: none;
+    }
+    #splashScreen img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: center;
+      position: absolute;
+      top: 0;
+      left: 0;
+      opacity: 0.4;
+    }
+    #splashScreen p {
+      font-size: 18px;
+      font-weight: 600;
+      opacity: 0.8;
+      position: relative;
+      z-index: 10;
+    }
+    #splashScreen > *:not(img) {
+      position: relative;
+      z-index: 10;
+    }
+    
     /* Toast Notifications */
     .toast-container {
       position: fixed;
@@ -167,6 +219,10 @@
 </head>
 <body>
   <div class="toast-container" id="toastContainer"></div>
+  <div id="splashScreen">
+    <img src="images/icon.png" alt="Anagram Rush" />
+    <p>Anagram Rush</p>
+  </div>
   <div class="app">
     <!-- LOGIN -->
     <div class="login-screen" id="loginScreen">
@@ -224,7 +280,7 @@
             <button class="leader-secondary" style="padding:16px;" onclick="openAchievements()">🏆 Achievements</button>
           </div>
           <div style="display:flex;gap:10px;margin-top:14px;">
-            <button class="btn modern" style="flex:1;background:linear-gradient(135deg,var(--warning),#f59e0b);" onclick="claimDailyReward()">🎁 Claim Daily Reward</button>
+            <button class="btn modern" id="dailyRewardBtn" style="flex:1;background:linear-gradient(135deg,var(--warning),#f59e0b);" onclick="claimDailyReward()">🎁 Claim Daily Reward</button>
             <button class="btn modern" style="flex:1;background:linear-gradient(135deg,var(--purple),#8b5cf6);" onclick="openMultiplayerModal()">🎮 Multiplayer</button>
           </div>
         </div>
@@ -537,6 +593,7 @@
     let currentUserId = null;
     let socialChannel = null;
     let dbChannel = null;
+    let isClaimingDailyReward = false; // Prevent concurrent claims
 
     const GameCache = {
       user: { id: '', email: '', display_name: '', avatar_url: '', mmr: 0, xp: 0, level: 1, coins: 0, wins: 0, losses: 0, draws: 0, rank_points: 0, streak: 0, dailyStreak: 0, lastDaily: null, achievements: [] },
@@ -584,6 +641,12 @@
         console.error('App initialization failed:', err);
         showLogin();
       }
+      
+      // Hide splash screen after app is ready
+      setTimeout(() => {
+        const splash = document.getElementById('splashScreen');
+        if (splash) splash.classList.add('hidden');
+      }, 1500);
     }
 
     async function setupSession(userObj){
@@ -597,6 +660,11 @@
       renderLeaderboardPreview();
       fetchDeveloperNotifications();
       setInterval(fetchDeveloperNotifications, 300000); // Check for dev updates every 5 minutes
+      
+      // Check and notify for daily reward eligibility in real-time
+      checkDailyRewardEligibility();
+      // Check daily reward every hour in case user stays logged in past midnight
+      setInterval(checkDailyRewardEligibility, 3600000);
     }
 
     /* ========================================== DATA ========================================== */
@@ -689,6 +757,7 @@
         GameCache.user.leaderboardPos = pos;
 
         updateStatsUI();
+        updateDailyRewardButtonState();
         
       }
     }
@@ -1119,17 +1188,16 @@
       openModal('notificationModal');
     }
 
-    function checkAchievements() {
+    async function checkAchievements() {
       const data = GameCache.user;
       const unlockedAchievements = Array.isArray(data.achievements) ? [...data.achievements] : [];
-      const newAchievements = [];
+      const newlyUnlocked = [];
       
       Object.values(ACHIEVEMENTS).forEach(achievement => {
-        // Skip if already unlocked
+        // Skip if already unlocked in local cache
         if (unlockedAchievements.includes(achievement.id)) return;
         
         let shouldUnlock = false;
-        
         if (achievement.type === 'xp') {
           shouldUnlock = data.xp >= achievement.xpRequired;
         } else if (achievement.type === 'win') {
@@ -1153,12 +1221,21 @@
         }
         
         if (shouldUnlock) {
-          newAchievements.push(achievement);
+          newlyUnlocked.push(achievement);
           unlockedAchievements.push(achievement.id);
         }
       });
       
-      showAchievementNotification(newAchievements);
+      if (newlyUnlocked.length > 0) {
+        // Assign the new full list back to cache
+        GameCache.user.achievements = unlockedAchievements;
+
+        // Persist to database immediately
+        await sb.from('profiles').update({ achievements: unlockedAchievements }).eq('id', currentUserId);
+
+        // Pop the notification ONLY for those newly unlocked this time
+        showAchievementNotification(newlyUnlocked);
+      }
     }
 
     function openAchievements() {
@@ -1768,15 +1845,27 @@
     }
     function updateBadges(){
       // Count only incoming messages (to_user_id === currentUserId AND from_user_id !== currentUserId)
-      // Only count messages that haven't been read (we track this by checking if the conversation has been opened)
-      const unreadMsgs = GameCache.messages.filter(m => m.to_user_id === currentUserId && m.from_user_id !== currentUserId && !m.read).length;
+      const unreadMsgs = GameCache.messages.filter(m => {
+        if (m.to_user_id !== currentUserId || m.from_user_id === currentUserId) return false;
+        const seen = getLastSeen(m.from_user_id);
+        return !seen || new Date(m.created_at) > new Date(seen);
+      }).length;
+
       // Count only pending invites and friend requests
       const unreadInvs = GameCache.invites.filter(i => i.status === 'pending').length + GameCache.friendRequests.filter(r => r.status === 'pending').length;
-      const mB = document.getElementById('msgBadge'); if(unreadMsgs > 0) { mB.innerText = unreadMsgs; mB.classList.remove('hidden'); } else mB.classList.add('hidden');
-      // Only show invites badge if invites modal is not currently open
-      const socialModal = document.getElementById('socialModal');
-      const isInvitesOpen = socialModal.classList.contains('active') && document.getElementById('socialTitle').innerText === "Invites";
-      const iB = document.getElementById('invBadge'); if(unreadInvs > 0 && !isInvitesOpen) { iB.innerText = unreadInvs; iB.classList.remove('hidden'); } else iB.classList.add('hidden');
+
+      const mB = document.getElementById('msgBadge');
+      if(unreadMsgs > 0) {
+        mB.innerText = unreadMsgs;
+        mB.classList.remove('hidden');
+      } else mB.classList.add('hidden');
+
+      const iB = document.getElementById('invBadge');
+      if(unreadInvs > 0) {
+        iB.innerText = unreadInvs;
+        iB.classList.remove('hidden');
+      } else iB.classList.add('hidden');
+
       document.getElementById('headerNotifDot').style.display = GameCache.notifications.length > 0 ? 'block' : 'none';
     }
 
@@ -2201,53 +2290,98 @@
       alert(`🎉 Achievement Unlocked!\n\n${achievements.map(a => `${a.icon} ${a.name}`).join('\n')}`);
     }
     
-    function claimDailyReward() {
-      const today = new Date().toDateString();
-      const lastDaily = GameCache.user.lastDaily;
+    async function claimDailyReward() {
+      // Prevent concurrent claims
+      if (isClaimingDailyReward) return;
       
-      if (lastDaily === today) {
-        alert('You already claimed your daily reward! Come back tomorrow.');
+      // Use YYYY-MM-DD format for consistent database comparison
+      const today = new Date().toISOString().split('T')[0];
+
+      // 1. Pre-check local cache
+      if (GameCache.user.lastDaily === today) {
+        showToast('notification', '⏳ Already Claimed', 'You already claimed your reward today. Come back tomorrow!');
+        updateDailyRewardButtonState();
         return;
       }
       
-      const yesterday = new Date(Date.now() - 86400000).toDateString();
-      const isConsecutive = lastDaily === yesterday;
-      
-      if (isConsecutive) {
-        GameCache.user.dailyStreak = (GameCache.user.dailyStreak || 0) + 1;
-      } else {
-        GameCache.user.dailyStreak = 1;
+      isClaimingDailyReward = true;
+      const btn = document.getElementById('dailyRewardBtn');
+      if (btn) {
+        btn.disabled = true;
+        btn.innerText = "Checking...";
       }
       
-      const streakBonus = Math.min(GameCache.user.dailyStreak * 5, 50);
-      const coins = 50 + streakBonus;
-      const xp = 25 + Math.floor(streakBonus / 2);
-      
-      GameCache.user.coins += coins;
-      GameCache.user.xp += xp;
-      // Bonus MMR from Daily XP (5%)
-      const bonusMMR = Math.floor(xp * 0.05);
-      GameCache.user.mmr += bonusMMR;
+      try {
+        // 2. Double-check database to prevent multi-device exploits
+        const { data: profile, error: fetchErr } = await sb.from('profiles').select('last_daily, coins, xp, mmr, daily_streak').eq('id', currentUserId).single();
+        
+        if (fetchErr) throw fetchErr;
+        
+        // Ensure we compare the same format
+        const dbLastDaily = profile.last_daily;
+        if (dbLastDaily === today) {
+          GameCache.user.lastDaily = today;
+          showToast('notification', '⏳ Already Claimed', 'You already claimed your reward today!');
+          updateDailyRewardButtonState();
+          return;
+        }
 
-      GameCache.user.lastDaily = today;
-      updateStatsUI();
+        // 3. Calculate rewards
+        const lastDaily = profile.last_daily;
+        const yesterdayDate = new Date();
+        yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+        const yesterday = yesterdayDate.toISOString().split('T')[0];
 
-      alert(`🎁 Daily Reward Claimed!\n\n+${coins} Coins\n+${xp} XP\n📈 +${bonusMMR} MMR\n🔥 ${GameCache.user.dailyStreak} Day Streak!`);
-      
-      // Update database
-      sb.from('profiles').update({
-        coins: GameCache.user.coins,
-        xp: GameCache.user.xp,
-        mmr: GameCache.user.mmr,
-        league: getRank(GameCache.user.mmr),
-        daily_streak: GameCache.user.dailyStreak,
-        last_daily: today
-      }).eq('id', currentUserId);
-      
-      loadProfile();
-      
-      // Check for achievements after daily reward
-      checkAchievements();
+        const isConsecutive = lastDaily === yesterday;
+        
+        const newDailyStreak = isConsecutive ? (profile.daily_streak || 0) + 1 : 1;
+        const streakBonus = Math.min(newDailyStreak * 5, 50);
+        const coinsBonus = 50 + streakBonus;
+        const xpBonus = 25 + Math.floor(streakBonus / 2);
+        const mmrBonus = Math.floor(xpBonus * 0.05);
+        
+        // 4. Update Database
+        const { error: updateErr } = await sb.from('profiles').update({
+          coins: (profile.coins || 0) + coinsBonus,
+          xp: (profile.xp || 0) + xpBonus,
+          mmr: (profile.mmr || 0) + mmrBonus,
+          league: getRank((profile.mmr || 0) + mmrBonus),
+          daily_streak: newDailyStreak,
+          last_daily: today
+        }).eq('id', currentUserId);
+        
+        if (updateErr) throw updateErr;
+
+        // 5. Update local state
+        GameCache.user.coins = (profile.coins || 0) + coinsBonus;
+        GameCache.user.xp = (profile.xp || 0) + xpBonus;
+        GameCache.user.mmr = (profile.mmr || 0) + mmrBonus;
+        GameCache.user.dailyStreak = newDailyStreak;
+        GameCache.user.lastDaily = today;
+        
+        // Success feedback
+        showToast('notification', '🎁 Daily Reward Claimed!', `+${coinsBonus} Coins, +${xpBonus} XP, +${mmrBonus} MMR! 🔥 Streak: ${newDailyStreak}`);
+
+        // Update UI
+        updateStatsUI();
+        updateDailyRewardButtonState();
+
+        // Check for achievements
+        await checkAchievements();
+
+      } catch (err) {
+        console.error('Daily reward error:', err);
+        showToast('notification', '❌ Error', 'Failed to claim reward. Please check your connection.');
+        // Re-enable so they can try again if it was a network error
+        if (btn) {
+          btn.disabled = false;
+          btn.innerText = "🎁 Claim Daily Reward";
+        }
+      } finally {
+        isClaimingDailyReward = false;
+      }
+    }
+      }
     }
 
     function createMatchPayload(mode, participants, teams = null) {
@@ -2628,6 +2762,48 @@
       }
     }
 
+    function isDailyRewardAvailable() {
+      const today = new Date().toISOString().split('T')[0];
+      return GameCache.user.lastDaily !== today;
+    }
+
+    function updateDailyRewardButtonState() {
+      const btn = document.getElementById('dailyRewardBtn');
+      if (!btn) return;
+      
+      if (isDailyRewardAvailable()) {
+        btn.disabled = false;
+        btn.style.opacity = '1';
+        btn.style.cursor = 'pointer';
+        btn.innerText = "🎁 Claim Daily Reward";
+      } else {
+        btn.disabled = true;
+        btn.style.opacity = '0.5';
+        btn.style.cursor = 'not-allowed';
+        btn.innerText = "🎁 Reward Claimed";
+      }
+    }
+
+    function checkDailyRewardEligibility() {
+      if (isDailyRewardAvailable()) {
+        const today = new Date().toISOString().split('T')[0];
+        const lastDaily = GameCache.user.lastDaily;
+        const yesterdayDate = new Date();
+        yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+        const yesterday = yesterdayDate.toISOString().split('T')[0];
+        
+        let messageBody = 'Claim your free coins, XP, and bonus MMR!';
+        if (lastDaily === yesterday) {
+          messageBody += ` Your streak is at ${GameCache.user.dailyStreak} day(s)!`;
+        } else if (!lastDaily) {
+          messageBody = 'Start your daily reward streak now!';
+        }
+        
+        addSystemNotification('🎁 Daily Reward Ready!', messageBody, { source: 'daily' });
+        showToast('notification', '🎁 Daily Reward Ready!', 'Tap to claim your rewards!', () => claimDailyReward());
+      }
+    }
+
     function addSystemNotification(title, body, options = {}) {
       const notif = {
         title,
@@ -2660,9 +2836,8 @@
     }
 
     async function fetchDeveloperNotifications() {
-      const notificationUrl = `https://raw.githubusercontent.com/bandaamos98-create/anagram-rush/main/notification.js?t=${Date.now()}`;
       try {
-        const response = await fetch(notificationUrl);
+        const response = await fetch('https://raw.githubusercontent.com/bandaamos98-create/anagram-rush/main/notification.js?t=' + Date.now());
         if (response.ok) {
           const text = await response.text();
           const match = text.match(/window\.developerNotification\s*=\s*(\{[\s\S]*?\});?/);
@@ -2763,6 +2938,7 @@
         mode: 'single',
         gameType: 'timed',
         duration: duration,
+        wordLength: 4,
         from_user_id: currentUserId,
         to_user_id: 'ai',
         playerNames: {
@@ -2889,7 +3065,7 @@
       }
     }
 
-    function useHint() {
+    async function useHint() {
       let hintCost = 10; // default cost
       
       // Determine hint cost based on match mode
@@ -2917,10 +3093,13 @@
       GameCache.user.coins -= hintCost;
       updateStatsUI();
       
-      // Save to database
-      sb.from('profiles').update({ coins: GameCache.user.coins }).eq('id', currentUserId).then(({ error }) => {
+      // Save to database with await
+      try {
+        const { error } = await sb.from('profiles').update({ coins: GameCache.user.coins }).eq('id', currentUserId);
         if (error) console.error('Failed to save coins:', error);
-      });
+      } catch (err) {
+        console.error('Error saving coins:', err);
+      }
       
       // Reveal the correct word
       document.getElementById('answerInput').value = word;
