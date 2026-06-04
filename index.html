@@ -322,7 +322,7 @@
           </div>
           <div class="feedback" id="feedback" style="margin-top:12px;font-size:14px;opacity:.85;"></div>
         </div>
-        <button class="btn guest-btn" onclick="endMatch()" style="margin-top:4px;"> Exit Match </button>
+        <button id="exitMatchBtn" class="btn modern secondary" onclick="endMatch()" style="margin-top:4px; width:100%; border-radius:18px; padding:16px; font-weight:700;"> 🚪 Exit Match </button>
       </div>
     </div>
 
@@ -2531,6 +2531,16 @@
         hintBtn.innerText = `💡 Hint (${hintCost} 🪙 | Own: ${GameCache.user.coins})`;
       }
       
+      // Show/Hide exit button: Only available in single player
+      const exitBtn = document.getElementById('exitMatchBtn');
+      if (exitBtn) {
+        if (GameCache.match.mode === 'single' || GameCache.match.mode === 'ai') {
+          exitBtn.classList.remove('hidden');
+        } else {
+          exitBtn.classList.add('hidden');
+        }
+      }
+
       if (!GameCache.match.roundStartTime) GameCache.match.roundStartTime = Date.now();
 
       document.getElementById('answerInput').value = '';
