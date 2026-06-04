@@ -77,7 +77,7 @@
     .status-dot.online{ background:var(--success); box-shadow: 0 0 8px var(--success); }
     .status-dot.away{ background:var(--warning); }
     .leader-secondary{ background:rgba(255,255,255,.08); border:none; color:white; padding:8px 14px; border-radius:12px; cursor:pointer; font-weight:600; }
-    .answer-input.modern{ background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.14); color:var(--white); border-radius:18px; padding:14px 16px; font-size:15px; width:100%; outline:none; transition:.25s; }
+    .answer-input.modern{ background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.14); color:var(--white); border-radius:18px; padding:14px 16px; font-size:15px; width:100%; outline:none; transition:.25s; text-transform: uppercase; font-weight: 700; letter-spacing: 2px; }
     .answer-input.modern:focus{ border-color:rgba(59,130,246,.8); box-shadow:0 0 0 4px rgba(59,130,246,.12); }
     .btn.modern{ background:linear-gradient(135deg,#4f46e5,#3b82f6); color:white; border:none; border-radius:20px; padding:14px 18px; font-weight:700; letter-spacing:.03em; box-shadow:0 18px 35px rgba(59,130,246,.18); }
     .btn.modern.secondary{ background:rgba(255,255,255,.08); color:white; border:1px solid rgba(255,255,255,.12); box-shadow:none; }
@@ -204,6 +204,10 @@
 </head>
 <body>
   <div class="toast-container" id="toastContainer"></div>
+  <div id="countdownOverlay" class="hidden" style="position:fixed; inset:0; background:rgba(0,0,0,0.85); display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:20000; transition:.3s;">
+    <div id="countdownText" style="font-size:120px; font-weight:900; color:var(--blue); text-shadow:0 0 40px var(--blue);">3</div>
+    <div id="countdownLabel" style="font-size:32px; font-weight:800; margin-top:20px; letter-spacing:4px;">READY!!</div>
+  </div>
   <div id="splashScreen">
     <img src="https://raw.githubusercontent.com/bandaamos98-create/anagram-rush/main/images/icon.png" alt="Anagram Rush" />
     <p>Anagram Rush</p>
@@ -315,7 +319,7 @@
             </div>
           </div>
           <div class="tiles" id="tiles"></div>
-          <input id="answerInput" class="answer-input modern" placeholder="Type your word..." autofocus />
+          <input id="answerInput" class="answer-input modern" placeholder="Type your word..." autofocus oninput="document.getElementById('feedback').innerHTML = ''" />
           <div style="display:flex;gap:10px;margin-top:12px;">
             <button class="btn modern" onclick="submitAnswer()" style="flex:1;">Submit</button>
             <button class="btn modern" onclick="useHint()" style="flex:1;background:linear-gradient(135deg,var(--warning),#f59e0b);" id="hintBtn">💡 Hint</button>
@@ -609,7 +613,7 @@
       onlineUsers: {},
       leaderboard: [],
       profiles: {},
-      match: { active: false },
+      match: { active: false, matchId: null, channel: null },
       matchHistory: []
     };
 
@@ -668,6 +672,9 @@
       checkDailyRewardEligibility();
       // Check daily reward every hour in case user stays logged in past midnight
       setInterval(checkDailyRewardEligibility, 3600000);
+
+      // Check if user is in an active match on login
+      checkActiveMatch();
     }
 
     /* ========================================== DATA ========================================== */
@@ -979,9 +986,46 @@
           }
           if (document.getElementById('globalChatModal').classList.contains('active')) renderGlobalChat();
         })
-        .subscribe((status, err) => {
+        // Realtime Leaderboard Updates
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles' }, (p) => {
+          console.log('[Realtime] Profile update received:', p.new);
+          // Update profile cache
+          GameCache.profiles[p.new.id] = { ...GameCache.profiles[p.new.id], ...p.new };
+
+          // Update leaderboard list
+          const idx = GameCache.leaderboard.findIndex(l => l.id === p.new.id);
+          if (idx !== -1) {
+            GameCache.leaderboard[idx] = { ...GameCache.leaderboard[idx], ...p.new };
+          } else if (GameCache.leaderboard.length < 100 || p.new.mmr > (GameCache.leaderboard[GameCache.leaderboard.length-1]?.mmr || 0)) {
+            if (idx === -1) GameCache.leaderboard.push(p.new);
+          }
+
+          // Sort and Refresh UI
+          GameCache.leaderboard.sort((a, b) => (b.mmr || 0) - (a.mmr || 0));
+          if (GameCache.leaderboard.length > 100) GameCache.leaderboard = GameCache.leaderboard.slice(0, 100);
+
+          // Update current user's position if it was them
+          if (p.new.id === currentUserId) {
+            GameCache.user.leaderboardPos = getLeaderboardPosition(currentUserId);
+            updateStatsUI();
+          }
+
+          renderLeaderboardPreview();
+          if (document.getElementById('socialModal').classList.contains('active') &&
+              document.getElementById('socialTitle').innerText === "Global Leaders") {
+            openLeaderboard();
+          }
+        })
+        .subscribe(async (status, err) => {
           console.log('[Realtime] DB channel status:', status);
           if (err) console.error('[Realtime] DB channel error:', err);
+
+          if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+            console.warn('[Realtime] Connection lost. Attempting to reconnect in 3s...');
+            setTimeout(() => {
+              if (currentUserId) setupRealtime();
+            }, 3000);
+          }
         });
 
       // DEBUG SUBSCRIPTION ADDED HERE
@@ -1062,6 +1106,43 @@
     async function fetchProfile(id) {
       const { data } = await sb.from('profiles').select('id, display_name, avatar_url, mmr').eq('id', id).maybeSingle();
       if (data) GameCache.profiles[id] = data;
+    }
+
+    async function checkActiveMatch() {
+      try {
+        const { data, error } = await sb.from('match_players').select('match_id').eq('user_id', currentUserId).eq('connected', true).limit(1).maybeSingle();
+
+        if (error) {
+          console.warn('[Match] Active match check failed. Ensure matches/match_players tables exist.', error);
+          return;
+        }
+
+        if (data && data.match_id) {
+          const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+          if (!uuidRegex.test(data.match_id)) return;
+
+          const { data: match } = await sb.from('matches').select('*').eq('id', data.match_id).eq('status', 'active').maybeSingle();
+          if (match) {
+            const { data: players } = await sb.from('match_players').select('user_id, score').eq('match_id', match.id);
+            const participants = players.map(p => p.user_id);
+            const playerScores = {};
+            players.forEach(p => playerScores[p.user_id] = p.score);
+
+            const payload = {
+              matchId: match.id,
+              mode: match.mode,
+              participants,
+              playerScores,
+              currentPuzzle: match.current_puzzle,
+              endsAt: match.ends_at ? new Date(match.ends_at).getTime() : Date.now() + 180000,
+              status: 'active'
+            };
+            startMatchSession(payload, true);
+          }
+        }
+      } catch (e) {
+        console.error('[Match] unexpected error in checkActiveMatch', e);
+      }
     }
 
     async function trackPresence(status) {
@@ -1780,6 +1861,28 @@
       renderTeamSlots();
     }
     
+    async function createMatchInDB(payload) {
+      const { data: match, error } = await sb.from('matches').insert({
+        id: payload.matchId,
+        host_id: currentUserId,
+        mode: payload.mode,
+        status: 'active',
+        current_puzzle: payload.currentPuzzle,
+        total_rounds: 20
+      }).select().single();
+
+      if (error) { console.error('Match creation error', error); return; }
+
+      const playerInserts = payload.participants.map(pid => ({
+        match_id: match.id,
+        user_id: pid,
+        score: 0,
+        connected: true
+      }));
+
+      await sb.from('match_players').insert(playerInserts);
+    }
+
     async function startFreeForAllMatch() {
       const participants = freeForAllPlayers.filter(pid => {
         if (!pid) return false;
@@ -1793,6 +1896,7 @@
       }
       
       const payload = createMatchPayload('ffa', participants);
+      await createMatchInDB(payload);
       startMatchSession(payload);
       try { socialChannel.send({ type: 'broadcast', event: 'match_start', payload }); } catch(e) {}
       closeModal('freeForAllLobbyModal');
@@ -1821,6 +1925,7 @@
       readyB.forEach(pid => teams[pid] = 'B');
 
       const payload = createMatchPayload('team', participants, teams);
+      await createMatchInDB(payload);
       startMatchSession(payload);
       try { socialChannel.send({ type: 'broadcast', event: 'match_start', payload }); } catch(e) {}
       closeModal('teamUpLobbyModal');
@@ -2165,6 +2270,12 @@
     async function respondGameInvite(id, status) {
       const invite = GameCache.invites.find(i => i.id === id);
       if (!invite) return;
+
+      if (status === 'accepted' && GameCache.match.active) {
+        alert('You are already in a match!');
+        return;
+      }
+
       await sb.from('game_invites').update({ status }).eq('id', id);
       GameCache.invites = GameCache.invites.filter(i => i.id !== id);
       updateBadges();
@@ -2173,6 +2284,7 @@
         if (invite.mode === 'quick' || invite.mode === 'ranked') {
           // 1v1 match: First acceptor starts it
           const matchPayload = createMatchPayload(invite.mode, [invite.from_user_id, invite.to_user_id]);
+          await createMatchInDB(matchPayload);
           startMatchSession(matchPayload);
           try { socialChannel.send({ type: 'broadcast', event: 'match_start', payload: matchPayload }); } catch(e) {}
         } else {
@@ -2353,7 +2465,7 @@
     }
     
     const ACHIEVEMENTS = {
-      first_win: { id: 'first_win', name: 'First Victory', description: 'Win your first match!', icon: '🏆', condition: (stats) => stats.wins >= 1, type: 'win' },
+      first_win: { id: 'first_win', name: 'First Victory', description: 'Win your first match!', icon: '🏆', winsRequired: 1, type: 'win' },
       xp_100: { id: 'xp_100', name: 'Rising Star', description: 'Reach 100 XP', icon: '⭐', xpRequired: 100, type: 'xp' },
       xp_500: { id: 'xp_500', name: 'Veteran', description: 'Reach 500 XP', icon: '🌟', xpRequired: 500, type: 'xp' },
       xp_1000: { id: 'xp_1000', name: 'Champion', description: 'Reach 1000 XP', icon: '👑', xpRequired: 1000, type: 'xp' },
@@ -2480,41 +2592,97 @@
       };
     }
 
-    function startMatchSession(payload) {
+    function startMatchSession(payload, isReconnect = false) {
       if (GameCache.match.active && GameCache.match.matchId === payload.matchId) return;
+
+      if (GameCache.match.channel) sb.removeChannel(GameCache.match.channel);
+
       GameCache.match = {
-        active: true,
+        active: false, // will be set true after countdown
         ...payload,
-        timer: null
+        timer: null,
+        wordSolvers: {}
       };
+
       document.getElementById('dashboardPage').classList.add('hidden');
       document.getElementById('gameScreen').classList.remove('hidden');
+
+      setupMatchRealtime(payload.matchId);
       renderMatchUI();
+
+      if (isReconnect) {
+        GameCache.match.active = true;
+        resumeMatchTimer();
+      } else {
+        runMatchCountdown();
+      }
+    }
+
+    function runMatchCountdown() {
+      const overlay = document.getElementById('countdownOverlay');
+      const text = document.getElementById('countdownText');
+      const label = document.getElementById('countdownLabel');
+
+      const phases = [
+        { text: '3', label: 'READY!!' },
+        { text: '2', label: 'SET!!' },
+        { text: '1', label: 'GO!!' }
+      ];
+
+      let step = 0;
+
+      // Set initial state immediately to avoid flicker or delay
+      text.innerText = phases[0].text;
+      label.innerText = phases[0].label;
+      overlay.classList.remove('hidden');
+
+      const interval = setInterval(() => {
+        step++;
+        if (step < phases.length) {
+          text.innerText = phases[step].text;
+          label.innerText = phases[step].label;
+        } else {
+          clearInterval(interval);
+          overlay.classList.add('hidden');
+          GameCache.match.active = true;
+          startMatchTimer();
+        }
+      }, 1000);
+    }
+
+    function startMatchTimer() {
       if (GameCache.match.timer) clearInterval(GameCache.match.timer);
       GameCache.match.timer = setInterval(() => {
         const remaining = Math.max(0, Math.round((GameCache.match.endsAt - Date.now()) / 1000));
+        document.getElementById('timer').innerText = remaining;
         const minutes = Math.floor(remaining / 60);
         const seconds = remaining % 60;
-        const timeDisplay = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-        
-        // Update timer displays without re-rendering entire UI
-        document.getElementById('timer').innerText = remaining;
-        document.getElementById('roundCount').innerText = timeDisplay;
-        
-        // Update opponent score if changed (check if opponent made progress)
-        const opponentId = GameCache.match.participants.find(id => id !== currentUserId);
-        if (opponentId && document.getElementById('oppScore')) {
-          const score = GameCache.match.playerScores[opponentId] || 0;
-          if (document.getElementById('oppScore').innerText != score) {
-            document.getElementById('oppScore').innerText = score;
-          }
-        }
+        document.getElementById('roundCount').innerText = `${minutes}:${seconds.toString().padStart(2, '0')}`;
         
         if (remaining <= 0) {
           clearInterval(GameCache.match.timer);
           finishMatch();
         }
       }, 1000);
+    }
+
+    function resumeMatchTimer() {
+      startMatchTimer();
+    }
+
+    function setupMatchRealtime(matchId) {
+      GameCache.match.channel = sb.channel(`match:${matchId}`);
+      GameCache.match.channel.on('broadcast', { event: 'score_update' }, ({ payload }) => {
+        if (payload.playerId !== currentUserId) {
+          GameCache.match.playerScores[payload.playerId] = payload.score;
+          renderMatchUI();
+        }
+      }).on('broadcast', { event: 'puzzle_update' }, ({ payload }) => {
+        GameCache.match.currentPuzzle = payload.puzzle;
+        GameCache.match.roundStartTime = Date.now();
+        GameCache.match.wordSolvers = {};
+        renderMatchUI();
+      }).subscribe();
     }
 
     function renderMatchUI() {
@@ -2593,8 +2761,8 @@
       document.getElementById('answerInput').focus();
     }
 
-    function finishMatch(won) {
-      if (!GameCache.match.active) return;
+    async function finishMatch(won) {
+      if (!GameCache.match.active && !GameCache.match.timer) return;
       GameCache.match.active = false;
       if (aiInterval) clearInterval(aiInterval);
       if (GameCache.match.timer) clearInterval(GameCache.match.timer);
@@ -2606,6 +2774,13 @@
       const opponentId = participants.find(id => id !== currentUserId) || 'ai';
       const oppScore = GameCache.match.playerScores[opponentId] || 0;
       const isRanked = mode !== 'single';
+
+      // Update match status in DB - ONLY if it's a real multiplayer match (valid UUID)
+      if (GameCache.match.matchId && mode !== 'single' && !GameCache.match.matchId.startsWith('single-')) {
+        await sb.from('matches').update({ status: 'finished' }).eq('id', GameCache.match.matchId);
+        await sb.from('match_players').update({ connected: false }).eq('match_id', GameCache.match.matchId).eq('user_id', currentUserId);
+      }
+      if (GameCache.match.channel) sb.removeChannel(GameCache.match.channel);
 
       let result = 'tie';
       let mmrChange = { winnerChange: 0, loserChange: 0 };
@@ -2734,6 +2909,11 @@
       if (result === 'win') {
         GameCache.user.wins++; GameCache.user.streak++;
         GameCache.user.mmr += mmrChange.winnerChange;
+
+        // Immediate achievement check for first win
+        if (GameCache.user.wins === 1) {
+          await checkAchievements();
+        }
       } else if (result === 'loss') {
         GameCache.user.losses++; GameCache.user.streak = 0;
         GameCache.user.mmr += mmrChange.loserChange;
@@ -2949,24 +3129,28 @@
 
     /* ========================================== GAME LOGIC ========================================== */
     async function findMatch(mode) {
+      if (GameCache.match.active) return alert('Already in a match!');
+
       if (mode === 'single') {
         startSinglePlayer();
         return;
       }
       
-      // For quick/ranked matches, send invites to all online players
-      const onlinePlayers = Object.keys(GameCache.onlineUsers).filter(id => id !== currentUserId);
-      if (onlinePlayers.length === 0) {
-        alert('No players online. Try again later or play against AI.');
-        return;
+      // Auto-matchmaking logic
+      const { data: queue, error } = await sb.from('matchmaking_queue').select('*').eq('mode', mode).neq('user_id', currentUserId).order('created_at', { ascending: true }).limit(1).maybeSingle();
+
+      if (queue) {
+        // Match found!
+        await sb.from('matchmaking_queue').delete().eq('id', queue.id);
+        const matchPayload = createMatchPayload(mode, [queue.user_id, currentUserId]);
+        await createMatchInDB(matchPayload);
+        startMatchSession(matchPayload);
+        try { socialChannel.send({ type: 'broadcast', event: 'match_start', payload: matchPayload }); } catch(e) {}
+      } else {
+        // Join queue
+        await sb.from('matchmaking_queue').insert({ user_id: currentUserId, mode: mode, mmr: GameCache.user.mmr });
+        showToast('notification', 'Matchmaking', `Searching for ${mode} match...`);
       }
-      
-      // Send invites to all online players
-      for (const playerId of onlinePlayers) {
-        await sendInvite(playerId, mode);
-      }
-      
-      alert(`${mode} match invites sent to ${onlinePlayers.length} online player(s). First to accept will play with you!`);
     }
     
     function startSinglePlayer() {
@@ -3028,73 +3212,54 @@
     
     let aiInterval = null;
     function startAI() {
-      if (aiInterval) clearInterval(aiInterval);
+      if (aiInterval) clearTimeout(aiInterval);
 
-      aiInterval = setInterval(() => {
-        if (!GameCache.match.active || GameCache.match.mode !== 'single') {
-          clearInterval(aiInterval);
+      const think = () => {
+        // If match is finished or mode changed, stop.
+        if (GameCache.match.mode !== 'single') return;
+
+        // If match hasn't started yet (countdown), wait a second and try again.
+        if (!GameCache.match.active) {
+          aiInterval = setTimeout(think, 1000);
           return;
         }
 
-        // AI is not smart: 60% chance to skip, slower timing (8-20 seconds)
-        if (Math.random() < 0.6) {
-          // AI skips this puzzle
-          return;
-        }
+        // Random thinking time: 6 to 14 seconds
+        const delay = 6000 + Math.random() * 8000;
+        const targetPuzzle = GameCache.match.currentPuzzle?.solution;
 
-        const solveTime = 8000 + Math.random() * 12000;
-        setTimeout(() => {
+        aiInterval = setTimeout(() => {
           if (!GameCache.match.active || GameCache.match.mode !== 'single') return;
 
-          // Get AI's current puzzle based on its puzzle index
-          const aiPuzzleIndex = GameCache.match.playerPuzzleIndex['ai'] || 0;
-          const currentPuzzle = GameCache.match.puzzles[aiPuzzleIndex];
+          // Only "solve" if the puzzle is still the same one we started thinking about
+          if (GameCache.match.currentPuzzle?.solution === targetPuzzle) {
+            // AI is not perfect: 75% accuracy
+            if (Math.random() < 0.75) {
+              const points = 50;
 
-          if (!currentPuzzle) return;
+              GameCache.match.playerScores['ai'] += points;
+              GameCache.match.playerStreaks['ai']++;
+              GameCache.match.playerCorrectCount['ai']++;
 
-          const word = currentPuzzle.solution;
+              // Trigger next puzzle logic
+              const nextPuzzle = generateLetters(GameCache.match.wordLength || 4);
+              GameCache.match.currentPuzzle = nextPuzzle;
+              GameCache.match.roundStartTime = Date.now();
+              GameCache.match.wordSolvers = {};
 
-          // AI is not smart: 50% chance to get it wrong
-          if (Math.random() < 0.5) {
-            // Wrong answer - don't add score, reset streak
-            GameCache.match.playerStreaks['ai'] = 0;
-            GameCache.match.playerWrongCount['ai']++;
-          } else {
-            // Correct answer but with random slower time (8-20 seconds)
-            const solveTimeSeconds = solveTime / 1000;
-            const isFirstSolve = !GameCache.match.wordSolvers || !GameCache.match.wordSolvers[word];
-            if (isFirstSolve) {
-              if (!GameCache.match.wordSolvers) GameCache.match.wordSolvers = {};
-              GameCache.match.wordSolvers[word] = ['ai'];
-            }
+              renderMatchUI();
 
-            const score = calculateScore(word, solveTimeSeconds, GameCache.match.playerStreaks['ai'], isFirstSolve, false);
-
-            GameCache.match.playerScores['ai'] += score;
-            GameCache.match.playerStreaks['ai']++;
-            GameCache.match.playerCorrectCount['ai']++;
-            GameCache.match.playerSolveTimes['ai'].push(solveTimeSeconds);
-
-            // Update AI's puzzle index
-            GameCache.match.playerPuzzleIndex['ai'] = aiPuzzleIndex + 1;
-
-            // Check if we need to generate a new puzzle
-            const nextPuzzleIndex = Math.max(
-              GameCache.match.playerPuzzleIndex['ai'],
-              GameCache.match.playerPuzzleIndex[currentUserId] || 0
-            );
-
-            if (nextPuzzleIndex >= GameCache.match.puzzles.length) {
-              const newPuzzle = generateLetters(GameCache.match.wordLength || 4);
-              GameCache.match.puzzles.push(newPuzzle);
+              // Visual feedback for AI solving
+              const feedback = document.getElementById('feedback');
+              if (feedback) feedback.innerHTML = `<div style="color:var(--purple); opacity:0.7;">🤖 AI solved the word!</div>`;
             }
           }
+          // Start next cycle
+          think();
+        }, delay);
+      };
 
-          // Update only opponent score without re-rendering entire UI
-          const oppScoreEl = document.getElementById('oppScore');
-          if (oppScoreEl) oppScoreEl.innerText = GameCache.match.playerScores['ai'];
-        }, solveTime);
-      }, 1000);
+      think();
     }
     
     function startGame(mode){ 
@@ -3123,7 +3288,7 @@
       }
       
       const currentPuzzle = GameCache.match.currentPuzzle;
-      const word = currentPuzzle?.word || currentPuzzle?.solution;
+      const word = currentPuzzle?.solution || currentPuzzle?.word;
       if (!currentPuzzle || !word) {
         alert('No active puzzle to solve.');
         return;
@@ -3133,95 +3298,115 @@
       GameCache.user.coins -= hintCost;
       updateStatsUI();
       
-      // Save to database with await
-      try {
-        const { error } = await sb.from('profiles').update({ coins: GameCache.user.coins }).eq('id', currentUserId);
-        if (error) console.error('Failed to save coins:', error);
-      } catch (err) {
-        console.error('Error saving coins:', err);
+      // Save to database only if it's not single player
+      const isRealMatch = GameCache.match.matchId && !GameCache.match.matchId.startsWith('single-');
+      if (isRealMatch) {
+        sb.from('profiles').update({ coins: GameCache.user.coins }).eq('id', currentUserId);
       }
       
       // Reveal the correct word
-      document.getElementById('answerInput').value = word;
-      document.getElementById('feedback').innerHTML = `<div style="color:var(--success);">💡 Hint used! The word is: ${word}</div>`;
+      const input = document.getElementById('answerInput');
+      input.value = word.toUpperCase();
+      document.getElementById('feedback').innerHTML = `<div style="color:var(--success); font-weight:700;">💡 Hint: The word is ${word.toUpperCase()}</div>`;
+
+      // Focus input to keep keyboard open
+      input.focus();
     }
 
-    function submitAnswer(){
+    async function submitAnswer(){
       if (!GameCache.match.active) return;
-      const guess = document.getElementById('answerInput').value.trim().toLowerCase();
+      const input = document.getElementById('answerInput');
+      const guess = input.value.trim().toUpperCase();
       if (!guess || guess.length < 2) return;
       
       const currentPuzzle = GameCache.match.currentPuzzle;
       const letters = currentPuzzle.scrambled;
-      
-      if (!validWords.has(guess)) {
-        document.getElementById('feedback').innerText = `"${guess}" is not a valid word. Try again!`;
+      const lowerGuess = guess.toLowerCase();
+
+      const feedback = document.getElementById('feedback');
+
+      if (!validWords.has(lowerGuess)) {
+        feedback.innerHTML = `<div style="color:var(--danger); animation: shake 0.4s;">❌ "${guess}" is not a valid word!</div>`;
         GameCache.match.playerWrongCount[currentUserId]++;
+        input.focus();
         return;
       }
       
-      if (!canFormWord(guess, letters)) {
-        document.getElementById('feedback').innerText = `"${guess}" cannot be formed from these letters. Try again!`;
+      if (!canFormWord(lowerGuess, letters)) {
+        feedback.innerHTML = `<div style="color:var(--danger); animation: shake 0.4s;">❌ "${guess}" uses invalid letters!</div>`;
         GameCache.match.playerWrongCount[currentUserId]++;
+        input.focus();
         return;
       }
       
       const solveTime = (Date.now() - GameCache.match.roundStartTime) / 1000;
-      const myScore = GameCache.match.playerScores[currentUserId] || 0;
+      const solution = currentPuzzle.solution.toUpperCase();
 
-      // Points calculation with multi-player aware logic
-      const currentWord = GameCache.match.currentPuzzle.solution;
+      if (guess !== solution) {
+        feedback.innerHTML = `<div style="color:var(--warning); animation: shake 0.4s;">🤔 "${guess}" is valid but not the target!</div>`;
+        input.focus();
+        return;
+      }
+
+      // First solve bonus calculation
+      const word = solution;
       if (!GameCache.match.wordSolvers) GameCache.match.wordSolvers = {};
-      const isFirstSolve = !GameCache.match.wordSolvers[currentWord];
-      GameCache.match.wordSolvers[currentWord] = GameCache.match.wordSolvers[currentWord] || [];
-      GameCache.match.wordSolvers[currentWord].push(currentUserId);
+      const isFirstSolve = !GameCache.match.wordSolvers[word];
 
-      const points = calculateScore(guess, solveTime, GameCache.match.playerStreaks[currentUserId], isFirstSolve, false);
+      let points = 0;
+      if (GameCache.match.mode === 'ffa') {
+        const order = Object.keys(GameCache.match.wordSolvers).length;
+        const rewards = [100, 75, 50, 25];
+        points = rewards[order] || 10;
+      } else {
+        points = calculateScore(guess, solveTime, GameCache.match.playerStreaks[currentUserId], isFirstSolve, false);
+      }
 
+      GameCache.match.wordSolvers[word] = true;
       GameCache.match.playerScores[currentUserId] += points;
       GameCache.match.playerStreaks[currentUserId]++;
       GameCache.match.playerCorrectCount[currentUserId]++;
-      GameCache.match.playerSolveTimes[currentUserId].push(solveTime);
-      GameCache.match.roundStartTime = Date.now();
 
-      // Update player's puzzle index
-      GameCache.match.playerPuzzleIndex[currentUserId] = (GameCache.match.playerPuzzleIndex[currentUserId] || 0) + 1;
+      // Update DB and Broadcast - ONLY for real multiplayer matches
+      const isRealMatch = GameCache.match.matchId && !GameCache.match.matchId.startsWith('single-');
 
-      // Ensure next puzzle is generated if needed
-      const maxIndex = Object.values(GameCache.match.playerPuzzleIndex).reduce((max, idx) => Math.max(max, idx), 0);
-      if (maxIndex >= GameCache.match.puzzles.length) {
-        const newPuzzle = generateLetters(GameCache.match.wordLength || 6);
-        GameCache.match.puzzles.push(newPuzzle);
+      if (isRealMatch) {
+        // Fire and forget DB update to keep UI snappy
+        sb.from('match_players').update({
+          score: GameCache.match.playerScores[currentUserId],
+          solved_count: GameCache.match.playerCorrectCount[currentUserId]
+        }).eq('match_id', GameCache.match.matchId).eq('user_id', currentUserId);
+
+        if (GameCache.match.channel) {
+          GameCache.match.channel.send({
+            type: 'broadcast',
+            event: 'score_update',
+            payload: { playerId: currentUserId, score: GameCache.match.playerScores[currentUserId] }
+          });
+        }
       }
 
-      // Update current local puzzle
-      GameCache.match.currentPuzzle = GameCache.match.puzzles[GameCache.match.playerPuzzleIndex[currentUserId]];
+      // Host generates next puzzle
+      const isHost = GameCache.match.participants[0] === currentUserId;
+      if (isHost || GameCache.match.mode === 'single') {
+        const nextPuzzle = generateLetters(GameCache.match.wordLength || 6);
+        GameCache.match.currentPuzzle = nextPuzzle;
+        GameCache.match.roundStartTime = Date.now();
+        GameCache.match.wordSolvers = {};
 
-      // Update UI feedback
-      let feedback = `+${points} points!`;
-      let feedbackClass = 'feedback-correct';
-      if (isFirstSolve) { feedback = `🏆 FIRST TO SOLVE! +${points} points!`; feedbackClass = 'feedback-first'; }
-
-      const feedbackEl = document.getElementById('feedback');
-      feedbackEl.innerHTML = `<span class="${feedbackClass}">${feedback}</span>`;
-
-      // Broadcast progress to ALL participants
-      try {
-        socialChannel.send({
-          type: 'broadcast',
-          event: 'match_progress',
-          payload: {
-            matchId: GameCache.match.matchId,
-            playerId: currentUserId,
-            score: GameCache.match.playerScores[currentUserId],
-            streak: GameCache.match.playerStreaks[currentUserId],
-            correctCount: GameCache.match.playerCorrectCount[currentUserId],
-            puzzleIndex: GameCache.match.playerPuzzleIndex[currentUserId],
-            puzzles: GameCache.match.puzzles
+        if (isRealMatch) {
+          sb.from('matches').update({ current_puzzle: nextPuzzle }).eq('id', GameCache.match.matchId);
+          if (GameCache.match.channel) {
+            GameCache.match.channel.send({
+              type: 'broadcast',
+              event: 'puzzle_update',
+              payload: { puzzle: nextPuzzle }
+            });
           }
-        }); 
-      } catch(e) {}
+        }
+      }
 
+      input.value = '';
       renderMatchUI();
     }
 
