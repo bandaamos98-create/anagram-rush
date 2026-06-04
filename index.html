@@ -1882,8 +1882,29 @@
     }
     
 
-    function getLevelXP(level){ return Math.floor(100 * Math.pow(1.5, level - 1)); }
-    function getXPProgress(){ const needed = getLevelXP(GameCache.user.level + 1); const current = GameCache.user.xp - getLevelXP(GameCache.user.level); return Math.min(100, Math.max(0, (current / needed) * 100)); }
+    function getLevelXP(level){
+      if (level <= 1) return 0;
+      let total = 0;
+      for (let i = 1; i < level; i++) {
+        total += Math.floor(100 * Math.pow(1.5, i - 1));
+      }
+      return total;
+    }
+    function getLevel(xp) {
+      let level = 1;
+      while (xp >= getLevelXP(level + 1)) {
+        level++;
+      }
+      return level;
+    }
+    function getXPProgress(){
+      const currentLevel = GameCache.user.level || 1;
+      const baseXP = getLevelXP(currentLevel);
+      const nextLevelXP = getLevelXP(currentLevel + 1);
+      const required = nextLevelXP - baseXP;
+      const progress = GameCache.user.xp - baseXP;
+      return Math.min(100, Math.max(0, (progress / required) * 100));
+    }
     function openModal(id){ document.getElementById(id).classList.add("active"); }
     function closeModal(id){ document.getElementById(id).classList.remove("active"); }
     
@@ -1931,6 +1952,9 @@
 
     function updateStatsUI(){
       const currentMMR = GameCache.user.mmr || 0;
+      const currentLevel = getLevel(GameCache.user.xp);
+      GameCache.user.level = currentLevel;
+
       const rankData = getRankData(currentMMR, GameCache.user.leaderboardPos);
       const rank = `${rankData.icon} ${rankData.name}`;
 
@@ -1945,30 +1969,31 @@
 
       const leagueBadge = document.getElementById("leagueBadge");
       if (leagueBadge) {
-        leagueBadge.innerText = rank;
+        leagueBadge.innerText = `${rank} • Lvl ${currentLevel}`;
         leagueBadge.style.color = rankData.color;
       }
 
       const headerRank = document.getElementById("headerRank");
-      if (headerRank) headerRank.innerText = rankData.name;
+      if (headerRank) headerRank.innerText = `${rankData.name} • Lvl ${currentLevel}`;
 
       const rankNameDisplay = document.getElementById("rankNameDisplay");
       if (rankNameDisplay) rankNameDisplay.innerText = rankData.name;
 
       const coinsDisplay = document.getElementById("coinsDisplay");
       if (coinsDisplay) coinsDisplay.innerText = GameCache.user.coins;
-      
-      // Update Rank Progress Bar based on MMR
-      const tierMMR = 600;
-      const currentTierStart = Math.floor(currentMMR / tierMMR) * tierMMR;
-      const currentTierProgress = ((currentMMR - currentTierStart) / tierMMR) * 100;
-      
-      const xpBar = document.getElementById("xpBar");
-      if (xpBar) xpBar.style.width = `${Math.min(100, Math.max(0, currentTierProgress))}%`;
 
-      const nextRankThreshold = currentTierStart + tierMMR;
+      // Update Level Progress Bar
+      const xpProgress = getXPProgress();
+      const xpBar = document.getElementById("xpBar");
+      if (xpBar) xpBar.style.width = `${xpProgress}%`;
+
+      const baseXP = getLevelXP(currentLevel);
+      const nextLevelXP = getLevelXP(currentLevel + 1);
+      const currentProgressXP = GameCache.user.xp - baseXP;
+      const requiredXP = nextLevelXP - baseXP;
+
       const xpText = document.getElementById("xpText");
-      if (xpText) xpText.innerText = `${currentMMR} / ${nextRankThreshold} MMR`;
+      if (xpText) xpText.innerText = `Level ${currentLevel}: ${currentProgressXP} / ${requiredXP} XP`;
     }
     function renderLeaderboardPreview(){
       const cont = document.getElementById('leaderboardPreview');
@@ -2328,7 +2353,7 @@
     }
     
     const ACHIEVEMENTS = {
-      first_win: { id: 'first_win', name: 'First Victory', description: 'Win your first match (excluding AI)', icon: '🏆', condition: (stats) => stats.wins >= 1, type: 'win' },
+      first_win: { id: 'first_win', name: 'First Victory', description: 'Win your first match!', icon: '🏆', condition: (stats) => stats.wins >= 1, type: 'win' },
       xp_100: { id: 'xp_100', name: 'Rising Star', description: 'Reach 100 XP', icon: '⭐', xpRequired: 100, type: 'xp' },
       xp_500: { id: 'xp_500', name: 'Veteran', description: 'Reach 500 XP', icon: '🌟', xpRequired: 500, type: 'xp' },
       xp_1000: { id: 'xp_1000', name: 'Champion', description: 'Reach 1000 XP', icon: '👑', xpRequired: 1000, type: 'xp' },
@@ -2574,6 +2599,7 @@
       if (aiInterval) clearInterval(aiInterval);
       if (GameCache.match.timer) clearInterval(GameCache.match.timer);
       
+      const oldRank = getRank(GameCache.user.mmr);
       const mode = GameCache.match.mode;
       const meScore = GameCache.match.playerScores[currentUserId] || 0;
       const participants = GameCache.match.participants;
@@ -2701,6 +2727,10 @@
       GameCache.user.xp += xpGained;
       GameCache.user.coins += coinsGained;
 
+      // Bonus MMR from XP gained (e.g. 5% of XP)
+      const bonusMMR = Math.floor(xpGained * 0.05);
+      GameCache.user.mmr += bonusMMR;
+
       if (result === 'win') {
         GameCache.user.wins++; GameCache.user.streak++;
         GameCache.user.mmr += mmrChange.winnerChange;
@@ -2713,6 +2743,11 @@
 
       updateStatsUI();
       checkAchievements();
+
+      const newRank = getRank(GameCache.user.mmr);
+      if (oldRank !== newRank && GameCache.user.mmr > 0) {
+        addSystemNotification(`🎉 Rank Up!`, `Congratulations! You've been promoted to ${newRank}!`);
+      }
 
       // Append rewards and ranking to summary
       const rewardsHTML = `
@@ -2745,12 +2780,6 @@
 
     async function updateProfileAfterMatch(result, isRanked, mmrChange, xpGained = 0) {
       try {
-        const oldRank = getRank(GameCache.user.mmr);
-
-        // Bonus MMR from XP gained (e.g. 5% of XP)
-        const bonusMMR = Math.floor(xpGained * 0.05);
-        GameCache.user.mmr += bonusMMR;
-
         const currentRank = getRank(GameCache.user.mmr);
 
         const updateData = {
@@ -2768,11 +2797,6 @@
         };
 
         await sb.from('profiles').update(updateData).eq('id', currentUserId);
-
-        // Check for Rank Up notification
-        if (oldRank !== currentRank && GameCache.user.mmr > 0) {
-          addSystemNotification(`🎉 Rank Up!`, `Congratulations! You've been promoted to ${currentRank}!`);
-        }
       } catch (err) {
         console.error('Failed to update profile after match:', err);
       }
