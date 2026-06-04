@@ -672,7 +672,7 @@
 
     /* ========================================== DATA ========================================== */
     async function loadProfile(){
-      const { data: profile, error: profileErr } = await sb.from('profiles').select('*').eq('id', currentUserId).maybeSingle();
+      let { data: profile, error: profileErr } = await sb.from('profiles').select('*').eq('id', currentUserId).maybeSingle();
       if (profileErr) console.error('[Profile] Error fetching profile:', profileErr);
 
       let authUser = null;
@@ -735,8 +735,6 @@
         profile.last_daily = profile.last_daily || null;
 
         // REPAIR: Ensure achievements is a valid array
-        console.log("Achievements value:", profile.achievements, "Type:", typeof profile.achievements, "IsArray:", Array.isArray(profile.achievements));
-
         if (typeof profile.achievements === 'string') {
           try {
             profile.achievements = JSON.parse(profile.achievements);
@@ -745,15 +743,16 @@
           }
         }
 
-        if (!Array.isArray(profile.achievements)) {
-          console.warn('[Profile] Achievements is not an array, resetting to []', profile.achievements);
-          profile.achievements = [];
-        }
+        const achievementsArray = Array.isArray(profile.achievements)
+          ? profile.achievements
+          : [];
+
+        console.log("Achievements value:", achievementsArray, "Type:", typeof achievementsArray, "IsArray:", Array.isArray(achievementsArray));
 
         // Audit and clean achievements
         const validAchievementIds = Object.keys(ACHIEVEMENTS);
-        const originalAchievementCount = profile.achievements.length;
-        profile.achievements = profile.achievements.filter(id => validAchievementIds.includes(id));
+        const originalAchievementCount = achievementsArray.length;
+        profile.achievements = achievementsArray.filter(id => validAchievementIds.includes(id));
 
         if (profile.achievements.length !== originalAchievementCount) {
           console.log('[Audit] Cleaned corrupted achievements. Removed:', originalAchievementCount - profile.achievements.length);
