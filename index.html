@@ -599,7 +599,7 @@
     }
 
     const GameCache = {
-      user: { id: '', email: '', display_name: '', avatar_url: '', mmr: 0, xp: 0, level: 1, coins: 0, wins: 0, losses: 0, draws: 0, rank_points: 0, streak: 0, dailyStreak: 0, lastDaily: null, achievements: [], achievement_notifications: [] },
+      user: { id: '', email: '', display_name: '', avatar_url: '', mmr: 0, xp: 0, level: 1, coins: 0, wins: 0, losses: 0, draws: 0, rank_points: 0, streak: 0, dailyStreak: 0, lastDaily: null, achievements: [], achievement_notifications: true },
       friends: [],
       messages: [],
       invites: [],
@@ -698,7 +698,7 @@
           daily_streak: 0,
           last_daily: null,
           achievements: [],
-          achievement_notifications: [],
+          achievement_notifications: true,
           email: authUser?.email || ''
         };
         console.log('[Profile] Creating new profile with payload:', insertPayload);
@@ -752,7 +752,7 @@
           dailyStreak: profile.daily_streak,
           lastDaily: profile.last_daily,
           achievements: profile.achievements || [],
-          achievement_notifications: profile.achievement_notifications || []
+          achievement_notifications: typeof profile.achievement_notifications === 'boolean' ? profile.achievement_notifications : true
         };
         document.getElementById("headerName").innerText = GameCache.user.display_name;
         document.getElementById("headerAvatar").src = profile.avatar_url || avatars[0];
@@ -1190,7 +1190,11 @@
     async function checkAchievements() {
       const data = GameCache.user;
       const unlockedAchievements = [...(data.achievements || [])];
-      const shownNotifications = data.achievement_notifications || [];
+
+      // Use the database's boolean toggle to see if we should show notifications at all
+      if (data.achievement_notifications !== true) return;
+
+      const newlyUnlocked = [];
       
       Object.values(ACHIEVEMENTS).forEach(achievement => {
         if (unlockedAchievements.includes(achievement.id)) return;
@@ -1220,24 +1224,28 @@
         
         if (shouldUnlock && !unlockedAchievements.includes(achievement.id)) {
           unlockedAchievements.push(achievement.id);
+          newlyUnlocked.push(achievement);
         }
       });
       
-      if (unlockedAchievements.length > GameCache.user.achievements.length) {
+      if (newlyUnlocked.length > 0) {
         GameCache.user.achievements = unlockedAchievements;
-        await sb.from('profiles').update({ achievements: unlockedAchievements }).eq('id', currentUserId);
-      }
 
-      for (const achievementId of unlockedAchievements) {
-        if (!shownNotifications.includes(achievementId)) {
-          const achievement = ACHIEVEMENTS[achievementId];
-          if (achievement) {
-            showAchievementNotification([achievement]);
-            shownNotifications.push(achievementId);
-            GameCache.user.achievement_notifications = shownNotifications;
-            await sb.from('profiles').update({ achievement_notifications: shownNotifications }).eq('id', currentUserId);
-          }
+        // Show notification for each newly unlocked achievement
+        newlyUnlocked.forEach(achievement => {
+          showAchievementNotification([achievement]);
+        });
+
+        // Ensure we only send valid types to Supabase
+        let validNotificationsSetting = GameCache.user.achievement_notifications;
+        if (typeof validNotificationsSetting !== "boolean") {
+            validNotificationsSetting = true;
         }
+
+        await sb.from('profiles').update({
+            achievements: unlockedAchievements,
+            achievement_notifications: validNotificationsSetting
+        }).eq('id', currentUserId);
       }
     }
 
