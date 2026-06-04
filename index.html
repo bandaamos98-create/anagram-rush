@@ -594,8 +594,12 @@
     let dbChannel = null;
     let isClaimingDailyReward = false; // Prevent concurrent claims
 
+    function getTodayDate() {
+      return new Date().toISOString().split('T')[0];
+    }
+
     const GameCache = {
-      user: { id: '', email: '', display_name: '', avatar_url: '', mmr: 0, xp: 0, level: 1, coins: 0, wins: 0, losses: 0, draws: 0, rank_points: 0, streak: 0, dailyStreak: 0, lastDaily: null, achievements: [] },
+      user: { id: '', email: '', display_name: '', avatar_url: '', mmr: 0, xp: 0, level: 1, coins: 0, wins: 0, losses: 0, draws: 0, rank_points: 0, streak: 0, dailyStreak: 0, lastDaily: null, achievements: [], achievement_notifications: [] },
       friends: [],
       messages: [],
       invites: [],
@@ -694,6 +698,7 @@
           daily_streak: 0,
           last_daily: null,
           achievements: [],
+          achievement_notifications: [],
           email: authUser?.email || ''
         };
         console.log('[Profile] Creating new profile with payload:', insertPayload);
@@ -746,7 +751,8 @@
           coins: profile.coins,
           dailyStreak: profile.daily_streak,
           lastDaily: profile.last_daily,
-          achievements: profile.achievements
+          achievements: profile.achievements || [],
+          achievement_notifications: profile.achievement_notifications || []
         };
         document.getElementById("headerName").innerText = GameCache.user.display_name;
         document.getElementById("headerAvatar").src = profile.avatar_url || avatars[0];
@@ -1082,7 +1088,7 @@
       const systemNotifications = [];
       
       // Daily reward notification
-      const today = new Date().toDateString();
+      const today = getTodayDate();
       const lastDaily = GameCache.user.lastDaily;
       if (lastDaily !== today) {
         systemNotifications.push({
@@ -1183,11 +1189,10 @@
 
     async function checkAchievements() {
       const data = GameCache.user;
-      const unlockedAchievements = Array.isArray(data.achievements) ? [...data.achievements] : [];
-      const newlyUnlocked = [];
+      const unlockedAchievements = [...(data.achievements || [])];
+      const shownNotifications = data.achievement_notifications || [];
       
       Object.values(ACHIEVEMENTS).forEach(achievement => {
-        // Skip if already unlocked in local cache
         if (unlockedAchievements.includes(achievement.id)) return;
         
         let shouldUnlock = false;
@@ -1213,21 +1218,26 @@
           });
         }
         
-        if (shouldUnlock) {
-          newlyUnlocked.push(achievement);
+        if (shouldUnlock && !unlockedAchievements.includes(achievement.id)) {
           unlockedAchievements.push(achievement.id);
         }
       });
       
-      if (newlyUnlocked.length > 0) {
-        // Assign the new full list back to cache
+      if (unlockedAchievements.length > GameCache.user.achievements.length) {
         GameCache.user.achievements = unlockedAchievements;
-
-        // Persist to database immediately
         await sb.from('profiles').update({ achievements: unlockedAchievements }).eq('id', currentUserId);
+      }
 
-        // Pop the notification ONLY for those newly unlocked this time
-        showAchievementNotification(newlyUnlocked);
+      for (const achievementId of unlockedAchievements) {
+        if (!shownNotifications.includes(achievementId)) {
+          const achievement = ACHIEVEMENTS[achievementId];
+          if (achievement) {
+            showAchievementNotification([achievement]);
+            shownNotifications.push(achievementId);
+            GameCache.user.achievement_notifications = shownNotifications;
+            await sb.from('profiles').update({ achievement_notifications: shownNotifications }).eq('id', currentUserId);
+          }
+        }
       }
     }
 
@@ -1236,17 +1246,7 @@
       const unlockedAchievements = data.achievements || [];
       const achievementsContent = document.getElementById('achievementsContent');
       achievementsContent.innerHTML = Object.values(ACHIEVEMENTS).map(achievement => {
-        let isUnlocked = false;
-        
-        if (achievement.type === 'xp') {
-          isUnlocked = data.xp >= achievement.xpRequired;
-        } else if (achievement.type === 'win') {
-          isUnlocked = unlockedAchievements.includes(achievement.id);
-        } else if (achievement.type === 'streak') {
-          isUnlocked = data.streak >= achievement.streakRequired;
-        } else if (achievement.condition) {
-          isUnlocked = achievement.condition({ wins: data.wins || 0, streak: data.streak || 0, level: data.level || 1, mmr: data.mmr || 0 });
-        }
+        const isUnlocked = unlockedAchievements.includes(achievement.id);
         
         return `
           <div style="padding:16px;background:${isUnlocked ? 'rgba(139,92,246,0.15)' : 'rgba(255,255,255,0.03)'};border:1px solid ${isUnlocked ? 'rgba(139,92,246,0.4)' : 'rgba(255,255,255,0.08)'};border-radius:12px;text-align:center;opacity:${isUnlocked ? 1 : 0.5};">
@@ -2289,76 +2289,34 @@
     
     async function claimDailyReward() {
       if (isClaimingDailyReward) return;
-      
-      const today = new Date().toLocaleDateString('en-CA');
+      const today = getTodayDate();
 
-      // 1. HARD BLOCK: Immediate local check before anything else
       if (GameCache.user.lastDaily === today) {
-        showToast('notification', '⏳ Already Claimed', 'You have already collected your reward today! Come back tomorrow.');
-        updateDailyRewardButtonState();
+        showToast('notification', 'Already claimed today');
         return;
       }
       
       isClaimingDailyReward = true;
       const btn = document.getElementById('dailyRewardBtn');
-      if (btn) {
-        btn.disabled = true;
-        btn.innerText = "Verifying...";
-      }
+      if (btn) { btn.disabled = true; btn.innerText = "Checking..."; }
       
       try {
-        // 2. HARD BLOCK: Database check to prevent session/tab exploits
-        const { data: profile, error: fetchErr } = await sb.from('profiles').select('last_daily, coins, xp, mmr, daily_streak').eq('id', currentUserId).single();
+        const { data, error } = await sb.rpc('claim_daily_reward', { p_user_id: currentUserId });
         
-        if (fetchErr) throw fetchErr;
-        
-        if (profile.last_daily === today) {
-          GameCache.user.lastDaily = today; // Sync local cache
-          showToast('notification', '⏳ Already Claimed', 'Our records show you already claimed today\'s reward!');
+        if (!data) {
+          showToast('notification', 'Already claimed today');
+          GameCache.user.lastDaily = today;
           updateDailyRewardButtonState();
           return;
         }
 
-        const lastDaily = profile.last_daily;
-        const yesterdayDate = new Date();
-        yesterdayDate.setDate(yesterdayDate.getDate() - 1);
-        const yesterday = yesterdayDate.toLocaleDateString('en-CA');
-
-        const isConsecutive = lastDaily === yesterday;
-        const newDailyStreak = isConsecutive ? (profile.daily_streak || 0) + 1 : 1;
-
-        const streakBonus = Math.min(newDailyStreak * 5, 50);
-        const coinsBonus = 50 + streakBonus;
-        const xpBonus = 25 + Math.floor(streakBonus / 2);
-        const mmrBonus = Math.floor(xpBonus * 0.05);
-        
-        // 3. ATOMIC UPDATE: Send to database
-        const { error: updateErr } = await sb.from('profiles').update({
-          coins: (profile.coins || 0) + coinsBonus,
-          xp: (profile.xp || 0) + xpBonus,
-          mmr: (profile.mmr || 0) + mmrBonus,
-          daily_streak: newDailyStreak,
-          last_daily: today
-        }).eq('id', currentUserId);
-        
-        if (updateErr) throw updateErr;
-
-        // 4. Update local state ONLY after DB success
-        GameCache.user.coins = (profile.coins || 0) + coinsBonus;
-        GameCache.user.xp = (profile.xp || 0) + xpBonus;
-        GameCache.user.mmr = (profile.mmr || 0) + mmrBonus;
-        GameCache.user.dailyStreak = newDailyStreak;
-        GameCache.user.lastDaily = today;
-        
-        showToast('notification', '🎁 Reward Claimed!', `+${coinsBonus} Coins, +${xpBonus} XP! Streak: ${newDailyStreak}d`);
-
-        updateStatsUI();
-        updateDailyRewardButtonState();
+        await loadProfile();
+        showToast('notification', '🎁 Reward Claimed!', 'Coins and XP added!');
         await checkAchievements();
 
       } catch (err) {
         console.error('Daily reward error:', err);
-        showToast('notification', '❌ Error', 'Failed to connect. Please try again.');
+        showToast('notification', '❌ Error', 'Failed to claim reward.');
         updateDailyRewardButtonState();
       } finally {
         isClaimingDailyReward = false;
@@ -2754,7 +2712,7 @@
     }
 
     function isDailyRewardAvailable() {
-      const today = new Date().toLocaleDateString('en-CA');
+      const today = getTodayDate();
       return GameCache.user.lastDaily !== today;
     }
 
@@ -2777,11 +2735,11 @@
 
     function checkDailyRewardEligibility() {
       if (isDailyRewardAvailable()) {
-        const today = new Date().toLocaleDateString('en-CA');
+        const today = getTodayDate();
         const lastDaily = GameCache.user.lastDaily;
         const yesterdayDate = new Date();
         yesterdayDate.setDate(yesterdayDate.getDate() - 1);
-        const yesterday = yesterdayDate.toLocaleDateString('en-CA');
+        const yesterday = yesterdayDate.toISOString().split('T')[0];
         
         let messageBody = 'Claim your free coins, XP, and bonus MMR!';
         if (lastDaily === yesterday) {
