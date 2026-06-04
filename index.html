@@ -2294,8 +2294,8 @@
       // Prevent concurrent claims
       if (isClaimingDailyReward) return;
       
-      // Use YYYY-MM-DD format for consistent database comparison
-      const today = new Date().toISOString().split('T')[0];
+      // Use Local YYYY-MM-DD format for consistent database comparison and local reset
+      const today = new Date().toLocaleDateString('en-CA');
 
       // 1. Pre-check local cache
       if (GameCache.user.lastDaily === today) {
@@ -2317,9 +2317,7 @@
         
         if (fetchErr) throw fetchErr;
         
-        // Ensure we compare the same format
-        const dbLastDaily = profile.last_daily;
-        if (dbLastDaily === today) {
+        if (profile.last_daily === today) {
           GameCache.user.lastDaily = today;
           showToast('notification', '⏳ Already Claimed', 'You already claimed your reward today!');
           updateDailyRewardButtonState();
@@ -2330,7 +2328,7 @@
         const lastDaily = profile.last_daily;
         const yesterdayDate = new Date();
         yesterdayDate.setDate(yesterdayDate.getDate() - 1);
-        const yesterday = yesterdayDate.toISOString().split('T')[0];
+        const yesterday = yesterdayDate.toLocaleDateString('en-CA');
 
         const isConsecutive = lastDaily === yesterday;
         
@@ -2379,8 +2377,6 @@
         }
       } finally {
         isClaimingDailyReward = false;
-      }
-    }
       }
     }
 
@@ -2763,7 +2759,7 @@
     }
 
     function isDailyRewardAvailable() {
-      const today = new Date().toISOString().split('T')[0];
+      const today = new Date().toLocaleDateString('en-CA');
       return GameCache.user.lastDaily !== today;
     }
 
@@ -2786,11 +2782,11 @@
 
     function checkDailyRewardEligibility() {
       if (isDailyRewardAvailable()) {
-        const today = new Date().toISOString().split('T')[0];
+        const today = new Date().toLocaleDateString('en-CA');
         const lastDaily = GameCache.user.lastDaily;
         const yesterdayDate = new Date();
         yesterdayDate.setDate(yesterdayDate.getDate() - 1);
-        const yesterday = yesterdayDate.toISOString().split('T')[0];
+        const yesterday = yesterdayDate.toLocaleDateString('en-CA');
         
         let messageBody = 'Claim your free coins, XP, and bonus MMR!';
         if (lastDaily === yesterday) {
