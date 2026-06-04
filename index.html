@@ -733,8 +733,34 @@
         profile.coins = profile.coins ?? 0;
         profile.daily_streak = profile.daily_streak ?? 0;
         profile.last_daily = profile.last_daily || null;
-        profile.achievements = profile.achievements || [];
-        GameCache.user = { 
+
+        // REPAIR: Ensure achievements is a valid array
+        console.log("Achievements value:", profile.achievements, "Type:", typeof profile.achievements, "IsArray:", Array.isArray(profile.achievements));
+
+        if (typeof profile.achievements === 'string') {
+          try {
+            profile.achievements = JSON.parse(profile.achievements);
+          } catch (e) {
+            profile.achievements = [];
+          }
+        }
+
+        if (!Array.isArray(profile.achievements)) {
+          console.warn('[Profile] Achievements is not an array, resetting to []', profile.achievements);
+          profile.achievements = [];
+        }
+
+        // Audit and clean achievements
+        const validAchievementIds = Object.keys(ACHIEVEMENTS);
+        const originalAchievementCount = profile.achievements.length;
+        profile.achievements = profile.achievements.filter(id => validAchievementIds.includes(id));
+
+        if (profile.achievements.length !== originalAchievementCount) {
+          console.log('[Audit] Cleaned corrupted achievements. Removed:', originalAchievementCount - profile.achievements.length);
+          await sb.from('profiles').update({ achievements: profile.achievements }).eq('id', currentUserId);
+        }
+
+        GameCache.user = {
           id: profile.id,
           email: authUser?.email || profile.email || "",
           display_name: profile.display_name || authUser?.user_metadata?.full_name || authUser?.email?.split('@')[0] || "Player",
@@ -1047,6 +1073,22 @@
     /* ========================================== SOCIAL ACTIONS ========================================== */
     function openProfile(){
       const data = GameCache.user;
+
+      // REPAIR: Ensure achievements is a valid array
+      console.log("Stored achievements:", data.achievements, "Type:", typeof data.achievements, "IsArray:", Array.isArray(data.achievements));
+      if (!Array.isArray(data.achievements)) {
+        console.warn('[Profile] Achievements in cache is not an array, resetting to []');
+        data.achievements = [];
+      }
+
+      const validAchievementIds = Object.keys(ACHIEVEMENTS);
+      const cleanedAchievements = data.achievements.filter(id => validAchievementIds.includes(id));
+
+      if (cleanedAchievements.length !== data.achievements.length) {
+        console.warn('[Profile] Detected unsynced corrupted achievements in cache, cleaning UI state...');
+        data.achievements = cleanedAchievements;
+      }
+
       const rank = getRank(data.mmr, data.leaderboardPos);
       const rankData = getRankData(data.mmr);
 
@@ -1189,7 +1231,24 @@
 
     async function checkAchievements() {
       const data = GameCache.user;
-      const unlockedAchievements = [...(data.achievements || [])];
+
+      console.log('Achievement Check', {
+        xp: data.xp,
+        wins: data.wins,
+        losses: data.losses,
+        level: data.level,
+        streak: data.streak,
+        mmr: data.mmr,
+        achievements: data.achievements
+      });
+
+      // REPAIR: Ensure achievements is a valid array
+      if (!Array.isArray(data.achievements)) {
+        console.warn('[Achievements] data.achievements is not an array, fixing...');
+        data.achievements = [];
+      }
+
+      const unlockedAchievements = [...data.achievements];
 
       // Use the database's boolean toggle to see if we should show notifications at all
       if (data.achievement_notifications !== true) return;
@@ -1223,6 +1282,7 @@
         }
         
         if (shouldUnlock && !unlockedAchievements.includes(achievement.id)) {
+          console.log('Unlocking achievement:', achievement.id);
           unlockedAchievements.push(achievement.id);
           newlyUnlocked.push(achievement);
         }
