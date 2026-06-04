@@ -21,29 +21,14 @@
     .hidden{display:none !important;}
     .app{ width:100%; max-width:720px; margin:auto; min-height:100vh; position:relative; padding-bottom:110px; }
     .glass{ background:var(--glass); backdrop-filter: blur(18px); border:1px solid var(--border); box-shadow: 0 10px 30px rgba(0,0,0,.25), inset 0 1px 0 rgba(255,255,255,.05); }
-    .login-screen{ min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:24px; position:relative; overflow:hidden; background: linear-gradient(135deg, rgba(15,23,42,0.85), rgba(15,23,42,0.85)), url('https://raw.githubusercontent.com/bandaamos98-create/anagram-rush/main/images/icon.png') center/cover no-repeat; filter: brightness(1); }
-    .login-screen::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: url('https://raw.githubusercontent.com/bandaamos98-create/anagram-rush/main/images/icon.png') center/cover no-repeat;
-      filter: blur(8px) brightness(0.5);
-      z-index: -1;
-    }
-    .floating{ position:absolute; border-radius:50%; filter:blur(40px); animation:float 8s infinite ease-in-out; z-index:1; }
-    .float1{ width:200px; height:200px; background:rgba(59,130,246,.25); top:-50px; left:-80px; }
-    .float2{ width:220px; height:220px; background:rgba(139,92,246,.25); bottom:-80px; right:-80px; animation-delay:2s; }
-    @keyframes float{ 0%,100%{transform:translateY(0px);} 50%{transform:translateY(20px);} }
-    .logo{ text-align:center; margin-bottom:40px; z-index:2; position:relative; }
-    .logo h1{ font-family:'Poppins',sans-serif; font-size:42px; line-height:1; font-weight:800; background:linear-gradient(135deg,var(--blue),var(--purple)); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; margin-bottom:10px; }
-    .logo p{ opacity:.8; }
-    .login-card{ width:100%; border-radius:30px; padding:30px 22px; z-index:2; position:relative; }
-    .btn{ width:100%; border:none; outline:none; border-radius:20px; padding:16px; font-weight:700; font-size:16px; cursor:pointer; transition:.25s; font-family:'Inter',sans-serif; }
-    .btn:active{ transform:scale(.97); }
-    .google-btn{ background:linear-gradient(135deg,var(--blue),var(--purple)); color:white; margin-bottom:14px; box-shadow:0 10px 30px rgba(59,130,246,.3); }
+    .login-screen { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; background: #0F172A; }
+    .login-card { width: 100%; max-width: 380px; text-align: center; }
+    .login-logo { width: 100px; height: 100px; margin-bottom: 24px; border-radius: 24px; box-shadow: 0 10px 25px rgba(0,0,0,0.4); }
+    .login-title { font-family: 'Poppins', sans-serif; font-size: 32px; font-weight: 800; color: white; margin-bottom: 8px; }
+    .login-subtitle { font-size: 14px; opacity: 0.5; margin-bottom: 48px; letter-spacing: 2px; text-transform: uppercase; }
+    .google-btn { background: white; color: #1F2937; border-radius: 14px; padding: 16px; font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 12px; border: none; width: 100%; box-shadow: 0 4px 6px rgba(0,0,0,0.1); cursor: pointer; transition: 0.2s; }
+    .google-btn:hover { background: #F9FAFB; transform: translateY(-1px); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
+    .google-btn img { width: 20px; height: 20px; }
     .guest-btn{ background:rgba(255,255,255,.08); color:white; }
     .header{ display:flex; align-items:center; justify-content:space-between; padding:20px 16px; position:sticky; top:0; z-index:10; backdrop-filter: blur(14px); }
     .header-left{ display:flex; align-items:center; gap:12px; }
@@ -226,11 +211,13 @@
   <div class="app">
     <!-- LOGIN -->
     <div class="login-screen" id="loginScreen">
-      <div class="floating float1"></div><div class="floating float2"></div>
-      <div class="logo"><h1>Anagram Rush</h1><p>Premium Multiplayer Word Battles</p></div>
-      <div class="login-card glass">
-        <button class="btn google-btn" id="googleLogin" style="display:flex;align-items:center;justify-content:center;gap:12px;">
-          <img src="https://www.google.com/favicon.ico" style="width:20px;height:20px;filter:brightness(0) invert(1);" alt="G">Continue with Google
+      <div class="login-card">
+        <img src="https://raw.githubusercontent.com/bandaamos98-create/anagram-rush/main/images/icon.png" class="login-logo" alt="Amos' Anagram Rush">
+        <h1 class="login-title">Amos' Anagram Rush</h1>
+        <p class="login-subtitle">The Ultimate Word Challenge</p>
+        <button class="btn google-btn" id="googleLogin">
+          <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google">
+          <span>Continue with Google</span>
         </button>
       </div>
     </div>
@@ -398,38 +385,50 @@
   </div>
 
   <div class="modal" id="profileModal">
-    <div class="modal-content glass">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
-        <div class="modal-title">Profile</div>
-        <div class="icon-btn" onclick="closeModal('profileModal')">✕</div>
+    <div class="modal-content glass" style="border-radius:32px; padding:32px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:28px;">
+        <h2 class="modal-title" style="margin:0;">Player Profile</h2>
+        <div class="icon-btn" onclick="closeModal('profileModal')" style="border-radius:50%; width:40px; height:40px;">✕</div>
       </div>
-      <div style="display:flex;gap:16px;align-items:center;">
-        <img id="profileAvatar" class="profile-pic" style="width:100px;height:100px;border-radius:20px;" src="">
+
+      <div style="background:rgba(255,255,255,0.03); border-radius:24px; padding:24px; border:1px solid var(--border); margin-bottom:24px;">
+        <div style="display:flex; gap:20px; align-items:center;">
+          <div style="position:relative;">
+            <img id="profileAvatar" class="profile-pic" style="width:96px; height:96px; border-radius:28px; border:4px solid var(--blue); object-fit:cover;" src="">
+            <div onclick="document.getElementById('avatarInput').click()" style="position:absolute; bottom:-6px; right:-6px; background:var(--blue); width:32px; height:32px; border-radius:10px; display:flex; align-items:center; justify-content:center; cursor:pointer; box-shadow:0 4px 10px rgba(59,130,246,0.5);">✏️</div>
+          </div>
+          <div style="flex:1;">
+            <h2 id="profileName" style="font-family:'Poppins',sans-serif; font-size:24px; font-weight:800; margin-bottom:4px;"></h2>
+            <div id="profileEmail" style="font-size:13px; opacity:0.5; margin-bottom:12px; font-weight:500;"></div>
+            <div id="profileLeagueBadge" style="display:inline-flex; align-items:center; padding:6px 12px; background:rgba(59,130,246,0.1); border-radius:10px; font-size:12px; font-weight:700; color:var(--blue); border:1px solid rgba(59,130,246,0.2);"></div>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:grid; gap:16px; margin-bottom:24px;">
         <div>
-          <h2 id="profileName"></h2>
-          <div id="profileEmail" style="font-size:14px;opacity:0.6;"></div>
-          <div id="profileLeagueBadge" style="margin-top:6px;font-weight:700;color:var(--blue);"></div>
+          <label style="font-size:12px; font-weight:700; opacity:0.4; text-transform:uppercase; letter-spacing:1px; margin-left:4px;">Display Name</label>
+          <input id="displayNameInput" class="answer-input modern" style="margin-top:8px; background:rgba(0,0,0,0.2);" placeholder="Your name..." />
+        </div>
+        <input type="file" id="avatarInput" hidden accept="image/*" onchange="handleAvatarUpload(event)">
+      </div>
+
+      <div style="margin-bottom:28px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+          <h3 style="font-family:'Poppins',sans-serif; font-size:16px; font-weight:700;">Unlocked Achievements</h3>
+          <div style="font-size:12px; opacity:0.5;" id="achievementCount">0/20</div>
+        </div>
+        <div id="achievementsList" style="display:flex; gap:10px; overflow-x:auto; padding-bottom:8px; scrollbar-width:none;">
+          <!-- Achievements will be horizontal cards -->
         </div>
       </div>
-      <div style="margin-top:20px;">
-        <label style="font-size:12px;opacity:0.7;">Display Name</label>
-        <input id="displayNameInput" class="answer-input" style="font-size:16px;text-align:left;letter-spacing:0;margin-top:6px;" />
-        <label style="font-size:12px;opacity:0.7;margin-top:14px;display:block;">Profile Picture</label>
-        <div style="display:flex;gap:10px;margin-top:6px;">
-            <button class="leader-secondary" style="flex:1;" onclick="document.getElementById('avatarInput').click()">Upload Picture</button>
-            <input type="file" id="avatarInput" hidden accept="image/*" onchange="handleAvatarUpload(event)">
-        </div>
+
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+        <button class="btn modern" style="grid-column: span 2;" id="saveProfileBtn">Save Changes</button>
+        <button class="btn modern secondary" onclick="openHowToPlayModal()">How to Play</button>
+        <button class="btn modern secondary" onclick="openAboutModal()">About Us</button>
+        <button class="btn modern" style="grid-column: span 2; background:rgba(239,68,68,0.1); color:var(--danger); border:1px solid rgba(239,68,68,0.2); box-shadow:none; margin-top:8px;" onclick="logout()">Logout Session</button>
       </div>
-      <div style="margin-top:24px;">
-        <h3 style="margin-bottom:12px;">Achievements</h3>
-        <div id="achievementsList" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;"></div>
-      </div>
-      <div style="display:flex;gap:10px;margin-top:24px;">
-        <button class="btn google-btn" style="flex:1;" id="saveProfileBtn">Save Changes</button>
-        <button class="btn guest-btn" style="flex:1;" onclick="openHowToPlayModal()">How to Play</button>
-        <button class="btn guest-btn" style="flex:1;" onclick="openAboutModal()">About Us</button>
-      </div>
-      <button class="btn decline" style="width:100%;margin-top:10px;" onclick="logout()">Logout</button>
     </div>
   </div>
 
@@ -1050,38 +1049,40 @@
     /* ========================================== SOCIAL ACTIONS ========================================== */
     function openProfile(){
       const data = GameCache.user;
+      const rank = getRank(data.mmr, data.leaderboardPos);
+      const rankData = getRankData(data.mmr);
+
       document.getElementById("profileName").innerText = data.display_name || "Player";
       document.getElementById("profileAvatar").src = data.avatar_url || avatars[0];
       document.getElementById("profileEmail").innerText = data.email || "Signed in with Google";
-      document.getElementById("profileLeagueBadge").innerText = getRank(data.mmr) + " League";
+
+      const badge = document.getElementById("profileLeagueBadge");
+      badge.innerText = rank;
+      badge.style.color = rankData.color;
+      badge.style.borderColor = rankData.color + '44';
+      badge.style.background = rankData.color + '11';
+
       document.getElementById("displayNameInput").value = data.display_name || "";
       
+      // Render horizontal achievements
+      const unlocked = data.achievements || [];
+      const list = document.getElementById("achievementsList");
+      const allAchievements = Object.values(ACHIEVEMENTS);
+
+      document.getElementById("achievementCount").innerText = `${unlocked.length}/${allAchievements.length}`;
+
+      list.innerHTML = allAchievements.map(a => {
+        const isUnlocked = unlocked.includes(a.id);
+        return `
+          <div style="min-width:120px; padding:16px; background:${isUnlocked ? 'rgba(59,130,246,0.1)' : 'rgba(255,255,255,0.03)'}; border:1px solid ${isUnlocked ? 'rgba(59,130,246,0.3)' : 'var(--border)'}; border-radius:20px; text-align:center; flex-shrink:0;">
+            <div style="font-size:24px; margin-bottom:8px; filter:${isUnlocked ? 'none' : 'grayscale(1) opacity(0.3)'}">${a.icon}</div>
+            <div style="font-size:11px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${a.name}</div>
+            <div style="font-size:9px; opacity:0.5; margin-top:2px;">${isUnlocked ? 'Unlocked' : 'Locked'}</div>
+          </div>
+        `;
+      }).join('');
+
       openModal("profileModal");
-
-      // Calculate win rate
-      const totalGames = (data.wins || 0) + (data.losses || 0) + (data.draws || 0);
-      const winRate = totalGames > 0 ? Math.round((data.wins / totalGames) * 100) : 0;
-      const rank = getRank(data.mmr, data.leaderboardPos);
-
-      document.getElementById("profileName").innerText = data.display_name || "Player";
-      document.getElementById("profileLeagueBadge").innerText = rank;
-      document.getElementById("profileLeagueBadge").style.color = getLeagueColor(data.mmr);
-
-      // Update profile display with more details
-      const profileInfo = document.createElement('div');
-      profileInfo.id = "extraProfileInfo";
-      profileInfo.style.marginTop = "10px";
-      profileInfo.style.fontSize = "13px";
-      profileInfo.style.opacity = "0.8";
-      const lbPosDisplay = (typeof data.leaderboardPos === 'number' && data.leaderboardPos > 0) ? `#${data.leaderboardPos}` : 'Unranked';
-      profileInfo.innerHTML = `
-        <p>Win Rate: <span style="color:var(--success);font-weight:700;">${winRate}%</span></p>
-        <p>Leaderboard Rank: <span style="color:var(--blue);font-weight:700;">${lbPosDisplay}</span></p>
-      `;
-
-      const existingInfo = document.getElementById('extraProfileInfo');
-      if (existingInfo) existingInfo.remove();
-      document.getElementById('profileLeagueBadge').parentNode.appendChild(profileInfo);
     }
 
     function openNotifications() {
@@ -2291,15 +2292,13 @@
     }
     
     async function claimDailyReward() {
-      // Prevent concurrent claims
       if (isClaimingDailyReward) return;
       
-      // Use Local YYYY-MM-DD format for consistent database comparison and local reset
       const today = new Date().toLocaleDateString('en-CA');
 
-      // 1. Pre-check local cache
+      // 1. HARD BLOCK: Immediate local check before anything else
       if (GameCache.user.lastDaily === today) {
-        showToast('notification', '⏳ Already Claimed', 'You already claimed your reward today. Come back tomorrow!');
+        showToast('notification', '⏳ Already Claimed', 'You have already collected your reward today! Come back tomorrow.');
         updateDailyRewardButtonState();
         return;
       }
@@ -2308,73 +2307,63 @@
       const btn = document.getElementById('dailyRewardBtn');
       if (btn) {
         btn.disabled = true;
-        btn.innerText = "Checking...";
+        btn.innerText = "Verifying...";
       }
       
       try {
-        // 2. Double-check database to prevent multi-device exploits
+        // 2. HARD BLOCK: Database check to prevent session/tab exploits
         const { data: profile, error: fetchErr } = await sb.from('profiles').select('last_daily, coins, xp, mmr, daily_streak').eq('id', currentUserId).single();
         
         if (fetchErr) throw fetchErr;
         
         if (profile.last_daily === today) {
-          GameCache.user.lastDaily = today;
-          showToast('notification', '⏳ Already Claimed', 'You already claimed your reward today!');
+          GameCache.user.lastDaily = today; // Sync local cache
+          showToast('notification', '⏳ Already Claimed', 'Our records show you already claimed today\'s reward!');
           updateDailyRewardButtonState();
           return;
         }
 
-        // 3. Calculate rewards
         const lastDaily = profile.last_daily;
         const yesterdayDate = new Date();
         yesterdayDate.setDate(yesterdayDate.getDate() - 1);
         const yesterday = yesterdayDate.toLocaleDateString('en-CA');
 
         const isConsecutive = lastDaily === yesterday;
-        
         const newDailyStreak = isConsecutive ? (profile.daily_streak || 0) + 1 : 1;
+
         const streakBonus = Math.min(newDailyStreak * 5, 50);
         const coinsBonus = 50 + streakBonus;
         const xpBonus = 25 + Math.floor(streakBonus / 2);
         const mmrBonus = Math.floor(xpBonus * 0.05);
         
-        // 4. Update Database
+        // 3. ATOMIC UPDATE: Send to database
         const { error: updateErr } = await sb.from('profiles').update({
           coins: (profile.coins || 0) + coinsBonus,
           xp: (profile.xp || 0) + xpBonus,
           mmr: (profile.mmr || 0) + mmrBonus,
-          league: getRank((profile.mmr || 0) + mmrBonus),
           daily_streak: newDailyStreak,
           last_daily: today
         }).eq('id', currentUserId);
         
         if (updateErr) throw updateErr;
 
-        // 5. Update local state
+        // 4. Update local state ONLY after DB success
         GameCache.user.coins = (profile.coins || 0) + coinsBonus;
         GameCache.user.xp = (profile.xp || 0) + xpBonus;
         GameCache.user.mmr = (profile.mmr || 0) + mmrBonus;
         GameCache.user.dailyStreak = newDailyStreak;
         GameCache.user.lastDaily = today;
         
-        // Success feedback
-        showToast('notification', '🎁 Daily Reward Claimed!', `+${coinsBonus} Coins, +${xpBonus} XP, +${mmrBonus} MMR! 🔥 Streak: ${newDailyStreak}`);
+        showToast('notification', '🎁 Reward Claimed!', `+${coinsBonus} Coins, +${xpBonus} XP! Streak: ${newDailyStreak}d`);
 
-        // Update UI
         updateStatsUI();
         updateDailyRewardButtonState();
-
-        // Check for achievements
         await checkAchievements();
 
       } catch (err) {
         console.error('Daily reward error:', err);
-        showToast('notification', '❌ Error', 'Failed to claim reward. Please check your connection.');
-        // Re-enable so they can try again if it was a network error
-        if (btn) {
-          btn.disabled = false;
-          btn.innerText = "🎁 Claim Daily Reward";
-        }
+        showToast('notification', '❌ Error', 'Failed to connect. Please try again.');
+        updateDailyRewardButtonState();
       } finally {
         isClaimingDailyReward = false;
       }
