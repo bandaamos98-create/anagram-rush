@@ -549,11 +549,13 @@
         <p><strong>Team score (Team Up):</strong> All correct answers count toward the team total.</p>
         <p><strong>Streak bonuses:</strong> Keep solving correctly to earn extra score boosts.</p>
         
-        <p style="font-weight:700;margin-top:16px;margin-bottom:12px;">💡 Tips</p>
-        <p>• Type your answer and press Enter or click Submit.</p>
-        <p>• In FFA, prioritize speed and accuracy — the fastest solver wins the biggest rewards.</p>
-        <p>• In Team Up, communicate with your teammate and focus on building the shared team score.</p>
-        <p>• Use streaks to amplify your score and climb the leaderboard.</p>
+        <p style="font-weight:700;margin-top:16px;margin-bottom:12px;">💡 Tips & Rules</p>
+        <p>• <strong>Capitalization:</strong> All answers must be typed in capitals (automatic).</p>
+        <p>• <strong>Auto-Skip:</strong> Words change automatically every 20 seconds if unsolved to keep the game fast-paced.</p>
+        <p>• <strong>FFA Speed:</strong> In FFA, prioritize speed! The first to solve earns 100pts, second 75, third 50, and fourth 25.</p>
+        <p>• <strong>Team Up:</strong> Work together! All points earned by team members are added to the shared total.</p>
+        <p>• <strong>Hints:</strong> Use hints when stuck, but they cost coins!</p>
+        <p>• <strong>Climb the Ranks:</strong> Play Ranked matches to earn MMR and move from Bronze to Legend.</p>
         
         <p style="font-weight:700;margin-top:16px;margin-bottom:12px;">🏆 Ranking System</p>
         <p>MMR increases with wins and decreases with losses in ranked matches. Higher MMR unlocks tougher words and better league placement.</p>
@@ -795,7 +797,16 @@
 
         updateStatsUI();
         updateDailyRewardButtonState();
-        
+
+        // Ensure new user is in the local leaderboard if they qualify
+        if (!GameCache.leaderboard.some(p => p.id === currentUserId)) {
+          if (GameCache.leaderboard.length < 100 || GameCache.user.mmr >= (GameCache.leaderboard[99]?.mmr || 0)) {
+            GameCache.leaderboard.push({ ...GameCache.user });
+            GameCache.leaderboard.sort((a, b) => (b.mmr || 0) - (a.mmr || 0));
+            renderLeaderboardPreview();
+          }
+        }
+
       }
     }
 
@@ -987,25 +998,35 @@
           if (document.getElementById('globalChatModal').classList.contains('active')) renderGlobalChat();
         })
         // Realtime Leaderboard Updates
-        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles' }, (p) => {
-          console.log('[Realtime] Profile update received:', p.new);
-          // Update profile cache
-          GameCache.profiles[p.new.id] = { ...GameCache.profiles[p.new.id], ...p.new };
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, (p) => {
+          console.log('[Realtime] Profile change received:', p.eventType, p.new);
 
-          // Update leaderboard list
-          const idx = GameCache.leaderboard.findIndex(l => l.id === p.new.id);
-          if (idx !== -1) {
-            GameCache.leaderboard[idx] = { ...GameCache.leaderboard[idx], ...p.new };
-          } else if (GameCache.leaderboard.length < 100 || p.new.mmr > (GameCache.leaderboard[GameCache.leaderboard.length-1]?.mmr || 0)) {
-            if (idx === -1) GameCache.leaderboard.push(p.new);
+          if (p.eventType === 'DELETE') {
+            GameCache.leaderboard = GameCache.leaderboard.filter(l => l.id !== p.old.id);
+          } else {
+            const profile = p.new;
+            // Update profile cache
+            GameCache.profiles[profile.id] = { ...GameCache.profiles[profile.id], ...profile };
+
+            // Update leaderboard list
+            const idx = GameCache.leaderboard.findIndex(l => l.id === profile.id);
+            if (idx !== -1) {
+              GameCache.leaderboard[idx] = { ...GameCache.leaderboard[idx], ...profile };
+            } else if (GameCache.leaderboard.length < 100 || profile.mmr >= (GameCache.leaderboard[GameCache.leaderboard.length-1]?.mmr || 0)) {
+              GameCache.leaderboard.push(profile);
+            }
           }
 
           // Sort and Refresh UI
-          GameCache.leaderboard.sort((a, b) => (b.mmr || 0) - (a.mmr || 0));
+          GameCache.leaderboard.sort((a, b) => {
+            if ((b.mmr || 0) !== (a.mmr || 0)) return (b.mmr || 0) - (a.mmr || 0);
+            return (b.wins || 0) - (a.wins || 0); // Tie breaker: wins
+          });
+
           if (GameCache.leaderboard.length > 100) GameCache.leaderboard = GameCache.leaderboard.slice(0, 100);
 
           // Update current user's position if it was them
-          if (p.new.id === currentUserId) {
+          if (p.new?.id === currentUserId || p.old?.id === currentUserId) {
             GameCache.user.leaderboardPos = getLeaderboardPosition(currentUserId);
             updateStatsUI();
           }
@@ -2162,7 +2183,7 @@
             buttonAction = '';
             buttonDisabled = 'disabled style="opacity:0.5"';
           }
-          return `<div class="social-item"><div style="display:flex;align-items:center;gap:10px;"><img src="${p.avatar_url || avatars[0]}" style="width:32px;height:32px;border-radius:50%;"><div><div style="font-weight:700">${p.display_name}</div><div style="font-size:11px;opacity:0.6">${p.email || ''}</div></div></div><button class="leader-secondary" ${buttonDisabled} onclick="${buttonAction}">${buttonText}</button></div>`;
+          return `<div class="social-item"><div style="display:flex;align-items:center;gap:10px;"><img src="${p.avatar_url || avatars[0]}" style="width:32px;height:32px;border-radius:50%;"><div><div style="font-weight:700">${p.display_name}</div></div></div><button class="leader-secondary" ${buttonDisabled} onclick="${buttonAction}">${buttonText}</button></div>`;
         }).join('') || "No users found";
       }
     }
@@ -2653,12 +2674,41 @@
     function startMatchTimer() {
       if (GameCache.match.timer) clearInterval(GameCache.match.timer);
       GameCache.match.timer = setInterval(() => {
-        const remaining = Math.max(0, Math.round((GameCache.match.endsAt - Date.now()) / 1000));
+        const now = Date.now();
+        const remaining = Math.max(0, Math.round((GameCache.match.endsAt - now) / 1000));
         document.getElementById('timer').innerText = remaining;
         const minutes = Math.floor(remaining / 60);
         const seconds = remaining % 60;
         document.getElementById('roundCount').innerText = `${minutes}:${seconds.toString().padStart(2, '0')}`;
         
+        // 20-second Auto-Skip Logic
+        if (GameCache.match.active && GameCache.match.roundStartTime) {
+          const elapsedInRound = (now - GameCache.match.roundStartTime) / 1000;
+          if (elapsedInRound >= 20) {
+            const isHost = GameCache.match.participants[0] === currentUserId || GameCache.match.mode === 'single';
+            if (isHost) {
+              const nextPuzzle = generateLetters(GameCache.match.wordLength || 6);
+              GameCache.match.currentPuzzle = nextPuzzle;
+              GameCache.match.roundStartTime = now;
+              GameCache.match.wordSolvers = {};
+
+              const isRealMatch = GameCache.match.matchId && !GameCache.match.matchId.startsWith('single-');
+              if (isRealMatch) {
+                sb.from('matches').update({ current_puzzle: nextPuzzle }).eq('id', GameCache.match.matchId);
+                if (GameCache.match.channel) {
+                  GameCache.match.channel.send({
+                    type: 'broadcast',
+                    event: 'puzzle_update',
+                    payload: { puzzle: nextPuzzle }
+                  });
+                }
+              }
+              renderMatchUI();
+              document.getElementById('feedback').innerHTML = `<div style="color:var(--warning); animation: slideIn 0.3s;">⏰ Time's up! New word generated.</div>`;
+            }
+          }
+        }
+
         if (remaining <= 0) {
           clearInterval(GameCache.match.timer);
           finishMatch();
