@@ -17,5 +17,13 @@
   "display_override": [
     "fullscreen",
     "window-controls-overlay"
+  ],
+  "icons": [
+    {
+      "src": "images/icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
   ]
 }
