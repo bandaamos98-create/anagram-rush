@@ -6,7 +6,7 @@
 window.developerNotification = {
   "enabled": true,
   "id": "update-v2-launch", 
-  "title": "🏆 Competitive Season 1 is Live!",
+  "title": "GAME UPDATES",
   "body": "We are working tirelessly to bring multiplayer mode (FREE FOR ALL and TEAM UP). Stay tuned",
   "icon": "📢"
 };
