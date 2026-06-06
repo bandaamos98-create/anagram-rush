@@ -1,4 +1,5 @@
-<!DOCTYPE html>
+Realtime] DB channel status: CLOSED
+index.html:1052 [Realtime] Connection lost. Attempting to reconnect in 5s...<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -1039,32 +1040,41 @@
         })
         .subscribe(async (status, err) => {
           console.log('[Realtime] DB channel status:', status);
-          if (err) console.error('[Realtime] DB channel error:', err);
+          if (err) {
+            console.error('[Realtime] DB channel error:', err);
+            // Don't reconnect on transport errors to prevent infinite loops
+            if (err.message?.includes('transport failure')) {
+              console.warn('[Realtime] Transport failure - will not auto-reconnect to prevent loops');
+              return;
+            }
+          }
 
           if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
-            console.warn('[Realtime] Connection lost. Attempting to reconnect in 3s...');
+            console.warn('[Realtime] Connection lost. Attempting to reconnect in 5s...');
             setTimeout(() => {
               if (currentUserId) setupRealtime();
-            }, 3000);
+            }, 5000);
           }
         });
 
-      // DEBUG SUBSCRIPTION ADDED HERE
-      sb.channel('debug-messages')
-        .on(
-          'postgres_changes',
-          {
-            event: '*',
-            schema: 'public',
-            table: 'messages'
-          },
-          payload => {
-            console.log('MESSAGE EVENT:', payload);
-          }
-        )
-        .subscribe(status => {
-          console.log('DEBUG STATUS:', status);
-        });
+      // Cleanup expired invites (5 minutes of inactivity)
+      setInterval(async () => {
+        const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+        const onlineUserIds = Object.keys(GameCache.onlineUsers || {});
+        
+        if (onlineUserIds.length === 0) {
+          // If no one is online, delete all pending invites older than 5 minutes
+          await sb.from('game_invites').delete().lt('created_at', fiveMinutesAgo).eq('status', 'pending');
+        } else {
+          // Delete pending invites where both parties are offline
+          await sb.from('game_invites')
+            .delete()
+            .lt('created_at', fiveMinutesAgo)
+            .eq('status', 'pending')
+            .not('from_user_id', 'in', `(${onlineUserIds.join(',')})`)
+            .not('to_user_id', 'in', `(${onlineUserIds.join(',')})`);
+        }
+      }, 60000); // Check every minute
     }
 
     /* ========= Toast Notifications ========= */
@@ -2292,14 +2302,25 @@
       const invite = GameCache.invites.find(i => i.id === id);
       if (!invite) return;
 
-      if (status === 'accepted' && GameCache.match.active) {
-        alert('You are already in a match!');
-        return;
+      if (status === 'accepted') {
+        // Check if player is online
+        const onlineUserIds = Object.keys(GameCache.onlineUsers || {});
+        if (!onlineUserIds.includes(currentUserId)) {
+          alert('You must be online to accept game invites');
+          return;
+        }
+
+        // Check if player is in a game
+        if (GameCache.match.active) {
+          alert('You are already in a match! Finish your current game before accepting invites.');
+          return;
+        }
       }
 
       await sb.from('game_invites').update({ status }).eq('id', id);
       GameCache.invites = GameCache.invites.filter(i => i.id !== id);
       updateBadges();
+      refreshOpenSocialView();
 
       if (status === 'accepted') {
         if (invite.mode === 'quick' || invite.mode === 'ranked') {
@@ -3185,21 +3206,80 @@
         startSinglePlayer();
         return;
       }
-      
-      // Auto-matchmaking logic
-      const { data: queue, error } = await sb.from('matchmaking_queue').select('*').eq('mode', mode).neq('user_id', currentUserId).order('created_at', { ascending: true }).limit(1).maybeSingle();
 
-      if (queue) {
-        // Match found!
-        await sb.from('matchmaking_queue').delete().eq('id', queue.id);
-        const matchPayload = createMatchPayload(mode, [queue.user_id, currentUserId]);
+      if (mode === 'ranked') {
+        // Send invites to players with similar MMR (±100)
+        const myMmr = GameCache.user?.mmr || 1000;
+        const onlinePlayers = Object.keys(GameCache.onlineUsers || {}).filter(id => id !== currentUserId);
+        
+        // Get profiles to check MMR
+        const { data: profiles } = await sb.from('profiles').select('id, mmr').in('id', onlinePlayers);
+        const similarRankPlayers = profiles?.filter(p => Math.abs(p.mmr - myMmr) <= 100) || [];
+        
+        if (similarRankPlayers.length === 0) {
+          showToast('notification', 'Ranked Match', 'No players with similar rank found');
+          return;
+        }
+
+        // Send invites to up to 3 similar rank players
+        const targets = similarRankPlayers.slice(0, 3);
+        for (const target of targets) {
+          await sendGameInvite(target.id, 'ranked');
+        }
+        showToast('notification', 'Ranked Match', `Sent invites to ${targets.length} players`);
+      
+      } else if (mode === 'quick') {
+        // Send invites to all online players
+        const onlinePlayers = Object.keys(GameCache.onlineUsers || {}).filter(id => id !== currentUserId);
+        
+        if (onlinePlayers.length === 0) {
+          showToast('notification', 'Quick Match', 'No players online');
+          return;
+        }
+
+        // Send invites to up to 5 online players
+        const targets = onlinePlayers.slice(0, 5);
+        for (const target of targets) {
+          await sendGameInvite(target, 'quick');
+        }
+        showToast('notification', 'Quick Match', `Sent invites to ${targets.length} players`);
+      }
+    }
+
+    async function sendGameInvite(toUserId, mode) {
+      const { error } = await sb.from('game_invites').insert({
+        from_user_id: currentUserId,
+        to_user_id: toUserId,
+        mode: mode,
+        status: 'pending',
+        created_at: new Date().toISOString()
+      });
+
+      if (error) {
+        console.error('[Invite] Failed to send:', error);
+      }
+    }
+
+    async function acceptInvite(inviteId) {
+      const { error } = await sb.from('game_invites').update({ status: 'accepted' }).eq('id', inviteId);
+      if (error) {
+        console.error('[Invite] Failed to accept:', error);
+        return;
+      }
+
+      const invite = GameCache.invites.find(i => i.id === inviteId);
+      if (invite) {
+        const matchPayload = createMatchPayload(invite.mode, [invite.from_user_id, invite.to_user_id]);
         await createMatchInDB(matchPayload);
         startMatchSession(matchPayload);
         try { socialChannel.send({ type: 'broadcast', event: 'match_start', payload: matchPayload }); } catch(e) {}
-      } else {
-        // Join queue
-        await sb.from('matchmaking_queue').insert({ user_id: currentUserId, mode: mode, mmr: GameCache.user.mmr });
-        showToast('notification', 'Matchmaking', `Searching for ${mode} match...`);
+      }
+    }
+
+    async function declineInvite(inviteId) {
+      const { error } = await sb.from('game_invites').update({ status: 'declined' }).eq('id', inviteId);
+      if (error) {
+        console.error('[Invite] Failed to decline:', error);
       }
     }
     
