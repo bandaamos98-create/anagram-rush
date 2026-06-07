@@ -317,6 +317,10 @@
               <div style="font-size:12px;opacity:.7;margin-bottom:6px;">Form a word from:</div>
               <div id="scrambleWord" style="font-size:28px;font-weight:800;letter-spacing:8px;color:var(--blue);"></div>
             </div>
+            <div style="text-align:right;">
+              <div style="font-size:12px;opacity:.7;margin-bottom:6px;">Word expires in:</div>
+              <div id="wordTimer" style="font-size:28px;font-weight:800;letter-spacing:4px;color:var(--warning);">15</div>
+            </div>
           </div>
           <div class="tiles" id="tiles"></div>
           <input id="answerInput" class="answer-input modern" placeholder="Type your word..." autofocus oninput="document.getElementById('feedback').innerHTML = ''" />
@@ -580,7 +584,8 @@
   </div>
 
   <div class="modal" id="gameInviteModal">
-    <div class="modal-content glass" style="text-align:center;">
+    <div class="modal-content glass" style="text-align:center;position:relative;">
+      <button onclick="closeModal('gameInviteModal')" style="position:absolute;top:16px;right:16px;background:none;border:none;color:white;font-size:24px;cursor:pointer;opacity:0.6;transition:opacity 0.2s;" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0.6">×</button>
       <div style="font-size:48px;margin-bottom:16px;">🎮</div>
       <div class="modal-title">Game Invite</div>
       <div id="gameInviteContent" style="margin:20px 0;"></div>
@@ -972,6 +977,27 @@
           refreshOpenSocialView();
           const sender = GameCache.profiles[p.new.from_user_id]?.display_name || 'Someone';
           showToast('friend', `Friend Request from ${sender}`, 'Click to view', () => openInvites());
+        })
+        // Friends - auto-refresh when new friend is added
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'friends', filter: `user_id=eq.${currentUserId}` }, async (p) => {
+          console.log('[Realtime] New friend added:', p.new);
+          const friendId = p.new.friend_id;
+          if (!GameCache.friends.includes(friendId)) {
+            GameCache.friends.push(friendId);
+          }
+          if (!GameCache.profiles[friendId]) await fetchProfile(friendId);
+          refreshOpenSocialView();
+          showToast('friend', 'New Friend Added', GameCache.profiles[friendId]?.display_name || 'Player', () => openFriends());
+        })
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'friends', filter: `friend_id=eq.${currentUserId}` }, async (p) => {
+          console.log('[Realtime] New friend added (reverse):', p.new);
+          const friendId = p.new.user_id;
+          if (!GameCache.friends.includes(friendId)) {
+            GameCache.friends.push(friendId);
+          }
+          if (!GameCache.profiles[friendId]) await fetchProfile(friendId);
+          refreshOpenSocialView();
+          showToast('friend', 'New Friend Added', GameCache.profiles[friendId]?.display_name || 'Player', () => openFriends());
         })
         // Notifications
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${currentUserId}` }, (p) => {
@@ -1448,7 +1474,7 @@
       setSocialModalFullscreen(false);
       document.getElementById('socialTitle').innerText = "Friends";
       const cont = document.getElementById('socialContent');
-      cont.innerHTML = `<div style="margin-bottom:18px;"><div style="display:flex;gap:10px;"><input id="friendSearch" class="answer-input modern" style="flex:1;" placeholder="Name or email..." /><button class="btn modern" style="width:100px;" onclick="searchFriend()">Search</button></div><div id="searchResult" style="margin-top:12px;"></div></div><div id="friendsList"></div>`;
+      cont.innerHTML = `<div style="margin-bottom:18px;"><div style="display:flex;gap:10px;"><input id="friendSearch" class="answer-input modern" style="flex:1;" placeholder="Name or email..." autocomplete="off" autocorrect="off" spellcheck="false" /><button class="btn modern" style="width:100px;" onclick="searchFriend()">Search</button></div><div id="searchResult" style="margin-top:12px;"></div></div><div id="friendsList"></div>`;
       renderFriendsList();
       openModal('socialModal');
     }
@@ -1897,7 +1923,6 @@
         host_id: currentUserId,
         mode: payload.mode,
         status: 'active',
-        current_puzzle: payload.currentPuzzle,
         total_rounds: 20
       }).select().single();
 
@@ -2203,8 +2228,8 @@
       if (error) { console.error('Friend request failed', error); return alert('Unable to send request.'); }
       if (data) GameCache.friendRequests.unshift(data);
       showToast('friend', 'Friend Request Sent', 'Your request has been sent successfully.');
-      // Refresh the search results to update button state
-      searchUsers();
+      // Refresh the current view to update button state
+      refreshOpenSocialView();
     }
 
     function showGameInvitePopup(invite) {
@@ -2253,6 +2278,15 @@
 
     async function sendInvite(toId, mode = 'quick') {
       if (toId === currentUserId) return alert('You cannot invite yourself.');
+      
+      // Check if target player is online
+      const onlineUserIds = Object.keys(GameCache.onlineUsers || {});
+      if (!onlineUserIds.includes(toId)) {
+        const targetName = GameCache.profiles[toId]?.display_name || 'Player';
+        showToast('notification', 'Cannot Send Invite', `${targetName} is currently offline. Invites can only be sent to online players.`);
+        return;
+      }
+      
       const { data, error } = await sb.from('game_invites').insert({ from_user_id: currentUserId, to_user_id: toId, mode: mode, status: 'pending' }).select().single();
       if (error) { console.error('Invite failed', error); return alert('Unable to send invite.'); }
       if (data) {
@@ -2307,6 +2341,13 @@
         const onlineUserIds = Object.keys(GameCache.onlineUsers || {});
         if (!onlineUserIds.includes(currentUserId)) {
           alert('You must be online to accept game invites');
+          return;
+        }
+
+        // Check if inviter is still online
+        if (!onlineUserIds.includes(invite.from_user_id)) {
+          const inviterName = GameCache.profiles[invite.from_user_id]?.display_name || 'The player';
+          showToast('notification', 'Cannot Accept Invite', `${inviterName} is currently offline. You can only accept invites from online players.`);
           return;
         }
 
@@ -2714,6 +2755,10 @@
         // 15-second per-player word expiration
         if (GameCache.match.active && GameCache.match.playerPuzzleStartTimes[currentUserId]) {
           const elapsedInRound = (now - GameCache.match.playerPuzzleStartTimes[currentUserId]) / 1000;
+          const remaining = Math.max(0, Math.ceil(15 - elapsedInRound));
+          const wordTimer = document.getElementById('wordTimer');
+          if (wordTimer) wordTimer.innerText = remaining;
+          
           if (elapsedInRound >= 15) {
             // Refresh puzzle for current player only
             const nextPuzzle = generateLetters(GameCache.match.wordLength || 6);
@@ -2813,6 +2858,14 @@
       const currentPuzzle = GameCache.match.currentPuzzle || { scrambled: '' };
       document.getElementById('scrambleWord').innerText = currentPuzzle.scrambled.toUpperCase();
       document.getElementById('tiles').innerHTML = currentPuzzle.scrambled.split('').map(l => `<div class="tile">${l.toUpperCase()}</div>`).join('');
+      
+      // Update word expiration countdown
+      if (GameCache.match.playerPuzzleStartTimes && GameCache.match.playerPuzzleStartTimes[currentUserId]) {
+        const elapsed = (Date.now() - GameCache.match.playerPuzzleStartTimes[currentUserId]) / 1000;
+        const remaining = Math.max(0, Math.ceil(15 - elapsed));
+        const wordTimer = document.getElementById('wordTimer');
+        if (wordTimer) wordTimer.innerText = remaining;
+      }
       
       const remainingTime = Math.max(0, Math.ceil((GameCache.match.endsAt - Date.now()) / 1000));
       const minutes = Math.floor(remainingTime / 60);
