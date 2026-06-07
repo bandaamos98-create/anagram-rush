@@ -1973,6 +1973,9 @@
       if (readyA.length < 1 || readyB.length < 1) {
         return alert('Each team needs at least 1 ready player.');
       }
+      if (readyA.length !== readyB.length) {
+        return alert('Teams must have equal number of players (1v1, 2v2, 3v3, or 4v4).');
+      }
       
       const participants = [...readyA, ...readyB];
       const teams = {};
