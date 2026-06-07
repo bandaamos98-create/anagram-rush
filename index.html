@@ -1074,7 +1074,7 @@
             }
           }
 
-          if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+          if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
             console.warn('[Realtime] Connection lost. Attempting to reconnect in 5s...');
             setTimeout(() => {
               if (currentUserId) setupRealtime();
@@ -2385,8 +2385,9 @@
             statusMsg.innerText = 'Waiting for host to start match...';
             document.getElementById('freeForAllSlots').parentNode.appendChild(statusMsg);
           } else if (invite.mode === 'team') {
-            teamAPlayers = [invite.from_user_id, currentUserId, null, null];
-            teamBPlayers = [null, null, null, null];
+            // Split players between teams for 2-player matches
+            teamAPlayers = [invite.from_user_id, null, null, null];
+            teamBPlayers = [currentUserId, null, null, null];
             renderTeamSlots();
             openModal('teamUpLobbyModal');
             document.querySelector('#teamUpLobbyModal .btn.modern').classList.add('hidden');
