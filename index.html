@@ -1900,18 +1900,27 @@
     }
     
     function removePlayerFromFFA(index) {
+      if (freeForAllPlayers[index] === currentUserId) {
+        return alert('You cannot remove the host.');
+      }
       freeForAllPlayers[index] = null;
       freeForAllStatus[index] = null;
       renderFreeForAllSlots();
     }
     
     function removePlayerFromTeamA(index) {
+      if (teamAPlayers[index] === currentUserId) {
+        return alert('You cannot remove the host.');
+      }
       teamAPlayers[index] = null;
       teamAStatus[index] = null;
       renderTeamSlots();
     }
     
     function removePlayerFromTeamB(index) {
+      if (teamBPlayers[index] === currentUserId) {
+        return alert('You cannot remove the host.');
+      }
       teamBPlayers[index] = null;
       teamBStatus[index] = null;
       renderTeamSlots();
@@ -1941,9 +1950,7 @@
     async function startFreeForAllMatch() {
       const participants = freeForAllPlayers.filter(pid => {
         if (!pid) return false;
-        if (pid === currentUserId) return true;
-        const inv = GameCache.invites.find(i => i.from_user_id === currentUserId && i.to_user_id === pid && i.mode === 'ffa');
-        return inv && inv.status === 'accepted';
+        return true;
       });
 
       if (participants.length < 2) {
@@ -1960,14 +1967,11 @@
     async function startTeamUpMatch() {
       const readyA = teamAPlayers.filter(pid => {
         if (!pid) return false;
-        if (pid === currentUserId) return true;
-        const inv = GameCache.invites.find(i => i.from_user_id === currentUserId && i.to_user_id === pid && i.mode === 'team');
-        return inv && inv.status === 'accepted';
+        return true;
       });
       const readyB = teamBPlayers.filter(pid => {
         if (!pid) return false;
-        const inv = GameCache.invites.find(i => i.from_user_id === currentUserId && i.to_user_id === pid && i.mode === 'team');
-        return inv && inv.status === 'accepted';
+        return true;
       });
 
       if (readyA.length < 1 || readyB.length < 1) {
