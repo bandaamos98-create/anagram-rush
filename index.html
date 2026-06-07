@@ -1929,7 +1929,6 @@
     async function createMatchInDB(payload) {
       const { data: match, error } = await sb.from('matches').insert({
         id: payload.matchId,
-        host_id: currentUserId,
         mode: payload.mode,
         status: 'active',
         total_rounds: 20
@@ -2179,6 +2178,13 @@
       GameCache.match.active = false;
       document.getElementById("gameScreen").classList.add("hidden");
       document.getElementById("dashboardPage").classList.remove("hidden");
+      // Clear lobby arrays after match ends
+      freeForAllPlayers = [null, null, null, null];
+      freeForAllStatus = [null, null, null, null];
+      teamAPlayers = [null, null, null, null];
+      teamBPlayers = [null, null, null, null];
+      teamAStatus = [null, null, null, null];
+      teamBStatus = [null, null, null, null];
     }
     
     function preventQuit() {
@@ -2630,10 +2636,10 @@
         else if (mmr < 2000) wordLength = 6;
         else wordLength = 7;
       } else if (mode === 'ffa') {
-        duration = 240; // 4 minutes
+        duration = 180; // 3 minutes
         wordLength = 5;
       } else if (mode === 'team') {
-        duration = 420; // 7 minutes
+        duration = 300; // 5 minutes
         wordLength = Math.random() > 0.5 ? 6 : 7; // 6 or 7 letter words
       }
       
