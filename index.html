@@ -1,5 +1,4 @@
-Realtime] DB channel status: CLOSED
-index.html:1052 [Realtime] Connection lost. Attempting to reconnect in 5s...<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -2239,6 +2238,7 @@ index.html:1052 [Realtime] Connection lost. Attempting to reconnect in 5s...<!DO
 
     function renderFriendsList() {
       const list = document.getElementById('friendsList');
+      if (!list) return; // Element doesn't exist in DOM
       list.innerHTML = GameCache.friends.map(fid => {
         const p = GameCache.profiles[fid] || { display_name: 'Player', avatar_url: avatars[0] };
         // Remove invite limit - allow unlimited invites
@@ -2643,8 +2643,17 @@ index.html:1052 [Realtime] Connection lost. Attempting to reconnect in 5s...<!DO
         active: false, // will be set true after countdown
         ...payload,
         timer: null,
-        wordSolvers: {}
+        wordSolvers: {},
+        playerPuzzles: {},
+        playerPuzzleStartTimes: {}
       };
+
+      // Initialize per-player puzzles
+      const initialPuzzle = generateLetters(GameCache.match.wordLength || 6);
+      GameCache.match.playerPuzzles[currentUserId] = initialPuzzle;
+      GameCache.match.playerPuzzleStartTimes[currentUserId] = Date.now();
+      GameCache.match.currentPuzzle = initialPuzzle;
+      GameCache.match.roundStartTime = Date.now();
 
       document.getElementById('dashboardPage').classList.add('hidden');
       document.getElementById('gameScreen').classList.remove('hidden');
@@ -2702,31 +2711,30 @@ index.html:1052 [Realtime] Connection lost. Attempting to reconnect in 5s...<!DO
         const seconds = remaining % 60;
         document.getElementById('roundCount').innerText = `${minutes}:${seconds.toString().padStart(2, '0')}`;
         
-        // 20-second Auto-Skip Logic
-        if (GameCache.match.active && GameCache.match.roundStartTime) {
-          const elapsedInRound = (now - GameCache.match.roundStartTime) / 1000;
-          if (elapsedInRound >= 20) {
-            const isHost = GameCache.match.participants[0] === currentUserId || GameCache.match.mode === 'single';
-            if (isHost) {
-              const nextPuzzle = generateLetters(GameCache.match.wordLength || 6);
-              GameCache.match.currentPuzzle = nextPuzzle;
-              GameCache.match.roundStartTime = now;
-              GameCache.match.wordSolvers = {};
+        // 15-second per-player word expiration
+        if (GameCache.match.active && GameCache.match.playerPuzzleStartTimes[currentUserId]) {
+          const elapsedInRound = (now - GameCache.match.playerPuzzleStartTimes[currentUserId]) / 1000;
+          if (elapsedInRound >= 15) {
+            // Refresh puzzle for current player only
+            const nextPuzzle = generateLetters(GameCache.match.wordLength || 6);
+            GameCache.match.playerPuzzles[currentUserId] = nextPuzzle;
+            GameCache.match.playerPuzzleStartTimes[currentUserId] = now;
+            GameCache.match.currentPuzzle = nextPuzzle;
+            GameCache.match.roundStartTime = now;
+            GameCache.match.wordSolvers = {};
 
-              const isRealMatch = GameCache.match.matchId && !GameCache.match.matchId.startsWith('single-');
-              if (isRealMatch) {
-                sb.from('matches').update({ current_puzzle: nextPuzzle }).eq('id', GameCache.match.matchId);
-                if (GameCache.match.channel) {
-                  GameCache.match.channel.send({
-                    type: 'broadcast',
-                    event: 'puzzle_update',
-                    payload: { puzzle: nextPuzzle }
-                  });
-                }
+            const isRealMatch = GameCache.match.matchId && !GameCache.match.matchId.startsWith('single-');
+            if (isRealMatch) {
+              if (GameCache.match.channel) {
+                GameCache.match.channel.send({
+                  type: 'broadcast',
+                  event: 'puzzle_update',
+                  payload: { playerId: currentUserId, puzzle: nextPuzzle }
+                });
               }
-              renderMatchUI();
-              document.getElementById('feedback').innerHTML = `<div style="color:var(--warning); animation: slideIn 0.3s;">⏰ Time's up! New word generated.</div>`;
             }
+            renderMatchUI();
+            document.getElementById('feedback').innerHTML = `<div style="color:var(--warning); animation: slideIn 0.3s;">⏰ Time's up! New word generated.</div>`;
           }
         }
 
@@ -2749,10 +2757,20 @@ index.html:1052 [Realtime] Connection lost. Attempting to reconnect in 5s...<!DO
           renderMatchUI();
         }
       }).on('broadcast', { event: 'puzzle_update' }, ({ payload }) => {
-        GameCache.match.currentPuzzle = payload.puzzle;
-        GameCache.match.roundStartTime = Date.now();
-        GameCache.match.wordSolvers = {};
-        renderMatchUI();
+        // Only update puzzle for the specific player who solved
+        if (!GameCache.match.playerPuzzles) GameCache.match.playerPuzzles = {};
+        if (!GameCache.match.playerPuzzleStartTimes) GameCache.match.playerPuzzleStartTimes = {};
+        
+        GameCache.match.playerPuzzles[payload.playerId] = payload.puzzle;
+        GameCache.match.playerPuzzleStartTimes[payload.playerId] = Date.now();
+        
+        // Only update local puzzle if it's for current player
+        if (payload.playerId === currentUserId) {
+          GameCache.match.currentPuzzle = payload.puzzle;
+          GameCache.match.roundStartTime = Date.now();
+          GameCache.match.wordSolvers = {};
+          renderMatchUI();
+        }
       }).subscribe();
     }
 
@@ -3516,23 +3534,29 @@ index.html:1052 [Realtime] Connection lost. Attempting to reconnect in 5s...<!DO
         }
       }
 
-      // Host generates next puzzle
-      const isHost = GameCache.match.participants[0] === currentUserId;
-      if (isHost || GameCache.match.mode === 'single') {
-        const nextPuzzle = generateLetters(GameCache.match.wordLength || 6);
-        GameCache.match.currentPuzzle = nextPuzzle;
-        GameCache.match.roundStartTime = Date.now();
-        GameCache.match.wordSolvers = {};
+      // Generate next puzzle for current player only
+      const nextPuzzle = generateLetters(GameCache.match.wordLength || 6);
+      
+      // Track per-player puzzles
+      if (!GameCache.match.playerPuzzles) GameCache.match.playerPuzzles = {};
+      if (!GameCache.match.playerPuzzleStartTimes) GameCache.match.playerPuzzleStartTimes = {};
+      
+      GameCache.match.playerPuzzles[currentUserId] = nextPuzzle;
+      GameCache.match.playerPuzzleStartTimes[currentUserId] = Date.now();
+      
+      // Update local current puzzle for rendering
+      GameCache.match.currentPuzzle = nextPuzzle;
+      GameCache.match.roundStartTime = Date.now();
+      GameCache.match.wordSolvers = {};
 
-        if (isRealMatch) {
-          sb.from('matches').update({ current_puzzle: nextPuzzle }).eq('id', GameCache.match.matchId);
-          if (GameCache.match.channel) {
-            GameCache.match.channel.send({
-              type: 'broadcast',
-              event: 'puzzle_update',
-              payload: { puzzle: nextPuzzle }
-            });
-          }
+      if (isRealMatch) {
+        // Broadcast puzzle update for this player only
+        if (GameCache.match.channel) {
+          GameCache.match.channel.send({
+            type: 'broadcast',
+            event: 'puzzle_update',
+            payload: { playerId: currentUserId, puzzle: nextPuzzle }
+          });
         }
       }
 
